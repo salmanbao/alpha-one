@@ -283,7 +283,7 @@ D13–D18) and the fifth-pass artifact is `docs/45-auth-contract-hardening.md` (
 decisions D19–D24) and the sixth-pass artifact is `docs/46-authorization-model.md` (the
 consolidated authorization specification, findings A1–A4) and the seventh-pass artifact is
 `docs/47-multi-tenancy-model.md` (the consolidated multi-tenancy specification, findings
-M1–M6); like docs/42 these change V1 design detail only — **no PRD workbook row was
+M1–M10, owner decisions W/U/D recorded in its §15); like docs/42 these change V1 design detail only — **no PRD workbook row was
 changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)

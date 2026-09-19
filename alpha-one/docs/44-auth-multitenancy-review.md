@@ -193,6 +193,13 @@ under that policy as written:
 | Auth resolution (session by id, API key by hash, link by `idp_user_id`, console-session check) | `app_rw` via **`SECURITY DEFINER` accessors** | four named functions in the `auth` schema; they take the lookup key, return the minimal row, and are the only way to read those tables without a tenant context. `EXECUTE` granted to `app_rw`, not to application code paths that could widen it |
 | Enumerated cross-tenant services (relay, ledger applier, audit applier, ANA updaters, `idp-sync`, CON read models) | `app_platform` | **`BYPASSRLS`**, used only by those services; their queries must still carry explicit `tenant_id` predicates — enforced by the CI grep-class check on new sqlc queries (docs/06) and review, because RLS is the backstop, not their isolation |
 | Migrations / DDL | `migrator` | `BYPASSRLS`; never in application config; run as a discrete job |
+
+> **Amended 2026-09-19 (decision W, docs/47 §15):** `workers` is deliberately **not**
+> added to the `app_platform` list — worker jobs run tenant-scoped (`app_rw` +
+> per-message `app.tenant_id`) and stay under RLS by default; the exemption is per named
+> platform-wide *job* in the workers manifest (DLQ sweep, cross-tenant session cleanup,
+> report generation), CI-asserted. The table above is the D16 record; docs/02 §9 is the
+> living model.
 | Analytics read models | `app_platform` (writes) / `app_rw` (reads) | `*_ro` tables carry `tenant_id` and are RLS-enforced for readers; the updater writes per tenant with context set, so no exemption is needed there |
 
 `auth_sessions` policy is now explicit: tenant rows via `app.tenant_id`; console rows

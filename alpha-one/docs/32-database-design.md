@@ -27,7 +27,7 @@
 - **Indexes**: every `(tenant_id, …)` leading; the read-model tables (`*_ro`)
   are the query surface for reads (19 §3.1).
 
-## 2. The schema (122 tables in 29 DDL blocks, module-ordered)
+## 2. The schema (123 tables in 29 DDL blocks, module-ordered)
 
 ### 02 — AUTH (from docs/02-identity-access.md §9)
 
@@ -198,14 +198,14 @@ CREATE TABLE tenants (
   limits        JSONB NOT NULL DEFAULT '{}',
   settings      JSONB NOT NULL DEFAULT '{}',        -- validated vs contracts schema
   branding      JSONB NOT NULL DEFAULT '{}',
-  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot
+  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot; written only in the entitlement-change transaction (never a second write path, never read for authz)
   onboarding_state JSONB NOT NULL DEFAULT '{"completedSteps":[]}',
   data_region   VARCHAR(20) NOT NULL DEFAULT 'eu-hetzner',
   suspended_at  TIMESTAMPTZ, suspension_reason TEXT,
   created_by    ULID,                                -- platform staff identity
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  activated_at  TIMESTAMPTZ, suspended_reason TEXT,
+  activated_at  TIMESTAMPTZ                         -- set on the onboarding->active transition
   deletion_scheduled_at TIMESTAMPTZ
 );
 CREATE INDEX idx_tenants_status ON tenants(status);
@@ -215,6 +215,9 @@ CREATE TABLE domain_mappings (
   id            ULID PRIMARY KEY,
   tenant_id     ULID NOT NULL REFERENCES tenants(id),
   domain        VARCHAR(255) UNIQUE NOT NULL,
+  -- custom domains ONLY (decision D, docs/47 §15): the subdomain lives solely in
+  -- tenants.slug — resolution never reads this table for {slug}.alpha1.io, and the
+  -- 'subdomain' enum value is dropped at the V1.1 custom-domain freeze
   type          TEXT NOT NULL CHECK (type IN ('subdomain','custom')),
   verified      BOOLEAN NOT NULL DEFAULT false,
   verification_token TEXT,            -- TXT record token (custom domain)
@@ -260,8 +263,22 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
   PRIMARY KEY (id)
-);
+) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
+
+-- Retention (decision U, 2026-09-19): raw rows are kept 25 months (monthly partitions
+-- dropped past the window by the scheduled-jobs worker); from month 13 onward the
+-- flusher also writes monthly rollups below, and BIL (V3) reads rollups for anything
+-- older. Tenant deletion purges both per §5.2 (rollups keep the anonymised totals).
+CREATE TABLE usage_rollups_monthly (
+  tenant_id        ULID NOT NULL,
+  metric_name      TEXT NOT NULL,
+  month            DATE NOT NULL,          -- first day of the month, UTC
+  value_total      NUMERIC(18,4) NOT NULL,
+  sample_count     BIGINT NOT NULL,
+  rolled_up_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, metric_name, month)
+);
 ```
 
 ### 04 — GW+EVT (from docs/04-gateway-events.md §9)

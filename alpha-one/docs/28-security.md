@@ -310,7 +310,9 @@ context set with `SET LOCAL`), `app_rw` + four `SECURITY DEFINER` accessors in t
 schema (the only way to resolve a session by id, a key by hash, a link by `idp_user_id`,
 or a console session without a tenant context), `app_platform` (`BYPASSRLS`, enumerated
 cross-tenant services only: relay, ledger/audit appliers, ANA updaters, `idp-sync`, CON
-read models — their queries still carry explicit `tenant_id` predicates), and `migrator`
+read models — their queries still carry explicit `tenant_id` predicates), **workers**
+(decision W, docs/47 §15: per-message `app.tenant_id` from the event/job, under RLS by
+default; only the manifest-named platform-wide jobs get `app_platform`), and `migrator`
 (`BYPASSRLS`, discrete DDL job, never in app config). `identities`, `identity_idp_links`,
 `auth_backup_codes`, `tenants`, `casbin_rule` and platform-scoped audit rows are
 platform-owned and guard-only. A worker that reads cross-tenant without `app_platform`

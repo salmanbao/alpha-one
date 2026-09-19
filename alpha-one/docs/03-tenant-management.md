@@ -39,7 +39,11 @@ CON (staff) ──create/suspend/upgrade──► TEN domain (api package)
   read. Changing a platform default does NOT rewrite tenants; the tenant's row wins.
 - **Entitlements** = `tenant_entitlements` rows (module, enabled, limit overrides) +
   Flipt flags for code-level kill switches (`TEN-10`, `CON-31`). GW reads
-  entitlements per route group; Flipt decides per feature.
+  entitlements per route group; Flipt decides per feature. `tenants.features`
+  is a **denormalised snapshot, not a second source of truth**: it is written
+  only inside the same transaction as `tenant_entitlements` by the
+  entitlement-change path, and no authorization decision ever reads it (GW
+  step 6 reads the rows; the snapshot exists for cheap renders/exports).
 - **White-label** is data, not code: `tenants.branding` JSONB → compiled to CSS
   variables + email template brand at render time (§3.4).
 
@@ -87,7 +91,10 @@ alphaone`. Availability is checked against `tenants.slug` **and** the reserved l
 in one call (`GET /v1/tenants/subdomain-check`), with DNS only consulted at
 provisioning. **V1: subdomains are immutable** — a change would break cookies, email
 links and webhooks, so `TEN-43` (V2) ships it as an explicit migration with a
-redirect window rather than an edit field.
+redirect window rather than an edit field. **`tenants.slug` is the subdomain's single
+source of truth** (decision D, docs/47 §15): resolution reads the slug for
+`{slug}.alpha1.io` and never `domain_mappings`; that table is for **custom domains
+only** (its `subdomain` type value is dropped at the V1.1 custom-domain freeze).
 
 ### 3.3 Configuration surface (settings JSONB, curated keys)
 
@@ -450,14 +457,14 @@ CREATE TABLE tenants (
   limits        JSONB NOT NULL DEFAULT '{}',
   settings      JSONB NOT NULL DEFAULT '{}',        -- validated vs contracts schema
   branding      JSONB NOT NULL DEFAULT '{}',
-  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot
+  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot; written only in the entitlement-change transaction (never a second write path, never read for authz)
   onboarding_state JSONB NOT NULL DEFAULT '{"completedSteps":[]}',
   data_region   VARCHAR(20) NOT NULL DEFAULT 'eu-hetzner',
   suspended_at  TIMESTAMPTZ, suspension_reason TEXT,
   created_by    ULID,                                -- platform staff identity
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  activated_at  TIMESTAMPTZ, suspended_reason TEXT,
+  activated_at  TIMESTAMPTZ                         -- set on the onboarding->active transition
   deletion_scheduled_at TIMESTAMPTZ
 );
 CREATE INDEX idx_tenants_status ON tenants(status);
@@ -467,6 +474,9 @@ CREATE TABLE domain_mappings (
   id            ULID PRIMARY KEY,
   tenant_id     ULID NOT NULL REFERENCES tenants(id),
   domain        VARCHAR(255) UNIQUE NOT NULL,
+  -- custom domains ONLY (decision D, docs/47 §15): the subdomain lives solely in
+  -- tenants.slug — resolution never reads this table for {slug}.alpha1.io, and the
+  -- 'subdomain' enum value is dropped at the V1.1 custom-domain freeze
   type          TEXT NOT NULL CHECK (type IN ('subdomain','custom')),
   verified      BOOLEAN NOT NULL DEFAULT false,
   verification_token TEXT,            -- TXT record token (custom domain)
@@ -512,8 +522,22 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
   PRIMARY KEY (id)
-);
+) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
+
+-- Retention (decision U, 2026-09-19): raw rows are kept 25 months (monthly partitions
+-- dropped past the window by the scheduled-jobs worker); from month 13 onward the
+-- flusher also writes monthly rollups below, and BIL (V3) reads rollups for anything
+-- older. Tenant deletion purges both per §5.2 (rollups keep the anonymised totals).
+CREATE TABLE usage_rollups_monthly (
+  tenant_id        ULID NOT NULL,
+  metric_name      TEXT NOT NULL,
+  month            DATE NOT NULL,          -- first day of the month, UTC
+  value_total      NUMERIC(18,4) NOT NULL,
+  sample_count     BIGINT NOT NULL,
+  rolled_up_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, metric_name, month)
+);
 ```
 
 **RLS (D3).** Every tenant-owned table in this module (`domain_mappings`,

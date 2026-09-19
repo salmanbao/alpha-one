@@ -29,7 +29,7 @@ sequence) and by reconciliation (nightly job, docs/43 §7):
 |---|---|---|---|
 | 1 | **The business entity** — firm, jurisdiction, KYB, plan, status | `tenants` row (guard-only, platform realm) | the saga's step 2; the state machine (§5) |
 | 2 | **The identity partition** — one ZITADEL Organization + one OIDC application | `tenants.idp_org_id` + `tenants.idp_client_id` (secret in the tenant secret store, referenced) | saga step 3 (G34/D19); compensation destroys on failure |
-| 3 | **The host** — `{slug}.alpha1.io` (+ custom domain, V1.1) | `tenants.slug` (unique, immutable in V1) + `domain_mappings` + Cloudflare DNS | saga step 5; G8 rules (§4) |
+| 3 | **The host** — `{slug}.alpha1.io` (+ custom domain, V1.1) | `tenants.slug` — the **only** subdomain source of truth (decision D); `domain_mappings` holds custom domains only | saga step 5; G8 rules (§4) |
 | 4 | **The data partition** — `tenant_id` on every tenant-owned row | every per-module table (shared schema, ADR-1) | app guard + RLS (§7); isolation suite |
 | 5 | **The configuration set** — settings, branding, entitlements, limits, flags | `tenants.settings/branding/features/limits` + `tenant_entitlements` + Flipt | JSON Schema validation (M6, now `contracts/tenants/tenant-settings.schema.json`); denormalised resolved rows |
 
@@ -247,10 +247,24 @@ locale keys (TEN-04/06/07, V2), per-tenant API version pinning (V2 door), reside
 | M4 | **The IdP org's fate at termination was unstated** — the deletion saga suspended/deleted users but never said what happens to the ZITADEL org or the subdomain DNS; `platform.tenant.provision` mentions "destroy a tenant org" only as saga compensation | Medium | **FIXED** — docs/03 §5.2 now states: org retained as the IdP-side tombstone (empty ⇒ login impossible), DNS removed at data_cleanup, destruction only via step-3 compensation or audited break-glass; slugs/ids never reused |
 | M5 | **`contracts/api/tenant.md` still said `DRAFT / Owner: TBD / Last updated: TODO`** and its error note carried a 5-name shorthand of the 31-name reserved list | Low | **FIXED** — header ratified (owner TEN/BE-2, dated, frozen-v0 basis); the full G8 reserved list referenced |
 | M6 | **The settings JSON Schema was dangling**: docs/03 §3.3 named `contracts/tenants/tenant-settings.schema.json` as the validation source but the file did not exist in the pack — a developer implementing settings writes had no contract | Medium | **FIXED** — the schema is authored (curated keys, `additionalProperties: false`, secrets explicitly out of scope, V2 keys intentionally absent until their freeze) |
+| M7 | **`workers` was missing from the RLS model**: event consumers, schedulers, reconcilers, the provisioning orchestrator and the metering flusher all do cross-tenant DB work, yet the `app_platform` exemption enumerated only relay / ledger-audit appliers / ANA updaters / `idp-sync` / CON read models — a developer wiring a worker had no defined DB role | High | **FIXED / DECIDED (W, owner answer 2026-09-19)** — hybrid: worker jobs run **tenant-scoped by default** (`app_rw` + per-message `app.tenant_id` from the event/job, under RLS); only manifest-named platform-wide jobs (DLQ sweep, cross-tenant session cleanup, report generation) get `app_platform`, CI-asserted. docs/02 §9 row, docs/28 §3.3, docs/44 §5 amendment note |
+| M8 | **`usage_events` had no retention/partitioning rule** — an unbounded table shipping in V1 (the docs/28 retention classes S1–S5/S2b do not cover metering) | Medium | **FIXED / DECIDED (U, owner answer 2026-09-19)** — monthly `PARTITION BY RANGE`; raw rows kept **25 months** then partitions dropped; monthly rollups (`usage_rollups_monthly`) from month 13 for BIL (V3); purge at tenant deletion per docs/03 §5.2. docs/03 §9 DDL + rules |
+| M9 | **A subdomain was represented twice** (`tenants.slug` and `domain_mappings(type='subdomain')`) with no precedence rule and no instruction whether the saga writes the mappings row | Low | **FIXED / DECIDED (D, owner answer 2026-09-19)** — `tenants.slug` is the single subdomain source of truth; `domain_mappings` is custom-domains-only and its `subdomain` enum value drops at the V1.1 freeze. docs/03 §3.2 + §9 DDL comment |
+| M10 | **Mechanical drift**: the `tenants` DDL carried a duplicate suspension column (`suspension_reason` *and* `suspended_reason`), docs/04's GW 3.5a did not state it is route-class-aware (onboarding staff surfaces pass), `tenants.features` had no sync rule, and gates 15/16 were not recorded in the docs/34 §9 checklist | Low | **FIXED** — duplicate column removed (propagated to docs/32 + `contracts/data/schemas/03-ten.sql` via the generators); 3.5a route-class note; features snapshot = same-transaction write, never read for authz; both gate checklist items added to docs/34 §9 |
 
 No PRD workbook row changed; no decision was re-opened. `docs/30`/`contracts/errors/taxonomy.md`
 rows changed meaning-text only (no code added or removed — the registry still has exactly
 the V1 set plus the same extended names).
+
+## 15. Owner decisions W / U / D (asked and answered, 2026-09-19)
+
+Raised as interactive findings M7–M9; the owner picked one option each. Binding from now on:
+
+| ID | Question | Decision |
+|---|---|---|
+| **W** | How do `workers` get DB access under RLS? | **Hybrid (per-message tenant context).** Worker jobs run as `app_rw` with `SET LOCAL app.tenant_id` taken from the event's/job's `tenant_id` and stay under RLS by default. The workers manifest names the platform-wide jobs that may use the `app_platform` DSN (initially: DLQ sweep, cross-tenant session cleanup, report generation); CI asserts only manifest jobs reference that DSN, and the list grows by *job name*, not by service. Every event and saga job already carries `tenant_id` (EVT-03), so the context is always available; a job without one is platform-wide by definition and must be in the manifest. |
+| **U** | Retention/partitioning for `usage_events`? | **Declared now.** Monthly `PARTITION BY RANGE(period_started_at)`; raw rows kept **25 months**, partitions dropped by the scheduled-jobs worker past the window; the flusher writes `usage_rollups_monthly` `(tenant_id, metric_name, month, value_total, sample_count)` from month 13 onward, and BIL (V3) reads rollups for anything older. Tenant deletion purges raw + rollups per docs/03 §5.2 (rollups keep anonymised totals where the §5.2 retention rule requires). |
+| **D** | Source of truth for a subdomain? | **`tenants.slug` only.** Resolution reads the slug for `{slug}.alpha1.io` and never `domain_mappings`; that table is custom-domains-only, and its `type='subdomain'` value is dropped at the V1.1 custom-domain freeze (TEN-05/26). The saga's DNS step creates no mappings row for the subdomain. |
 
 ---
 

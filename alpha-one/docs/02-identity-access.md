@@ -910,6 +910,7 @@ identity-scoped accessors.
 | Request paths | `app_rw` | RLS enforced; context set with `SET LOCAL` inside the transaction (PgBouncer txn-mode safe) |
 | Auth resolution (session by id, key by hash, link by `idp_user_id`, console-session check) | `app_rw` + **`SECURITY DEFINER` accessors** (four named functions in the `auth` schema) | the only way to read those tables without a tenant context; console sessions (`is_console`, `tenant_id IS NULL`) are reachable **only** this way |
 | Cross-tenant services (relay, ledger/audit appliers, ANA updaters, `idp-sync`, CON read models) | `app_platform` | `BYPASSRLS`, enumerated services only, and their queries still carry explicit `tenant_id` predicates (CI grep-class check on new sqlc queries, docs/06) — RLS is their backstop, not their isolation |
+| **Workers** (event consumers, schedulers, reconcilers, the provisioning orchestrator, the metering flusher) | `app_rw` + **per-message context** (decision W, docs/47 §15) | every job sets `app.tenant_id` (`SET LOCAL`) from the event's/job's `tenant_id` and stays **under RLS by default**; only **named platform-wide jobs** in the workers manifest (DLQ sweep, cross-tenant session cleanup, report generation) run as `app_platform` — the exemption is per *job*, recorded in the manifest and CI-asserted, never per service |
 | Migrations / DDL | `migrator` | `BYPASSRLS`, a discrete job, never in application config |
 
 Negative tests (docs/35 §5.1): no tenant context → zero rows on every tenant table;
