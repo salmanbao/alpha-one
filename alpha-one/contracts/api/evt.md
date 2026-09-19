@@ -38,8 +38,8 @@ Broker commands are requests, not facts. They live in a separate Postgres comman
 - Consumes (carries): every event in `contracts/events/catalog.md`.
 
 ## Open contract questions
-- TODO — needs owner decision: Redis Stream key naming per tenant vs shared stream, and consumer group naming.
-- TODO — needs owner decision: relay batch size / poll interval and lag alerting threshold.
-- TODO — needs owner decision: outbox retention policy and event log retention policy (replay window).
-- TODO — needs owner decision: command table retry/backoff parameters and dead-letter handling (EVT-20 says retry and backoff, no numbers).
-- TODO — needs owner decision: envelope `version` bump policy per event type.
+- Resolved 2026-09-19 (docs/54): shared per-topic streams `topic.<domain>` (docs/04 §3.3; tenant_id is in the envelope, lanes order by entity_id); consumer group = the consumer's declared name (§3.5).
+- Resolved 2026-09-19 (docs/54): keyset poll, 500/batch (docs/04 §3.3); lag alerting: `/readyz` fails past 60 s relay lag (GW-14) and `evt.relay_stopped` CRITICAL at 60 s (docs/04 §6.2).
+- Resolved 2026-09-19 (docs/54): outbox rows pruned 7 d after publish; `events` retained 13 months in PG, then R2 archive (EVT-22) — the replay window.
+- Resolved 2026-09-19 (docs/54): the numbers live with the executor — docs/08 §3.4: 3 retries with backoff, circuit-breaker per account, terminal = `dead` + CRITICAL + LCC-27 monitor backup; `credit` never auto-retries.
+- Resolved 2026-09-19 (docs/54): `version` bumps on any payload change, additive-only between freezes (the envelope schema's own rule, contracts/events/payloads/envelope.schema.json).

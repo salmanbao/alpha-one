@@ -251,14 +251,15 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/chk.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/payments/catalog` (purchasable packages × rules ×
+Trader (TD): `GET /v1/trader/payments/catalog` (purchasable packages × rules ×
 pricing — from TEN, filtered by tenant policy),
-`POST /v1/payments/intents` `{order:{package_id, rule_set_id, currency},
+`POST /v1/trader/payments/intents` `{order:{package_id, rule_set_id, currency},
 method}` → `{intent_id, redirect_url|deposit_instructions|wire_details, ttl}`,
-`GET /v1/payments/intents/{id}` (status poll for the redirect-back UX),
-`GET /v1/payments/orders` (own history: orders + invoices + refund status),
-`POST /v1/payments/orders/{id}/refund-request` (policy-window check),
-`GET /v1/payments/methods` + `POST|DELETE` (V2 saved methods).
+`GET /v1/trader/payments/intents/{id}` (status poll for the redirect-back UX),
+`GET /v1/trader/payments/orders` (own history: orders + invoices + refund status),
+`POST /v1/trader/payments/orders/{id}/refund-request` (policy-window check),
+`GET /v1/trader/payments/methods` + `POST|DELETE` (V2 saved methods).
+(Paths normalized to the GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/payments?status=`, `GET /v1/admin/payments/intents/{id}`
 (full detail incl. provider refs, redacted),

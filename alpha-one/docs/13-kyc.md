@@ -246,12 +246,13 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/kyc.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/kyc/status` (both levels, what's missing, next action),
-`POST /v1/kyc/sessions` `{level, country}` → `{session_id, checkout_url,
+Trader (TD): `GET /v1/trader/kyc/status` (both levels, what's missing, next action),
+`POST /v1/trader/kyc/sessions` `{level, country}` → `{session_id, checkout_url,
 expires_at}` (KYC-04 V2 names it; V1 has it),
-`GET /v1/kyc/sessions/{id}` (progress, KYC-36),
-`POST /v1/kyc/sessions/{id}/documents` (manual upload, KYC-12),
-`GET /v1/kyc/sessions/{id}/documents` (own uploaded docs).
+`GET /v1/trader/kyc/sessions/{id}` (progress, KYC-36),
+`POST /v1/trader/kyc/sessions/{id}/documents` (manual upload, KYC-12),
+`GET /v1/trader/kyc/sessions/{id}/documents` (own uploaded docs).
+(Paths normalized to the GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/kyc/queue` (manual_review sessions),
 `GET /v1/admin/kyc/sessions/{id}` (detail: provider verdict, docs [audited

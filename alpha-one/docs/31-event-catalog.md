@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (158 events — 37 V1 baseline, 121 extended — across 34 topics)
+## 2. The catalog (157 events — 37 V1 baseline, 120 extended — across 33 topics)
 
 ### `user.*`
 
@@ -78,12 +78,6 @@
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
 | `gateway.rate_limit_breached` | 04 (GW+EVT) | GW | ANA, CON | ext |
-
-### `relay.*`
-
-| Event | Producer | When / V1 producer | Consumers | Tier |
-|---|---|---|---|---|
-| `relay.lag` | 04 (GW+EVT) | relay | Prometheus; CON gauge | ext |
 
 ### `outbox.*`
 

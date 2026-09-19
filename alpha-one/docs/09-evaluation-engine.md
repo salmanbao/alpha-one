@@ -305,15 +305,16 @@ Engine (internal, Rust service): `POST /internal/v1/evaluate`
 `{account_id, state, rule_pack, tick}` → `{verdict, state_after, metrics}`
 (stateless request — also used by the re-run tool).
 
-Tenant (ADM): `GET|POST /v1/rule-packs`, `GET /v1/rule-packs/{id}`,
-`POST /v1/rule-packs/{id}/activate` (new version), `POST /v1/rule-packs/{id}/rebind`
-(EVL-34, reason required), `POST /v1/evaluations/{account_id}/run` (EVL-36, 2FA),
-`POST /v1/evaluations/{account_id}/override` (EVL-20, 2FA + reason),
-`GET /v1/evaluations/{account_id}/verdicts` (dispute view: verdicts + evidence
-+ observed ticks), `GET /v1/evaluations/{account_id}/state`.
+Tenant (ADM): `GET|POST /v1/admin/rule-packs`, `GET /v1/admin/rule-packs/{id}`,
+`POST /v1/admin/rule-packs/{id}/activate` (new version), `POST /v1/admin/rule-packs/{id}/rebind`
+(EVL-34, reason required), `POST /v1/admin/evaluations/{account_id}/run` (EVL-36, 2FA),
+`POST /v1/admin/evaluations/{account_id}/override` (EVL-20, 2FA + reason),
+`GET /v1/admin/evaluations/{account_id}/verdicts` (dispute view: verdicts + evidence
++ observed ticks), `GET /v1/admin/evaluations/{account_id}/state`. (Paths normalized
+to the GW-01 groups — D46, docs/54.)
 
-Trader (TD): `GET /v1/accounts/{id}/rules` (plain-language rule rendering — TD-27),
-`GET /v1/accounts/{id}/breach-report` (TD-25: structured breach explanation from
+Trader (TD): `GET /v1/trader/accounts/{id}/rules` (plain-language rule rendering — TD-27),
+`GET /v1/trader/accounts/{id}/breach-report` (TD-25: structured breach explanation from
 verdict evidence).
 ## 8. Schema (key shapes)
 

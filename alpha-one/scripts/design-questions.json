@@ -483,6 +483,36 @@
       "owner": "BE-1 + BE-2",
       "deadline": "Phase 1 (CHK/KYC build)",
       "answer": "**Answered 2026-09-19 \u2014 option A:** no V1 purchase gate; docs/12 \u00a714 and docs/13 \u00a73.2 de-conflicted to one table."
+    },
+    {
+      "id": "D45",
+      "source_doc": "54",
+      "section": "Gateway & Event Backbone",
+      "question": "The API success envelope has been a 'working draft \u2014 owner decision' since the research (api/gw.md's oldest TODO). Options \u2014 A: adopt the working draft {data, meta{request_id, version, pagination{cursor, has_more}}} as binding (matches every module's \u00a78 examples + the shared OpenAPI envelope + GW-21 cursor pagination); B: flat {data} + pagination headers (churn against 11 modules' illustrated shapes). See docs/54 \u00a72 F9.",
+      "raised_by": "Fourteenth-pass review (docs/54 F9)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (GW build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the working draft is binding; api/gw.md updated."
+    },
+    {
+      "id": "D46",
+      "source_doc": "54",
+      "section": "Gateway & Event Backbone",
+      "question": "The extended surfaces used un-grouped paths (/v1/accounts, /v1/payouts, /v1/kyc, /v1/payments) while GW-01 binds grouped ones (/v1/trader/*, /v1/admin/*, /v1/console/*, /v1/webhooks/*). Options \u2014 A: grouped everywhere (the GW-01 groups are the plan; normalize the \u00a77.2 illustrations); B: resource-style with realm by token (contradicts the binding groups and route-class gates). See docs/54 \u00a72 F10.",
+      "raised_by": "Fourteenth-pass review (docs/54 F10)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (GW build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the GW-01 groups are the URL plan; docs/09/11/12/13 \u00a77.2 normalized; internal /internal/* compose-only group documented."
+    },
+    {
+      "id": "D47",
+      "source_doc": "54",
+      "section": "Gateway & Event Backbone",
+      "question": "V1 DLQ operations were undefined: a poison event lands in dlq.{consumer} + alert, but the CON list/retry screen is blueprint V2 and replay is V2 \u2014 no documented V1 recovery. Options \u2014 A: a relay dlq list/retry/purge subcommand in V1 (ops SOPS identity, AUD-logged; CON screen stays V2); B: alert-only with documented manual SQL; C: pull the CON DLQ screen into V1. See docs/54 \u00a72 F11.",
+      "raised_by": "Fourteenth-pass review (docs/54 F11)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (relay build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the relay subcommand ships in V1 (blueprint step 2); the rule is no dead event without a retry or a recorded purge decision."
     }
   ]
 }

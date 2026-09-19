@@ -305,9 +305,11 @@ gap detection, the full bridge.tick shape, BRG-owned account_snapshots, worker-i
 and `bridge.sync_gap` joining the V1 catalog), the twelfth-pass artifact is `docs/52-pay-review.md`
 (the payout review — D32 answered: the FUNDED breach edge + hold-flag queue; D37–D39: no V1 request
 event, reserves as visibility-only, re-check-failure pins; the PAY-13 machine reconciled everywhere),
-and the thirteenth-pass artifact is `docs/53-chk-kyc-review.md` (money-in + gates — D40–D44: minimal
+the thirteenth-pass artifact is `docs/53-chk-kyc-review.md` (money-in + gates — D40–D44: minimal
 manual refunds, wire to V2, order-at-submit + checkout_sessions DDL, KYC edges pinned, no V1 purchase
-gate; the workbook itself used as the citation oracle);
+gate; the workbook itself used as the citation oracle), and the fourteenth-pass artifact is
+`docs/54-gw-evt-review.md` (the spine — D45–D47: the success envelope binding, the GW-01 groups as the
+URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

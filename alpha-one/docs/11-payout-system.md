@@ -351,15 +351,16 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/pay.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/payouts/eligibility?account_id=` (the TD-26 preview:
+Trader (TD): `GET /v1/trader/payouts/eligibility?account_id=` (the TD-26 preview:
 payoutable amount, next eligible time, method list),
-`POST /v1/payouts/requests` `{account_id, method_id, amount_cents?}` (amount
+`POST /v1/trader/payouts/requests` `{account_id, method_id, amount_cents?}` (amount
 optional = "everything available"; idempotency key mandatory),
-`GET /v1/payouts` (own, history + status), `GET /v1/payouts/{id}`
+`GET /v1/trader/payouts` (own, history + status), `GET /v1/trader/payouts/{id}`
 (status + calc summary + receipt link when settled),
-`DELETE /v1/payouts/requests/{id}` (cancel pre-approval),
-`GET|POST /v1/payouts/methods`, `DELETE /v1/payouts/methods/{id}` (PAY-05),
-`POST /v1/payouts/methods/{id}/default` (V2).
+`DELETE /v1/trader/payouts/requests/{id}` (cancel pre-approval),
+`GET|POST /v1/trader/payouts/methods`, `DELETE /v1/trader/payouts/methods/{id}` (PAY-05),
+`POST /v1/trader/payouts/methods/{id}/default` (V2). (Paths normalized to the
+GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/payouts/queue?status=`,
 `POST /v1/admin/payouts/{id}/approve` (2FA, note),
