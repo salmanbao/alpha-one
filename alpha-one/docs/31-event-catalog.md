@@ -94,16 +94,16 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `ledger.entry_posted` | 05 (LED/AUD) | LED | AUD (mirror), ANA, CON (platform finance) | ext |
-| `ledger.entry_reversed` | 05 (LED/AUD) | LED | AUD, ANA, NOT (tenant finance) | ext |
-| `ledger.reconciliation_exception` | 05 (LED/AUD) | worker | NOT (tenant owner + CON), ADM queue | ext |
+| `ledger.entry_posted` | 05 (LED/AUD) | LED | ext | ext |
+| `ledger.entry_reversed` | 05 (LED/AUD) | LED | ext | ext |
+| `ledger.reconciliation_exception` | 05 (LED/AUD) | worker | ext | ext |
 
 ### `audit.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `audit.critical_action` | 05 (LED/AUD) | AUD (tiered) | NOT (owner/CON), RSK (V2 correlation) | ext |
-| `audit.export_completed` | 05 (LED/AUD) | AUD | AUD self (meta), CON | ext |
+| `audit.critical_action` | 05 (LED/AUD) | AUD (tiered) | ext | ext |
+| `audit.export_completed` | 05 (LED/AUD) | AUD | ext | ext |
 | `audit.access_denied` | 17 (ADM) | security tab (V2) | security tab (V2) | ext |
 
 ### V1 PascalCase events (LCC-23, PayoutPaid)

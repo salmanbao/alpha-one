@@ -277,13 +277,24 @@ docs/34 §9 alongside the five above:
     the `tenants.status` DDL, and every blocked cell's code is registered in
     `contracts/errors/taxonomy.md`; the check mode fails the build on drift (docs/47 §11).
 
+**Gates added by the eighth-pass review (docs/48, 2026-09-19)** — recorded in docs/34 §9:
+
+17. **Journal invariants are commit-enforced** — the deferred constraint trigger rejects
+    unbalanced or mixed-currency entries at COMMIT (property test over randomized line
+    sets passes), immutability triggers + INSERT-only privileges hold for the app role,
+    the ledger-applier replays the same event idempotently (same `idempotency_key` → one
+    entry), and a deliberately unbalanced post rolls the business transaction back with
+    `led.entry_unbalanced` (docs/48 §5, decisions D25–D27).
+
 The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12) and
 the fourth-pass artifact is `docs/44-auth-multitenancy-review.md` (G21–G33, decisions
 D13–D18) and the fifth-pass artifact is `docs/45-auth-contract-hardening.md` (G34–G45,
 decisions D19–D24) and the sixth-pass artifact is `docs/46-authorization-model.md` (the
-consolidated authorization specification, findings A1–A4) and the seventh-pass artifact is
+consolidated authorization specification, findings A1–A4), the seventh-pass artifact is
 `docs/47-multi-tenancy-model.md` (the consolidated multi-tenancy specification, findings
-M1–M10, owner decisions W/U/D recorded in its §15); like docs/42 these change V1 design detail only — **no PRD workbook row was
+M1–M10, owner decisions W/U/D recorded in its §15) and the eighth-pass artifact is
+`docs/48-ledger-audit-review.md` (the LED + AUD deep review, findings F1–F10, owner
+decisions D25–D27); like docs/42 these change V1 design detail only — **no PRD workbook row was
 changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)

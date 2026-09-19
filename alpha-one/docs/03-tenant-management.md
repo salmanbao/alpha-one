@@ -140,6 +140,7 @@ DOC). Admin preview in ADM (`ADM-19` settings pages). No JS theme injection.
 | 4 | branding defaults + legal defaults | delete rows | retry |
 | 5 | subdomain DNS (Cloudflare API: `CNAME {slug}.alpha1.io`) | delete record | retry; custom domain = V1.1 step |
 | 6 | default broker group ref (BRG-12) + default rule packs (EVL seed) | delete refs | retry |
+| 6b | seed the tenant chart of accounts (LED CoA template, docs/05 §3.1 — accounts + platform-account links; idempotent) | delete seeded rows | retry |
 | 7 | Flipt flags for plan | reset flags | retry |
 | 8 | welcome invite email to owner (NOT) | — (safe to resend) | retry ×3 |
 | 9 | `status=onboarding` → checklist starts (ADM-39 side) | — | — |
@@ -521,7 +522,7 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   period_started_at TIMESTAMPTZ NOT NULL,
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id, period_started_at)   -- partitioned table: PK must include the partition key
 ) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
 
@@ -643,7 +644,7 @@ evidence for tenant onboarding records — consider-later register).
 | 1. Schemas (tenants, domain_mappings, entitlements, provisioning_jobs, usage_events) + guard | BE-2 | 1.5 d | OPS, AUTH | isolation suite green |
 | 2. Tenant CRUD + settings/branding validation (JSON Schemas in contracts) | BE-2 | 3 d | 1 | CON creates tenant `staging-fb` end-to-end |
 | 3. Resolution middleware (custom domain/subdomain/header/key) + negative cache | BE-1 | 2 d | 1 | unknown subdomain → 404, < 5 ms cached |
-| 4. Provisioning saga (steps 1–9) + resume CLI | BE-2 | 4 d | 2, AUTH org, Cloudflare creds | kill step 6 mid-run → resume completes; tenant live on staging subdomain |
+| 4. Provisioning saga (steps 1–9, incl. 6b CoA seed — D26) + resume CLI | BE-2 | 4 d | 2, AUTH org, Cloudflare creds | kill step 6 mid-run → resume completes; tenant live on staging subdomain |
 | 5. Suspension/activation + session/traffic kill (event wiring to AUTH/GW) | BE-1 | 1.5 d | 4 | suspended tenant's live trader gets 403 in < 1 s |
 | 6. Limits enforcer (`limits.Assert`) + usage metering buffer | BE-2 | 2 d | 4 | over-limit account provisioning rejected with `tenant.limit_exceeded` (docs/47 M3) |
 | 7. White-label render path (CSS vars + email brand) + asset upload/validation | FE-01 + BE-2 | 3 d | 5 | TD login page shows tenant brand on staging |

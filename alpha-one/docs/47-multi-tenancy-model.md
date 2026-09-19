@@ -123,11 +123,11 @@ rendered table, the YAML, the DDL status list, or the error taxonomy drift apart
 
 ## 6. Birth and death — the two sagas
 
-**Provisioning** (docs/03 §3.5, 9 steps + 3a): validate/KYB/sanctions → create row →
+**Provisioning** (docs/03 §3.5, 9 steps + 3a + 6b): validate/KYB/sanctions → create row →
 provision the ZITADEL org + application + owner membership (+ 3a: external IdP + SCIM
 token when contracted; **no group→role mapping in V1**, D22 — roles are assigned by us) →
-branding/legal defaults → DNS → broker group + rule packs → Flipt flags → welcome invite
-→ `onboarding`. Orchestrated in `workers` on a PG `FOR UPDATE SKIP LOCKED` queue; every
+branding/legal defaults → DNS → broker group + rule packs **+ the LED chart-of-accounts
+seed (6b, decision D26 — docs/48)** → Flipt flags → welcome invite → `onboarding`. Orchestrated in `workers` on a PG `FOR UPDATE SKIP LOCKED` queue; every
 step idempotent with a named compensation; terminal failure → `provisioning_failed` +
 CON resume. MIG (TTS cutover) reuses this pipeline with extra import steps.
 

@@ -85,7 +85,7 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   period_started_at TIMESTAMPTZ NOT NULL,
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
-  PRIMARY KEY (id)
+  PRIMARY KEY (id, period_started_at)   -- partitioned table: PK must include the partition key
 ) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
 
