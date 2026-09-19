@@ -385,4 +385,5 @@ freezing with its module.
 `contracts/permissions/roles.yaml` (bindings) ·
 `contracts/permissions/matrix.md` (generated views) ·
 [44 — fourth pass](44-auth-multitenancy-review.md) (D14–D18) ·
-[45 — fifth pass](45-auth-contract-hardening.md) (G34–G45, D19–D24).*
+[45 — fifth pass](45-auth-contract-hardening.md) (G34–G45, D19–D24) ·
+[47 — The Multi-Tenancy Model](47-multi-tenancy-model.md) (the isolation/lifecycle companion).*

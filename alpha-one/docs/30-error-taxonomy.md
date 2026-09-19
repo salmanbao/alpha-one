@@ -90,7 +90,7 @@
 | `tenant.subdomain_taken` | 409 | Subdomain already in use — "That subdomain is already taken." | V1 |
 | `tenant.subdomain_reserved` | 409 | Subdomain on reserved list (www, admin, api, console, app) — "That subdomain is reserved." | V1 |
 | `tenant.suspended` | 403 | Tenant traffic denied (reason in details) | ext |
-| `tenant.not_live` | 403 | `onboarding` tenant, trader-facing route | ext |
+| `tenant.not_live` | 403 | Pre-`active` tenant on a tenant-realm route (details.state: provisioning/provisioning_failed/onboarding — docs/47 M2) | ext |
 | `tenant.provisioning_failed` | 500 | Pipeline terminal failure (CON only, with step) | ext |
 | `tenant.slug_taken` | 409 | Slug/subdomain conflict | ext |
 | `tenant.domain_invalid` | 422 | DNS/verification failure (custom domain V1.1) | ext |

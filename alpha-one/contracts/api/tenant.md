@@ -1,11 +1,11 @@
 # Tenant API Contract
 
-Status: DRAFT
-Owner: TBD
+Status: RATIFIED (V1 baseline — the 9 operations below are the frozen v0 contract, docs/99 0.10; bindings per roles.yaml, decision D14)
+Owner: TEN (BE-2)
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-19
 
-Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until contract freeze.
+Derived from the V1 Execution Sheet (V1.0 / V1.1). The V1 rows are frozen; extended rows are provisional until this module's phase freeze (docs/99 §12). The consolidated multi-tenancy specification is `docs/47-multi-tenancy-model.md`.
 
 ## Scope
 Tenant record CRUD with suspend/terminate, tenant resolution at the edge, tenant-scoped data access, per-tenant module entitlements, integration config with secret handling, storage scoping, subdomain availability/reservation. (TEN-01, TEN-02, TEN-03, TEN-08, TEN-11, TEN-12, TEN-15, TEN-18, TEN-42)
@@ -42,7 +42,7 @@ Response 201:
 
 Errors:
 - `tenant.subdomain_taken` 409 — subdomain collision # implied by TEN-42
-- `tenant.subdomain_reserved` 409 — reserved list: www, admin, api, console, app # implied by TEN-42
+- `tenant.subdomain_reserved` 409 — the full reserved list lives in docs/03 §3.2 (review G8): www, admin, api, app, console, login, id, auth, sso, status, docs, help, support, mail, email, cdn, static, assets, billing, pay, payments, bridge, engine, relay, test, staging, demo, beta, internal, alpha1, alphaone # TEN-42
 
 ### GET /v1/tenants/{tenant_id}
 Auth: Super Admin — TEN-01

@@ -1,0 +1,123 @@
+{
+  "$comment": "Alpha One — tenant state × capability matrix. Machine-readable source for the docs/03 §5.1 table (rendered by scripts/verify_tenant_states.py, marker block) and for the docs/35 I-20 table-driven test (every state x surface pair must behave exactly as this file says). Seventh pass, docs/47 (findings M1/M2), 2026-09-19. GW enforcement point: step 3.5a (docs/04 §3.1) — tenant state is checked after authn, before authz; the per-cell error is the GW-18 code returned on that surface.",
+  "version": 1,
+  "decided": "2026-09-19",
+  "artifact": "docs/03 §5.1 (review G7, docs/42) + docs/47 §5",
+  "enforcement": "GW step 3.5a for route-level denies (state read from the resolution cache, <= 5 s stale bound); module-level holds (payout hold, bridge pause, webhook queue) are the owning modules' consumers of the same tenant.* events",
+  "capabilities": {
+    "trader_routes": "Trader portal surfaces on the tenant host (GW-01 trader route group)",
+    "staff_routes": "Tenant staff admin surfaces (ADM host/route group) — console (platform realm) is NOT governed by tenant state and can always reach the CON screens for the tenant record",
+    "api_keys": "Machine access with the tenant's API keys (no tenant-facing surface until AUTH-21; row kept for the matrix's completeness, docs/47 §9)",
+    "webhooks_out": "Outbound tenant webhooks (EVT/Hook0)",
+    "bridge_sync": "Broker sync + enforcement (BRG pollers/commands for this tenant's accounts)",
+    "payments": "New checkout/payment capture (CHK providers)",
+    "payouts": "Payout request/approval/execution (PAY)"
+  },
+  "cells": {
+    "allow": "Surface works normally for this state.",
+    "deny": "Surface refused with the named GW-18 code (details.state carries the tenant state where the code is generic).",
+    "degraded": "Surface partially works as described by the note."
+  },
+  "states": {
+    "pending_approval": {
+      "$comment": "Application received, not approved. No saga has run: no IdP org, no DNS. The host does not resolve (GW step 2 rejects before authn); the record is reachable only by id in CON.",
+      "trader_routes": { "deny": "tenant.unknown_host", "note": "DNS exists only from provisioning step 5 — host resolution fails first" },
+      "staff_routes": { "deny": "tenant.unknown_host" },
+      "api_keys": { "deny": "tenant.unknown_host" },
+      "webhooks_out": { "deny": "tenant.unknown_host" },
+      "bridge_sync": { "deny": "tenant.unknown_host" },
+      "payments": { "deny": "tenant.unknown_host" },
+      "payouts": { "deny": "tenant.unknown_host" }
+    },
+    "provisioning": {
+      "$comment": "Saga steps 1-9 running. DNS appears at step 5; until then the host does not resolve. Nothing serves traffic because the IdP org/application (step 3) may not exist yet.",
+      "trader_routes": { "deny": "tenant.unknown_host", "note": "before saga step 5; after it, tenant.not_live (details.state=provisioning) — a resolved host on a pre-active tenant" },
+      "staff_routes": { "deny": "tenant.unknown_host", "note": "same DNS caveat; tenant.not_live once the host resolves" },
+      "api_keys": { "deny": "tenant.unknown_host" },
+      "webhooks_out": { "deny": "tenant.unknown_host" },
+      "bridge_sync": { "deny": "tenant.unknown_host" },
+      "payments": { "deny": "tenant.unknown_host" },
+      "payouts": { "deny": "tenant.unknown_host" }
+    },
+    "provisioning_failed": {
+      "$comment": "Terminal saga failure, awaiting manual resume (CON). If the failure preceded step 5 the host does not resolve; if it followed, the host resolves and the state gate refuses.",
+      "trader_routes": { "deny": "tenant.not_live", "note": "details.state=provisioning_failed; unresolved-host case yields tenant.unknown_host at GW step 2" },
+      "staff_routes": { "deny": "tenant.not_live" },
+      "api_keys": { "deny": "tenant.not_live" },
+      "webhooks_out": { "deny": "tenant.not_live" },
+      "bridge_sync": { "deny": "tenant.not_live" },
+      "payments": { "deny": "tenant.not_live" },
+      "payouts": { "deny": "tenant.not_live" }
+    },
+    "onboarding": {
+      "$comment": "Saga done, go-live checklist running (ADM-39). Staff work is the point of this state; trader-facing surfaces stay closed; bridge runs in dry-run only so provisioning tests cannot reach a live broker.",
+      "trader_routes": { "deny": "tenant.not_live" },
+      "staff_routes": "allow",
+      "api_keys": { "deny": "tenant.not_live" },
+      "webhooks_out": { "deny": "tenant.not_live" },
+      "bridge_sync": { "deny": "tenant.not_live", "note": "dry-run mode only — BRG sandbox routing, never a live broker connection" },
+      "payments": { "deny": "tenant.not_live" },
+      "payouts": { "deny": "tenant.not_live" }
+    },
+    "active": {
+      "$comment": "Go-live signed off (CON) and KYB verified (docs/03 §10). Everything serves.",
+      "trader_routes": "allow",
+      "staff_routes": "allow",
+      "api_keys": "allow",
+      "webhooks_out": "allow",
+      "bridge_sync": "allow",
+      "payments": "allow",
+      "payouts": "allow"
+    },
+    "suspended": {
+      "$comment": "Reversible, immediate (TEN-15): traffic + sessions killed <= 1 s (GW deny-set + ZITADEL session termination). Webhooks already queued keep delivering for <= 24 h then DLQ; bridge pauses; payouts hold per PAY policy. Reasons: billing (V3), abuse, risk, manual, provider.",
+      "trader_routes": { "deny": "tenant.suspended" },
+      "staff_routes": { "deny": "tenant.suspended" },
+      "api_keys": { "deny": "tenant.suspended" },
+      "webhooks_out": { "deny": "tenant.suspended", "note": "in-flight queue drains <= 24 h, then DLQ" },
+      "bridge_sync": { "deny": "tenant.suspended", "note": "paused, resumable" },
+      "payments": { "deny": "tenant.suspended" },
+      "payouts": { "deny": "tenant.suspended", "note": "held per PAY policy — approved-but-unexecuted payouts wait" }
+    },
+    "deactivated": {
+      "$comment": "Voluntary deactivation, 30-day recovery window (TEN-45). Staff keep an export-only surface; everything else is refused.",
+      "trader_routes": { "deny": "tenant.deactivated" },
+      "staff_routes": { "degraded": "export-only surface (TEN-33 bundle)" },
+      "api_keys": { "deny": "tenant.deactivated" },
+      "webhooks_out": { "deny": "tenant.deactivated" },
+      "bridge_sync": { "deny": "tenant.deactivated" },
+      "payments": { "deny": "tenant.deactivated" },
+      "payouts": { "deny": "tenant.deactivated" }
+    },
+    "pending_deletion": {
+      "$comment": "Retention window after the termination saga; PII already anonymised, R2 archived. Only settlement and export remain.",
+      "trader_routes": { "deny": "tenant.pending_deletion" },
+      "staff_routes": { "degraded": "export-only surface" },
+      "api_keys": { "deny": "tenant.pending_deletion" },
+      "webhooks_out": { "deny": "tenant.pending_deletion" },
+      "bridge_sync": { "deny": "tenant.pending_deletion" },
+      "payments": { "degraded": "settlement only — capture of existing obligations, no new checkout" },
+      "payouts": { "degraded": "settlement only — owed payouts execute; new requests refused" }
+    },
+    "archived": {
+      "$comment": "Post-retention cold state: R2 prefix in cold storage, subdomain DNS removed at data_cleanup, IdP org empty (tombstone). Host resolution fails; the row is reachable only by id in CON.",
+      "trader_routes": { "deny": "tenant.unknown_host", "note": "DNS removed at data_cleanup" },
+      "staff_routes": { "deny": "tenant.unknown_host" },
+      "api_keys": { "deny": "tenant.unknown_host" },
+      "webhooks_out": { "deny": "tenant.unknown_host" },
+      "bridge_sync": { "deny": "tenant.unknown_host" },
+      "payments": { "deny": "tenant.unknown_host" },
+      "payouts": { "deny": "tenant.unknown_host" }
+    },
+    "deleted": {
+      "$comment": "Tombstone; ids and slugs are never reused (docs/03 §5.2). Reachable only by id (tenant.not_found for deleted ids on platform surfaces).",
+      "trader_routes": { "deny": "tenant.unknown_host", "note": "by id: tenant.not_found" },
+      "staff_routes": { "deny": "tenant.unknown_host" },
+      "api_keys": { "deny": "tenant.unknown_host" },
+      "webhooks_out": { "deny": "tenant.unknown_host" },
+      "bridge_sync": { "deny": "tenant.unknown_host" },
+      "payments": { "deny": "tenant.unknown_host" },
+      "payouts": { "deny": "tenant.unknown_host" }
+    }
+  }
+}

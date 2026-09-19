@@ -250,7 +250,7 @@ ZITADEL, keeping our reuse *response* (kill the family, CRITICAL audit) because 
 
 | Order | Check | Failure |
 |---|---|---|
-| 3.5a | tenant state (from the resolution in step 2) | `tenant.suspended` / `tenant.not_ready` |
+| 3.5a | tenant state (from the resolution in step 2) | `tenant.suspended` / `tenant.not_live` (code name corrected 2026-09-19, docs/47 M2 — `tenant.not_ready` was never registered) |
 | 3.5b | identity state (`identities.status`) | `auth.account_suspended` (403) |
 | 3.5c | membership state for `(identity, tenant)` — console realm skips this | `auth.membership_suspended` (403, new code) |
 

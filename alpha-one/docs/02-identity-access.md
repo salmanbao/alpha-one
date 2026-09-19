@@ -480,8 +480,9 @@ screen shows the IdP row next to PG/Redis/relay.
 1. **Custom domain** (`firm.com` → tenant) — V1 via CON-maintained mapping table +
    Cloudflare DNS; 2. **Subdomain** (`firm.alpha1.io`) → `tenants.slug`;
    3. **Internal** `X-Tenant-Id` header (service tokens only); 4. **API key** embeds
-   tenant (key wins over any header). Unresolved → `404 tenant.not_found`
-   (never 400 — avoids leaking which subdomains exist).
+   tenant (key wins over any header). Unresolved host → `404 tenant.unknown_host`
+   (never 400 — avoids leaking which subdomains exist; an unknown *id* on a platform
+   surface is `tenant.not_found` — the two codes are distinct, docs/47 §4).
 
 ### 3.5 API keys (primitives V1, full UX V2 `AUTH-21`)
 

@@ -177,7 +177,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning |
 |---|---|---|
 | `tenant.suspended` | 403 | Tenant traffic denied (reason in details) |
-| `tenant.not_live` | 403 | `onboarding` tenant, trader-facing route |
+| `tenant.not_live` | 403 | Pre-`active` tenant on a tenant-realm route (details.state: provisioning/provisioning_failed/onboarding — docs/47 M2) | |
 | `tenant.provisioning_failed` | 500 | Pipeline terminal failure (CON only, with step) |
 | `tenant.slug_taken` | 409 | Slug/subdomain conflict |
 | `tenant.domain_invalid` | 422 | DNS/verification failure (custom domain V1.1) |

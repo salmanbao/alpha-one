@@ -269,13 +269,22 @@ docs/34 §9 alongside the five above:
     table + the `x-phase: V1` operations via `scripts/verify_roles.py --write-matrix`; the
     check mode fails the build on drift (docs/46 §11).
 
+**Gates added by the seventh-pass consolidation (docs/47, 2026-09-19)** — recorded in docs/34 §9:
+
+16. **Tenant state matrix is machine-fresh** — `contracts/tenants/state-capabilities.yaml`
+    (the state × capability matrix, the docs/35 I-20 test source) renders byte-identical
+    into docs/03 §5.1 via `scripts/verify_tenant_states.py`, every matrix state exists in
+    the `tenants.status` DDL, and every blocked cell's code is registered in
+    `contracts/errors/taxonomy.md`; the check mode fails the build on drift (docs/47 §11).
+
 The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12) and
 the fourth-pass artifact is `docs/44-auth-multitenancy-review.md` (G21–G33, decisions
 D13–D18) and the fifth-pass artifact is `docs/45-auth-contract-hardening.md` (G34–G45,
 decisions D19–D24) and the sixth-pass artifact is `docs/46-authorization-model.md` (the
-consolidated authorization specification, findings A1–A4); like docs/42 these change V1
-design detail only — **no PRD workbook
-row was changed**.
+consolidated authorization specification, findings A1–A4) and the seventh-pass artifact is
+`docs/47-multi-tenancy-model.md` (the consolidated multi-tenancy specification, findings
+M1–M6); like docs/42 these change V1 design detail only — **no PRD workbook row was
+changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)
 
