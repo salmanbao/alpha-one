@@ -40,9 +40,7 @@ widget (SUP-28), AI support bot (SUP-29 — answers only from the KB,
 escalates to human; the "AI gives trading advice" pattern is banned by
 the compliance posture).
 
-Requirement coverage: V1-basic (unnumbered — the TD/ADM pre-fill contract is
-what the other docs committed) + `SUP-01..26,30,31,32,33` (V2) +
-`SUP-24,27,28,29` (V3).
+Requirement coverage: V1-basic (unnumbered — the TD/ADM pre-fill contract is what the other docs committed) + `SUP-01..23,25,26,30,31,32,33` (V2.0) + `SUP-24,27,28,29` (V3.0).
 
 ## 2. Architecture
 

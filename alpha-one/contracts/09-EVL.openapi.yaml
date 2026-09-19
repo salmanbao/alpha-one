@@ -294,7 +294,7 @@ paths:
     get:
       tags:
       - core
-      summary: GET
+      summary: Evaluation Engine GET /v1/rule-packs
       operationId: get_v1_rule_packs
       x-phase: extended
       security:
@@ -317,7 +317,7 @@ paths:
     post:
       tags:
       - core
-      summary: GET
+      summary: Evaluation Engine POST /v1/rule-packs
       operationId: post_v1_rule_packs
       x-phase: extended
       security:
@@ -377,7 +377,7 @@ paths:
     post:
       tags:
       - core
-      summary: (new version), POST
+      summary: new version — POST
       operationId: post_v1_rule_packs_id_activate
       x-phase: extended
       parameters:
@@ -449,7 +449,7 @@ paths:
     post:
       tags:
       - core
-      summary: (EVL-36, 2FA)
+      summary: EVL-36, 2FA
       operationId: post_v1_evaluations_account_id_run
       x-phase: extended
       parameters:
@@ -485,7 +485,7 @@ paths:
     post:
       tags:
       - core
-      summary: (EVL-20, 2FA + reason)
+      summary: EVL-20, 2FA + reason
       operationId: post_v1_evaluations_account_id_override
       x-phase: extended
       parameters:
@@ -521,7 +521,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(dispute view: verdicts + evidence'
+      summary: 'dispute view: verdicts + evidence'
       operationId: get_v1_evaluations_account_id_verdicts
       x-phase: extended
       parameters:
@@ -581,7 +581,7 @@ paths:
     get:
       tags:
       - core
-      summary: (plain-language rule rendering — TD-27)
+      summary: plain-language rule rendering — TD-27
       operationId: get_v1_accounts_id_rules
       x-phase: extended
       parameters:
@@ -611,7 +611,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(TD-25: structured breach explanation from'
+      summary: 'TD-25: structured breach explanation from'
       operationId: get_v1_accounts_id_breach_report
       x-phase: extended
       parameters:

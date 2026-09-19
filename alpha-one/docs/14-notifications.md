@@ -26,8 +26,7 @@
   (NOT-32), versioning (NOT-33), SLA (NOT-37), digest (NOT-39), throttling
   (NOT-41), suppression (NOT-26).
 
-Requirement coverage: `NOT-01,03,05,13` (V1) + `02,04,06..22,23,24,25,26,28,
-29,30,32,33,35,36,37,39,41` (V2) + `38,40` (V3).
+Requirement coverage: `NOT-01,03,05,13` (V1.0) + `02,04,06..12,14..33,35,36,37,39,41` (V2.0) + `34,38,40` (V3.0).
 
 ## 2. Architecture
 

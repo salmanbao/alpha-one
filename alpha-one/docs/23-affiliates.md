@@ -1,6 +1,6 @@
 # 23 — AFF: Affiliate System
 
-> Covers PRD module **AFF** (29 requirements — all V3). Affiliates are
+> Covers PRD module **AFF** (30 requirements — all V3). Affiliates are
 > prop-firm marketing's core channel: a trader/manager who refers funded
 > traders earns commission on the referred revenue. V3 by PRD; the design
 > doc exists now (the docs/00 commitment: schema + event contracts frozen
@@ -38,9 +38,7 @@ and it stays human-gated), tier-3+ depth (capped at 2 — the multi-tier
 depth cap is a compliance choice: unlimited MLM depth is a regulatory
 hazard).
 
-Requirement coverage: `AFF-01..29` (all V3; the 29th/07/29 duplicates in the
-PRD extraction are the refund/chargeback and payout-method pairs — one
-capability each).
+Requirement coverage: `AFF-01..30` (all V3.0).
 
 ## 2. Architecture
 

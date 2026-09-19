@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `webhook.delivery_failed_final` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/webhook.schema.json ($defs/webhook_delivery_failed_final). Per-event payload. Producer: 27 (SDK/DVP/TRD/PLT/CS). When: the DLQ. Consumers: the developer's log (the portal), the AUD (the low), the NOT (the tenant admin, the \"your webhook is down\" \u2014 the 04 \u00a75.6 posture). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "KBDP7R8V4PPA2NBB3W3HGMDVKJ",
+  "type": "webhook.delivery_failed_final",
+  "version": 1,
+  "tenant_id": "P0NCWJN70Y4ET8VTH0P96RWFJK",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

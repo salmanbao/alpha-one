@@ -200,7 +200,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own, incl. progress), GET
+      summary: own, incl. progress — GET
       operationId: get_v1_accounts
       x-phase: extended
       security:
@@ -254,7 +254,7 @@ paths:
     get:
       tags:
       - core
-      summary: GET
+      summary: Account Lifecycle GET /v1/accounts/{id}/history
       operationId: get_v1_accounts_id_history
       x-phase: extended
       parameters:
@@ -284,7 +284,7 @@ paths:
     get:
       tags:
       - core
-      summary: (reveal
+      summary: reveal
       operationId: get_v1_accounts_id_credentials
       x-phase: extended
       parameters:
@@ -314,7 +314,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V2 self-serve if tenant allows)
+      summary: V2 self-serve if tenant allows
       operationId: post_v1_accounts_id_pause
       x-phase: extended
       parameters:
@@ -350,7 +350,7 @@ paths:
     get:
       tags:
       - core
-      summary: (DOC)
+      summary: Account Lifecycle GET /v1/accounts/{id}/statement
       operationId: get_v1_accounts_id_statement
       x-phase: extended
       parameters:
@@ -452,7 +452,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2 LCC-14)
+      summary: V2 LCC-14
       operationId: post_v1_admin_accounts_id_extend
       x-phase: extended
       parameters:
@@ -488,7 +488,7 @@ paths:
     post:
       tags:
       - admin
-      summary: '(V2 LCC-12: manual, reason'
+      summary: 'V2 LCC-12: manual, reason'
       operationId: post_v1_admin_accounts_id_override_transition
       x-phase: extended
       parameters:
@@ -524,7 +524,7 @@ paths:
     post:
       tags:
       - internal
-      summary: (CHK → LCC on order.paid)
+      summary: CHK → LCC on order.paid
       operationId: post_internal_v1_accounts_id_provision
       x-phase: extended
       parameters:

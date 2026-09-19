@@ -10,7 +10,7 @@
 """
 import re, json, pathlib, yaml, collections
 
-ROOT = pathlib.Path("/home/user/alpha-one")
+ROOT = pathlib.Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 CON = ROOT / "contracts"
 CON.mkdir(exist_ok=True)
@@ -47,7 +47,7 @@ MODULES = [
 ]
 
 # ---------------------------------------------------------------- endpoints
-EP_RE = re.compile(r"`?([A-Z][A-Z|]*) (/(?:v[0-9]+|internal|dvp|webhooks|sandbox)(?:\{[^{}]*\}|[^\s`|)\]{}])*)`?")
+EP_RE = re.compile(r"`?([A-Z][A-Z|]*) (/(?:(?:v[0-9]+|internal|dvp|webhooks|sandbox)(?:\{[^{}]*\}|[^\s`|)\]{}])*|healthz|readyz))`?")
 ENUM_PLACEHOLDER_RE = re.compile(r"\{[a-z0-9_]+(?:\|[a-z0-9_]+)+\}")
 
 def _v1_zone(text):
@@ -113,9 +113,16 @@ def extract_endpoints(fname):
             line_end = text.find("\n", end)
             nxt = end if line_end == -1 else min(nxt, line_end)
         desc = text[end:nxt].split("\n")[0]
-        desc = desc.lstrip("(),;").strip()
+        desc = desc.strip()
+        mpar = re.match(r"^\(([^()]*)\)\s*,?\s*(.*)$", desc)
+        if mpar:  # unwrap a leading parenthetical: "(V2), POST" -> "V2 \u2014 POST"
+            head, tail = mpar.group(1).strip(), mpar.group(2).strip()
+            desc = (head + (" \u2014 " + tail if tail else "")).strip()
+        desc = desc.lstrip("(),;:\u2014\u2013- ").strip()
         desc = re.sub(r"`", "", desc)
-        desc = re.sub(r"\s+", " ", desc).strip().rstrip(".,;")
+        desc = re.sub(r"\s+", " ", desc).strip().rstrip(".,;").strip().rstrip("\u2014\u2013-").strip()
+        if len(desc) < 6 or re.fullmatch(r"[A-Z][A-Z|+\s]*", desc):
+            desc = ""  # bare method/version fragments -> "Title METHOD path" fallback
         path = path.rstrip("`").split("?")[0]
         for meth in methods.split("|"):
             if meth not in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"):
@@ -144,7 +151,11 @@ def infer_tag(path):
         return "console"
     return "core"
 
-def infer_security(tag):
+NO_AUTH_PATHS = {"/healthz", "/readyz", "/v1/openapi.json"}
+
+def infer_security(tag, path=""):
+    if path in NO_AUTH_PATHS:
+        return []  # unauthenticated (probes/docs)
     if tag == "internal":
         return [{"internalService": []}]
     if tag in ("public", "dvp"):
@@ -232,7 +243,7 @@ def build_module_spec(num, fname, mod, title, blurb):
             op["x-v1-errors"] = ep["v1_errors"]
         if params:
             op["parameters"] = params
-        sec = infer_security(tag)
+        sec = infer_security(tag, npath)
         if sec:
             op["security"] = sec
         if meth in ("POST", "PUT", "PATCH"):

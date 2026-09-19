@@ -23,7 +23,7 @@ paths:
     post:
       tags:
       - internal
-      summary: (CON
+      summary: retry a failed enforcement command from CON tooling
       operationId: post_internal_v1_bridge_commands_id_retry
       x-phase: extended
       parameters:
@@ -55,7 +55,7 @@ paths:
     get:
       tags:
       - internal
-      summary: (debug)
+      summary: debug read of a broker account's bridge-side state
       operationId: get_internal_v1_bridge_accounts_login_state
       x-phase: extended
       parameters:
@@ -81,7 +81,7 @@ paths:
     post:
       tags:
       - internal
-      summary: (manual run)
+      summary: trigger a manual BRG↔broker reconciliation run
       operationId: post_internal_v1_bridge_reconcile
       x-phase: extended
       security:
@@ -107,7 +107,7 @@ paths:
     get:
       tags:
       - admin
-      summary: Trading Bridge GET /v1/admin/broker/groups
+      summary: list broker server groups with account counts
       operationId: get_v1_admin_broker_groups
       x-phase: extended
       security:
@@ -131,7 +131,7 @@ paths:
     get:
       tags:
       - admin
-      summary: GET
+      summary: list broker accounts, filterable by ?state=
       operationId: get_v1_admin_broker_accounts
       x-phase: extended
       security:
@@ -155,7 +155,7 @@ paths:
     get:
       tags:
       - admin
-      summary: Trading Bridge GET /v1/admin/broker/accounts/{login}/positions
+      summary: read live positions for one broker account
       operationId: get_v1_admin_broker_accounts_login_positions
       x-phase: extended
       parameters:
@@ -185,7 +185,7 @@ paths:
     get:
       tags:
       - admin
-      summary: Trading Bridge GET /v1/admin/broker/health
+      summary: 'provider health: success rate, p95, syncing accounts, backlog'
       operationId: get_v1_admin_broker_health
       x-phase: extended
       security:

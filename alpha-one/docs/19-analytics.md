@@ -29,8 +29,7 @@
   cross-tenant platform analytics (ANA-28 — platform-ops view only,
   tenant data never mixed).
 
-Requirement coverage: `ANA-01,32` (V1) + `02..14,16,20..31,33..36` (V2) +
-`15,17,18,19,28` (V3).
+Requirement coverage: `ANA-01` (V1.0) + `ANA-32` (V1.1) + `02..14,16,20..27,29..31,33..36` (V2.0) + `15,17,18,19,28` (V3.0).
 
 ## 2. Architecture
 

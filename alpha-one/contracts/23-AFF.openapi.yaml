@@ -23,7 +23,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(balance: accrued/settled/hold, links'
+      summary: 'balance: accrued/settled/hold, links'
       operationId: get_v1_affiliate_dashboard
       x-phase: extended
       security:
@@ -47,7 +47,7 @@ paths:
     get:
       tags:
       - core
-      summary: (+ POST — link generation with the code)
+      summary: + POST — link generation with the code
       operationId: get_v1_affiliate_links
       x-phase: extended
       security:
@@ -71,7 +71,7 @@ paths:
     get:
       tags:
       - core
-      summary: (history incl. reversals with reasons)
+      summary: history incl. reversals with reasons
       operationId: get_v1_affiliate_accruals
       x-phase: extended
       security:
@@ -95,7 +95,7 @@ paths:
     post:
       tags:
       - core
-      summary: GET
+      summary: Affiliates POST /v1/affiliate/payouts/requests
       operationId: post_v1_affiliate_payouts_requests
       x-phase: extended
       security:
@@ -149,7 +149,7 @@ paths:
     get:
       tags:
       - core
-      summary: (encrypted, PAY-pattern)
+      summary: encrypted, PAY-pattern
       operationId: get_v1_affiliate_methods
       x-phase: extended
       security:
@@ -172,7 +172,7 @@ paths:
     post:
       tags:
       - core
-      summary: (encrypted, PAY-pattern)
+      summary: encrypted, PAY-pattern
       operationId: post_v1_affiliate_methods
       x-phase: extended
       security:
@@ -202,7 +202,7 @@ paths:
     get:
       tags:
       - core
-      summary: (+ upload)
+      summary: + upload
       operationId: get_v1_affiliate_tax_forms
       x-phase: extended
       security:
@@ -226,7 +226,7 @@ paths:
     get:
       tags:
       - console
-      summary: (+ apply/approve — 2FA)
+      summary: + apply/approve — 2FA
       operationId: get_v1_console_affiliates
       x-phase: extended
       security:
@@ -250,7 +250,7 @@ paths:
     get:
       tags:
       - console
-      summary: (attribution quality, accruals, holds)
+      summary: attribution quality, accruals, holds
       operationId: get_v1_console_affiliates_id
       x-phase: extended
       parameters:
@@ -280,7 +280,7 @@ paths:
     post:
       tags:
       - console
-      summary: (versioned, future-dated
+      summary: versioned, future-dated
       operationId: post_v1_console_affiliates_id_rate_card
       x-phase: extended
       parameters:
@@ -316,7 +316,7 @@ paths:
     post:
       tags:
       - console
-      summary: (2FA)
+      summary: Affiliates POST /v1/console/affiliate-payouts/{id}/approve
       operationId: post_v1_console_affiliate_payouts_id_approve
       x-phase: extended
       parameters:
@@ -352,7 +352,7 @@ paths:
     get:
       tags:
       - console
-      summary: (AFF-14)
+      summary: AFF-14
       operationId: get_v1_console_affiliates_reports
       x-phase: extended
       security:

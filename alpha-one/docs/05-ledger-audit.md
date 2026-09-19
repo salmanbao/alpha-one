@@ -1,6 +1,6 @@
 # 05 — LED + AUD: Ledger & Accounting, Audit & Compliance
 
-> Covers PRD modules **LED** (25 requirements) and **AUD** (26 requirements).
+> Covers PRD modules **LED** (26 requirements) and **AUD** (26 requirements).
 > LED is the **only** place money math happens twice: every payment, fee, payout,
 > and refund posts as a balanced double-entry journal. AUD is the tamper-evident
 > record of **who did what, when, from where** — for every sensitive action.
@@ -17,8 +17,8 @@ TigerBeetle stays on the register as the V2+ upgrade path if payout volume grows
 **AUD** answers: "prove what happened, to whom, without trusting anyone including
 us." Append-only, access-audited, exportable, (V2) hash-chained.
 
-Requirement coverage: LED `01,02,04,07,08,18` (V1) + `05,06,09,10,11,12,13,14,17,20,21,23,24,25,26` (V2) + `16,19` (V3);
-AUD `01,03,04,21,23` (V1) + `02,05..17,20,22,24,25,26` (V2) + `18,19` (V3).
+Requirement coverage: LED `01,02,03,04,07,08,18` (V1.0) + `05,06,09,10,11,12,13,14,15,17,20,21,22,23,24,25,26` (V2.0) + `16,19` (V3.0);
+AUD `01,03,04,21` (V1.0) + `23` (V1.1) + `02,05..17,20,22,24,25,26` (V2.0) + `18,19` (V3.0).
 
 ## 2. Architecture
 

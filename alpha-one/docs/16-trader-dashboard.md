@@ -1,17 +1,17 @@
 # 16 — TD: Trader Dashboard
 
-> Covers PRD module **TD** (Trader Dashboard, Rel 1.0). The trader portal:
+> Covers PRD module **TD** (36 requirements). The trader portal:
 > accounts, live P&L, broker credentials, purchases, payouts, KYC, documents,
 > notifications.
 >
-> **Note on requirements:** TD's requirement rows sat in a PRD page band the
-> extraction tool could not parse (0 recovered ids — see `99-development-
-> phases.md` §risk register). This document is scoped from the module catalog
-> (docs/00 §4) plus the TD-xx references other module docs committed to
-> (TD-06/21 equity curves, TD-10 payout section, TD-11 status polling,
-> TD-26 payout preview). **FunderBlu's product owner should confirm the TD
-> screen list in Phase 1** — that confirmation is a Phase-1 checklist item,
-> not a blocker: the screen list below is what the backend already promises.
+> V1.0 commits 4 rows (TD-02 auth screens, TD-03 overview dashboard, TD-09
+> purchase flow UI, TD-10 payout section) + TD-05 objectives/progress view in
+> V1.1. The V1 screen set below is wider than those 5 rows because other
+> modules' V1 contracts require portal surfaces: credential delivery (BRG-06),
+> certificate download (DOC-06), KYC flows (KYC-06..08), order history (CHK-16,
+> V1.1), payout methods (PAY-05, V1.1). **FunderBlu's product owner confirms
+> the final V1 screen list in Phase 1** — a checklist item, not a blocker:
+> the screen list below is what the backend already promises.
 
 ## 1. Purpose & scope
 
@@ -32,6 +32,10 @@ TD is where a funded trader lives every day. V1 screens (the committed set):
 **Explicitly not in V1:** journal (JRN V2), education (EDU V2), community
 (CHT V2), mobile (MOB V2 — TD must be mobile-*responsive* from day 1),
 settings-adjacent admin surfaces (those are ADM's).
+
+Requirement coverage: `TD-02,03,09,10` (V1.0) + `TD-05` (V1.1) +
+`TD-01,04,06,07,08,11,12,13,14,15,16,17,18,19,20,21,22,23,25,26,27,28,29,30,31,32,33,34,35,36` (V2.0) +
+`TD-24` (V3.0: referral entry point).
 
 ## 2. Architecture
 

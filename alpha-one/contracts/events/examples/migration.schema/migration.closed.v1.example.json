@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `migration.closed` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/migration.schema.json ($defs/migration_closed). Per-event payload. Producer: 25 (MIG). When: parallel run signed. Consumers: CON, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "VW2Q6R5MQ7PMAENETHTVAZ7TKJ",
+  "type": "migration.closed",
+  "version": 1,
+  "tenant_id": "E19M06ESNTWT434ZXZVP2DSMB2",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

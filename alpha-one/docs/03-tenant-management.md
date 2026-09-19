@@ -12,12 +12,9 @@ and tenants are created **by Alpha One staff in the Platform Console** — there
 self-serve signup until V3 (`BIL-18`), but the provisioning pipeline is built as if
 signup existed (same steps, different trigger).
 
-Requirement coverage: `TEN-01..12` (V1-Core: registry, resolution, lifecycle,
-white-label, entitlements, flags, settings, limits, suspension, onboarding),
-`TEN-13..25` (V1.1/V2: custom domains, email sender config, language, report
-branding, onboarding checklist UX, quota alerts), `TEN-26..45` (V2/V3: sub-tenant
-doors, per-tenant API version pinning, data residency metadata, self-serve billing
-hooks, white-label app icons, advanced theming).
+Requirement coverage: `TEN-01,02,03,08,11,12,15,18,42` (V1.0: registry, resolution, lifecycle, entitlements, suspension, storage prefix, subdomain validation) +
+`TEN-04,05,06,07,09,10,13,14,16,17,19,20,21,22,23,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,43,44,45` (V2.0: white-label, custom domains, flags, settings, onboarding, quotas) +
+`TEN-24` (V3.0: data residency).
 
 ## 2. Architecture
 

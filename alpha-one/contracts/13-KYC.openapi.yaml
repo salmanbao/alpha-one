@@ -296,7 +296,7 @@ paths:
     get:
       tags:
       - core
-      summary: (both levels, what's missing, next action)
+      summary: both levels, what's missing, next action
       operationId: get_v1_kyc_status
       x-phase: extended
       security:
@@ -320,7 +320,7 @@ paths:
     get:
       tags:
       - core
-      summary: (progress, KYC-36)
+      summary: progress, KYC-36
       operationId: get_v1_kyc_sessions_id
       x-phase: extended
       parameters:
@@ -350,7 +350,7 @@ paths:
     post:
       tags:
       - core
-      summary: (manual upload, KYC-12)
+      summary: manual upload, KYC-12
       operationId: post_v1_kyc_sessions_id_documents
       x-phase: extended
       parameters:
@@ -385,7 +385,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own uploaded docs)
+      summary: own uploaded docs
       operationId: get_v1_kyc_sessions_id_documents
       x-phase: extended
       parameters:
@@ -415,7 +415,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (manual_review sessions)
+      summary: manual_review sessions
       operationId: get_v1_admin_kyc_queue
       x-phase: extended
       security:
@@ -439,7 +439,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(detail: provider verdict, docs [audited'
+      summary: 'detail: provider verdict, docs [audited'
       operationId: get_v1_admin_kyc_sessions_id
       x-phase: extended
       parameters:
@@ -469,7 +469,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (2FA, reason; KYC-11; override
+      summary: 2FA, reason; KYC-11; override
       operationId: post_v1_admin_kyc_sessions_id_decide
       x-phase: extended
       parameters:
@@ -505,7 +505,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (V2 KYC-17 queue & viewer)
+      summary: V2 KYC-17 queue & viewer
       operationId: get_v1_admin_kyc_history
       x-phase: extended
       security:

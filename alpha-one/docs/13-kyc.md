@@ -1,6 +1,6 @@
 # 13 — KYC: Identity Verification
 
-> Covers PRD module **KYC** (37 requirements). KYC is a **gate system**, not a
+> Covers PRD module **KYC** (38 requirements). KYC is a **gate system**, not a
 > feature: purchase gate (L1) and payout gate (L2). The provider (Veriff) does
 > the verification; we own the **gates, the state machine, the manual fallback,
 > and the PII hygiene** around all of it.
@@ -29,9 +29,8 @@
   (KYC-25 V2), consent management UI (KYC-27 V2 — V1 stores the consent record
   at session start as Veriff requires it).
 
-Requirement coverage: `KYC-01,02,05,06,07,08,09,11,12,13,14,16,36` (V1) +
-`03,04,10,15,17,18,19,20,21,22,25,26,27,28,29,30,31,32,33,34,35,37,38` (V2) +
-`23` (V3).
+Requirement coverage: `KYC-01,02,05,06,07,08,16` (V1.0) + `09,11,12,13,14,36` (V1.1) +
+`03,04,10,15,17,18,19,20,21,22,24,25,26,27,28,29,30,31,32,33,34,35,37,38` (V2.0) + `23` (V3.0).
 
 ## 2. Architecture
 

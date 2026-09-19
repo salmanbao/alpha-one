@@ -21,7 +21,7 @@ paths:
     post:
       tags:
       - console
-      summary: '(create: tenant, export refs, the policy'
+      summary: 'create: tenant, export refs, the policy'
       operationId: post_v1_console_migrations
       x-phase: extended
       security:
@@ -51,7 +51,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(the runbook view: class states'
+      summary: 'the runbook view: class states'
       operationId: get_v1_console_migrations_id
       x-phase: extended
       parameters:
@@ -81,7 +81,7 @@ paths:
     post:
       tags:
       - console
-      summary: (2FA — starts the §2 step 0
+      summary: 2FA — starts the §2 step 0
       operationId: post_v1_console_migrations_id_dry_run
       x-phase: extended
       parameters:
@@ -117,7 +117,7 @@ paths:
     post:
       tags:
       - console
-      summary: (after a fix)
+      summary: after a fix
       operationId: post_v1_console_migrations_id_classes_class_retry
       x-phase: extended
       parameters:
@@ -158,7 +158,7 @@ paths:
     post:
       tags:
       - console
-      summary: (2FA, reason
+      summary: 2FA, reason
       operationId: post_v1_console_migrations_id_exceptions_id_2_dispose
       x-phase: extended
       parameters:
@@ -199,7 +199,7 @@ paths:
     post:
       tags:
       - console
-      summary: (the gate-checked trigger
+      summary: the gate-checked trigger
       operationId: post_v1_console_migrations_id_cutover
       x-phase: extended
       parameters:
@@ -235,7 +235,7 @@ paths:
     get:
       tags:
       - console
-      summary: (the daily comparator
+      summary: the daily comparator
       operationId: get_v1_console_migrations_id_parallel_run
       x-phase: extended
       parameters:
@@ -265,7 +265,7 @@ paths:
     post:
       tags:
       - console
-      summary: (the §3.5 flow)
+      summary: the §3.5 flow
       operationId: post_v1_console_migrations_id_corrections
       x-phase: extended
       parameters:

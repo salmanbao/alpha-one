@@ -1,6 +1,6 @@
 # 11 — PAY: Payout System
 
-> Covers PRD module **PAY** (48 requirements). Payouts are where the platform's
+> Covers PRD module **PAY** (49 requirements). Payouts are where the platform's
 > trust lives: a trader's real money, calculated from trading we enforce, moved
 > through providers we don't control. Every number here must be recomputable,
 > every state auditable, every rail reconcilable.
@@ -18,8 +18,8 @@ Wires (V2 CHK-38 family), multi-network crypto (PAY-43 V2), instant payout
 option (PAY-41 V2). **Manual approval at launch** for all tenants (auto-approve
 toggle PAY-11 is V2; FunderBlu default = manual, reviewed in ADM).
 
-Requirement coverage: `PAY-01..05,08,09,12,13,21,38,44,45` (V1-Core/Plus) +
-`06,07,10,11,15..43,46..49` (V2).
+Requirement coverage: `PAY-01,02,03,08,09,12,13,14,21,38` (V1.0) + `04,05,44,45` (V1.1) +
+`06,07,10,11,15..20,22..37,39..43,46..49` (V2.0).
 
 ## 2. Architecture
 
@@ -187,6 +187,35 @@ Reserves check (PAY-37): tenant's collected-challenge-funds balance (LED `cash`
 account) ≥ pending obligations (Σ approved+processing) → breach = CON CRITICAL
 (the platform never promises a payout the tenant's collected funds can't cover —
 FunderBlu's TTS-parity rule).
+
+### 3.7 Execution safety (exactly-once per payout)
+
+The executor (one worker, V1) processes `approved → processing → settled`
+under three guards (adapted from the payout research §10 — Redlock replaced
+by PG-native primitives, below):
+
+1. **Per-payout mutex (PG advisory lock):**
+   `SELECT pg_advisory_xact_lock(hashtext('payout:' || payout_id))` — held
+   for the whole approve→execute transaction. Two workers can never execute
+   the same payout concurrently, and the lock dies with the transaction
+   (no orphan-lock sweeper needed).
+2. **Status CAS:** `UPDATE payouts SET status='processing' WHERE id=? AND
+   status='approved'` — 0 rows affected means another worker won; the loser
+   exits quietly. The **eligibility re-check (PAY-03) runs inside the lock**,
+   so two concurrent approvals of the same profit can't both pass (the second
+   sees the first's obligation row).
+3. **Rail idempotency:** the provider idempotency key is the payout ULID
+   (stable across retries); `payout_executions` records the provider ref on
+   success. A retried rail call with the same key returns the original
+   transfer — never a second one.
+
+**Redlock (research §10) explicitly rejected:** at one PG box, advisory
+locks are transactional *with the state change they guard* — a Redis fence
+adds a failure mode (fencing-token plumbing, clock-drift reasoning) for zero
+benefit. Revisit only if executors ever span PGs. **Crash recovery:** a
+`processing` row older than 15 min is reaped by the sweeper → transient rail
+errors retry with backoff (≤ 5 attempts), deterministic failures go straight
+to the manual ticket (no unbounded auto-retry, §3.5).
 
 ## 4. Events (topic `payout`)
 
@@ -475,14 +504,16 @@ CREATE INDEX idx_pexec_payout ON payout_executions(payout_id, attempt);
 | Hyperswitch (open-source payments router) | Rejected V1: it solves *inbound* orchestration breadth; our rails are 3 providers with thin needs — adapter interface (strategy pattern) covers it; revisit at > 8 rails |
 | Fireblocks/Circle (crypto custody, research list) | Not in V1 scope: we pay out from the tenant's provider balance, we are not a custodian |
 | Temporal (approval workflows, research) | V2 upgrade path (PAY-10/19/46 complexity); V1 = state machine + worker |
+| Redlock / Redis fencing (research §10) | **Rejected** — PG advisory lock + status CAS are transactional with the guarded state (§3.7); revisit if executors span PGs |
+| TigerBeetle (research ledger option) | Not PAY's call — verdict lives in 05 §12 (PG journal V1, TigerBeetle V2+ path) |
 | Wise/Rise/Airwallex (research list) | V2 candidates for local rails (register: consider) |
 
 ## 13. Technology stack
 
 Go domain package (api) + payout-executor worker; NOWPayments/Match2Pay/
 Interkasa REST (EVT-10 webhook adapters); Postgres (requests/methods/
-executions); LED (obligation/settlement); Redis (eligibility cache, circuit
-state); R2 (receipt PDFs via DOC); Postmark (via NOT); Prometheus (queue age,
+executions); LED (obligation/settlement); PG advisory locks (execution mutex, §3.7);
+Redis (eligibility cache, circuit state); R2 (receipt PDFs via DOC); Postmark (via NOT); Prometheus (queue age,
 rail circuit, settlement rate); Sentry.
 
 ## 14. Integration — internal modules (glue)

@@ -23,7 +23,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own), POST
+      summary: own — POST
       operationId: get_v1_support_tickets
       x-phase: extended
       security:
@@ -76,7 +76,7 @@ paths:
     get:
       tags:
       - core
-      summary: (thread, own only)
+      summary: thread, own only
       operationId: get_v1_support_tickets_id
       x-phase: extended
       parameters:
@@ -105,7 +105,7 @@ paths:
     delete:
       tags:
       - core
-      summary: '(cancel — V1: only while open)'
+      summary: 'cancel — V1: only while open'
       operationId: delete_v1_support_tickets_id
       x-phase: extended
       parameters:
@@ -135,7 +135,7 @@ paths:
     post:
       tags:
       - core
-      summary: (reply)
+      summary: Support POST /v1/support/tickets/{id}/messages
       operationId: post_v1_support_tickets_id_messages
       x-phase: extended
       parameters:
@@ -171,7 +171,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own, signed)
+      summary: own, signed
       operationId: get_v1_support_attachments_id_url
       x-phase: extended
       parameters:
@@ -201,7 +201,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V2)
+      summary: Support POST /v1/support/tickets/{id}/satisfaction
       operationId: post_v1_support_tickets_id_satisfaction
       x-phase: extended
       parameters:
@@ -261,7 +261,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(full: internal notes, object context'
+      summary: 'full: internal notes, object context'
       operationId: get_v1_admin_support_tickets_id
       x-phase: extended
       parameters:
@@ -291,7 +291,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (staff-opened)
+      summary: staff-opened
       operationId: post_v1_admin_support_tickets
       x-phase: extended
       security:
@@ -321,7 +321,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (staff reply / internal note
+      summary: staff reply / internal note
       operationId: post_v1_admin_support_tickets_id_messages
       x-phase: extended
       parameters:
@@ -357,7 +357,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (transition, 2FA for
+      summary: transition, 2FA for
       operationId: post_v1_admin_support_tickets_id_status
       x-phase: extended
       parameters:

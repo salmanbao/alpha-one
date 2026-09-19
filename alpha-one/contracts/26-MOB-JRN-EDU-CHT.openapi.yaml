@@ -23,7 +23,7 @@ paths:
     post:
       tags:
       - core
-      summary: (register
+      summary: register
       operationId: post_v1_auth_devices
       x-phase: extended
       security:
@@ -53,7 +53,7 @@ paths:
     delete:
       tags:
       - core
-      summary: (the
+      summary: Mobile, Journal, Education, Community DELETE /v1/auth/devices/{id}
       operationId: delete_v1_auth_devices_id
       x-phase: extended
       parameters:
@@ -166,7 +166,7 @@ paths:
     get:
       tags:
       - core
-      summary: (+ PATCH (edit, the version
+      summary: + PATCH (edit, the version
       operationId: get_v1_journal_entries_id
       x-phase: extended
       parameters:
@@ -196,7 +196,7 @@ paths:
     post:
       tags:
       - core
-      summary: (upload → the R2 + the scan queue)
+      summary: upload → the R2 + the scan queue
       operationId: post_v1_journal_screenshots
       x-phase: extended
       security:
@@ -226,7 +226,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the JRN-04 aggregates)
+      summary: the JRN-04 aggregates
       operationId: get_v1_journal_stats
       x-phase: extended
       security:
@@ -250,7 +250,7 @@ paths:
     get:
       tags:
       - core
-      summary: (V3 — the render data)
+      summary: V3 — the render data
       operationId: get_v1_journal_replay
       x-phase: extended
       security:
@@ -274,7 +274,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V3 → {url, expires_at})
+      summary: V3 → {url, expires_at}
       operationId: post_v1_journal_entries_id_share
       x-phase: extended
       parameters:
@@ -309,7 +309,7 @@ paths:
     delete:
       tags:
       - core
-      summary: (V3 — revoke)
+      summary: V3 — revoke
       operationId: delete_v1_journal_entries_id_share
       x-phase: extended
       parameters:
@@ -339,7 +339,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the JRN-07 self-serve)
+      summary: the JRN-07 self-serve
       operationId: get_v1_journal_export
       x-phase: extended
       security:
@@ -363,7 +363,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the tenant's published courses + paths)
+      summary: the tenant's published courses + paths
       operationId: get_v1_edu_library
       x-phase: extended
       security:
@@ -387,7 +387,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the blocks, the progress state)
+      summary: the blocks, the progress state
       operationId: get_v1_edu_courses_id
       x-phase: extended
       parameters:
@@ -446,7 +446,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the progress overview — the §3.2 states)
+      summary: the progress overview — the §3.2 states
       operationId: get_v1_edu_enrollments
       x-phase: extended
       security:
@@ -470,7 +470,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the video position claim / the
+      summary: the video position claim / the
       operationId: post_v1_edu_blocks_id_progress
       x-phase: extended
       parameters:
@@ -506,7 +506,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the answers → the
+      summary: the answers → the
       operationId: post_v1_edu_quizzes_id_attempts
       x-phase: extended
       parameters:
@@ -542,7 +542,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the earned, the DOC links)
+      summary: the earned, the DOC links
       operationId: get_v1_edu_certificates
       x-phase: extended
       security:
@@ -566,7 +566,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (+ the block editor V3, the
+      summary: + the block editor V3, the
       operationId: get_v1_admin_edu_courses
       x-phase: extended
       security:
@@ -589,7 +589,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (+ the block editor V3, the
+      summary: + the block editor V3, the
       operationId: post_v1_admin_edu_courses
       x-phase: extended
       security:
@@ -619,7 +619,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the large-upload, the
+      summary: the large-upload, the
       operationId: post_v1_admin_edu_courses_id_media
       x-phase: extended
       parameters:
@@ -655,7 +655,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the path builder)
+      summary: the path builder
       operationId: get_v1_admin_edu_paths
       x-phase: extended
       security:
@@ -678,7 +678,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the path builder)
+      summary: the path builder
       operationId: post_v1_admin_edu_paths
       x-phase: extended
       security:
@@ -708,7 +708,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the completion rates, the quiz
+      summary: the completion rates, the quiz
       operationId: get_v1_admin_edu_analytics
       x-phase: extended
       security:
@@ -732,7 +732,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the own, the SUP-adjacent)
+      summary: the own, the SUP-adjacent
       operationId: get_v1_chat_conversations
       x-phase: extended
       security:
@@ -755,7 +755,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the new — the pre-fill context
+      summary: the new — the pre-fill context
       operationId: post_v1_chat_conversations
       x-phase: extended
       security:
@@ -785,7 +785,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the
+      summary: Mobile, Journal, Education, Community GET /v1/chat/conversations/{id}
       operationId: get_v1_chat_conversations_id
       x-phase: extended
       parameters:
@@ -815,7 +815,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the
+      summary: Mobile, Journal, Education, Community POST /v1/chat/conversations/{id}/messages
       operationId: post_v1_chat_conversations_id_messages
       x-phase: extended
       parameters:
@@ -851,7 +851,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the banner + the
+      summary: the banner + the
       operationId: get_v1_chat_announcements
       x-phase: extended
       security:
@@ -875,7 +875,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the support availability)
+      summary: the support availability
       operationId: get_v1_chat_presence
       x-phase: extended
       security:
@@ -899,7 +899,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the CHT-02 — the Discord auth
+      summary: the CHT-02 — the Discord auth
       operationId: post_v1_chat_discord_link
       x-phase: extended
       security:
@@ -953,7 +953,7 @@ paths:
     get:
       tags:
       - core
-      summary: GET
+      summary: Mobile, Journal, Education, Community GET /v1/chat/boards
       operationId: get_v1_chat_boards
       x-phase: extended
       security:
@@ -1000,7 +1000,7 @@ paths:
     post:
       tags:
       - core
-      summary: POST
+      summary: Mobile, Journal, Education, Community POST /v1/chat/threads
       operationId: post_v1_chat_threads
       x-phase: extended
       security:
@@ -1102,7 +1102,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the forum identity — the
+      summary: the forum identity — the
       operationId: get_v1_chat_profiles_handle
       x-phase: extended
       parameters:
@@ -1132,7 +1132,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the live conversations + the
+      summary: the live conversations + the
       operationId: get_v1_admin_chat_queue
       x-phase: extended
       security:
@@ -1186,7 +1186,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the staff
+      summary: the staff
       operationId: post_v1_admin_chat_conversations_id_messages
       x-phase: extended
       parameters:
@@ -1288,7 +1288,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the pending links — the
+      summary: the pending links — the
       operationId: get_v1_admin_chat_discord_links
       x-phase: extended
       security:
@@ -1420,7 +1420,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the report queue)
+      summary: the report queue
       operationId: get_v1_admin_chat_reports
       x-phase: extended
       security:

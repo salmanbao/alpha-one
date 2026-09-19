@@ -23,7 +23,7 @@ paths:
     get:
       tags:
       - console
-      summary: (V1+)
+      summary: Tenant Billing GET /v1/console/metering
       operationId: get_v1_console_metering
       x-phase: extended
       security:
@@ -47,7 +47,7 @@ paths:
     get:
       tags:
       - console
-      summary: (contract-mode terms, versioned
+      summary: contract-mode terms, versioned
       operationId: get_v1_console_billing_contracts
       x-phase: extended
       security:
@@ -70,7 +70,7 @@ paths:
     post:
       tags:
       - console
-      summary: (contract-mode terms, versioned
+      summary: contract-mode terms, versioned
       operationId: post_v1_console_billing_contracts
       x-phase: extended
       security:
@@ -100,7 +100,7 @@ paths:
     post:
       tags:
       - console
-      summary: (manual/contract-mode invoice, 2FA
+      summary: manual/contract-mode invoice, 2FA
       operationId: post_v1_console_billing_invoices
       x-phase: extended
       security:
@@ -129,7 +129,7 @@ paths:
     get:
       tags:
       - console
-      summary: (all modes)
+      summary: all modes
       operationId: get_v1_console_billing_invoices
       x-phase: extended
       security:
@@ -153,7 +153,7 @@ paths:
     post:
       tags:
       - console
-      summary: (2FA + proof ref)
+      summary: 2FA + proof ref
       operationId: post_v1_console_billing_invoices_id_mark_paid
       x-phase: extended
       parameters:
@@ -189,7 +189,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(BIL-14/CON-19: MRR/ARR/churn/pass-'
+      summary: 'BIL-14/CON-19: MRR/ARR/churn/pass'
       operationId: get_v1_console_billing_revenue
       x-phase: extended
       security:
@@ -213,7 +213,7 @@ paths:
     get:
       tags:
       - console
-      summary: (+ catalog admin)
+      summary: + catalog admin
       operationId: get_v1_console_billing_plans
       x-phase: extended
       security:
@@ -237,7 +237,7 @@ paths:
     post:
       tags:
       - console
-      summary: (create/change → Lago)
+      summary: create/change → Lago
       operationId: post_v1_console_billing_subscriptions
       x-phase: extended
       security:
@@ -267,7 +267,7 @@ paths:
     post:
       tags:
       - console
-      summary: (credit notes, two-op)
+      summary: credit notes, two-op
       operationId: post_v1_console_billing_credits
       x-phase: extended
       security:
@@ -297,7 +297,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(BIL-13: tenant-staff portal: invoices, usage'
+      summary: 'BIL-13: tenant-staff portal: invoices, usage'
       operationId: get_v1_billing_portal
       x-phase: extended
       security:

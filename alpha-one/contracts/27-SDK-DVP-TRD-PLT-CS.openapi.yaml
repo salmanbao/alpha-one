@@ -29,7 +29,7 @@ paths:
     post:
       tags:
       - public
-      summary: '— a sandbox-only route: fire'
+      summary: 'a sandbox-only route: fire'
       operationId: post_v1_sandbox_inject
       x-phase: extended
       security:
@@ -89,7 +89,7 @@ paths:
     get:
       tags:
       - public
-      summary: — the LED's
+      summary: the LED's
       operationId: get_v1_public_accounting_ledger
       x-phase: extended
       security:
@@ -113,7 +113,7 @@ paths:
     get:
       tags:
       - public
-      summary: (+detail, the states, the metrics (the observed, the 09 §3.4 class — the public metrics
+      summary: +detail, the states, the metrics (the observed, the 09 §3.4 class — the public metrics
         are the observed numbers, the tenant's traders' data, the key's tenant-scoped), the positions/deals
         read (the BRG read API, the 08 §7 public subset)) | the tenant's system of record read — the "BYO
         front-end" data source |
@@ -140,7 +140,7 @@ paths:
     get:
       tags:
       - public
-      summary: '(the states, the amounts, the method **masked** (the 11 §10 masking extends: the public
+      summary: 'the states, the amounts, the method **masked** (the 11 §10 masking extends: the public
         API never returns the full wallet string — the tenant''s CRM doesn''t need it, the payout execution
         is the platform''s)), POST'
       operationId: get_v1_public_payouts
@@ -166,7 +166,7 @@ paths:
     post:
       tags:
       - public
-      summary: '(the **tenant-initiated** payout request — the tenant''s own system requests the payout
+      summary: 'the **tenant-initiated** payout request — the tenant''s own system requests the payout
         on the trader''s behalf (the idempotency key, the eligibility check, the 11 §3.1 — the request
         is the same object, the channel is the API (the audit: the request source is api:{key_id} — the
         "who requested" is answerable)) | the money-adjacent public surface — the strictest scope (payout:write),
@@ -202,7 +202,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the orders, the intents' states, the invoices (the DOC links, the 15 §7 public subset)),
+      summary: the orders, the intents' states, the invoices (the DOC links, the 15 §7 public subset)),
         POST
       operationId: get_v1_public_payments
       x-phase: extended
@@ -227,7 +227,7 @@ paths:
     post:
       tags:
       - public
-      summary: '(the **checkout link** — the tenant''s system creates a checkout session (the pre-filled
+      summary: 'the **checkout link** — the tenant''s system creates a checkout session (the pre-filled
         package), returns the URL, the trader completes it in the platform (the login-first rule holds:
         the URL carries the session, the trader logs in, the checkout is the platform''s — the BYO checkout
         is the *link*, not the *flow* (the 12 §1 posture: the payment flow is the platform''s, the tenant''s
@@ -261,7 +261,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the states per identity (the masked, the 13 §7 public subset)), POST
+      summary: the states per identity (the masked, the 13 §7 public subset)), POST
       operationId: get_v1_public_kyc_status
       x-phase: extended
       security:
@@ -315,7 +315,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the SSE, the DVP-12) | the read-only (the trading itself is the trader's MT5 — the platform's
+      summary: the SSE, the DVP-12 — | the read-only (the trading itself is the trader's MT5 — the platform's
         public API never executes trades in V3 (the TRD Part C is the advanced layer, the separate design))
         |
       operationId: get_v1_public_streams_account_id
@@ -347,7 +347,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the 05 §3.4 balances) | the BYO-accounting data path |
+      summary: the 05 §3.4 balances — | the BYO-accounting data path |
       operationId: get_v1_public_accounting_balances
       x-phase: extended
       security:
@@ -371,7 +371,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the SDK-13 states sync, the masked PII rule) | the BYO-CRM data path |
+      summary: the SDK-13 states sync, the masked PII rule — | the BYO-CRM data path |
       operationId: get_v1_public_crm_traders
       x-phase: extended
       security:
@@ -395,7 +395,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the status page data), GET
+      summary: the status page data — GET
       operationId: get_v1_public_meta_health
       x-phase: extended
       security:
@@ -419,7 +419,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the DVP-08) | the platform transparency |
+      summary: the DVP-08 — | the platform transparency |
       operationId: get_v1_public_meta_changelog
       x-phase: extended
       security:
@@ -443,7 +443,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the generated docs, the static + the
+      summary: the generated docs, the static + the
       operationId: get_dvp_docs
       x-phase: extended
       security:
@@ -467,7 +467,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the management, the scopes, the
+      summary: the management, the scopes, the
       operationId: get_dvp_keys
       x-phase: extended
       security:
@@ -490,7 +490,7 @@ paths:
     post:
       tags:
       - dvp
-      summary: (the management, the scopes, the
+      summary: the management, the scopes, the
       operationId: post_dvp_keys
       x-phase: extended
       security:
@@ -520,7 +520,7 @@ paths:
     post:
       tags:
       - dvp
-      summary: (the DVP-10)
+      summary: the DVP-10
       operationId: post_dvp_keys_id_delegate
       x-phase: extended
       parameters:
@@ -556,7 +556,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: '(the DVP-06: the calls, the webhooks, the'
+      summary: 'the DVP-06: the calls, the webhooks, the'
       operationId: get_dvp_usage
       x-phase: extended
       security:
@@ -580,7 +580,7 @@ paths:
     get:
       tags:
       - webhook
-      summary: (the log, the DVP-05/07)
+      summary: the log, the DVP-05/07
       operationId: get_dvp_webhooks_deliveries
       x-phase: extended
       responses:
@@ -602,7 +602,7 @@ paths:
     post:
       tags:
       - webhook
-      summary: (the sandbox)
+      summary: the sandbox
       operationId: post_dvp_webhooks_delivery_replay
       x-phase: extended
       parameters:
@@ -636,7 +636,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the DVP-07 data)
+      summary: the DVP-07 data
       operationId: get_dvp_status
       x-phase: extended
       security:
@@ -660,7 +660,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the DVP-08, the subscription)
+      summary: the DVP-08, the subscription
       operationId: get_dvp_changelog
       x-phase: extended
       security:
@@ -684,7 +684,7 @@ paths:
     post:
       tags:
       - dvp
-      summary: (the DVP-17, the SUP category)
+      summary: the DVP-17, the SUP category
       operationId: post_dvp_support_tickets
       x-phase: extended
       security:
@@ -714,7 +714,7 @@ paths:
     post:
       tags:
       - dvp
-      summary: (the §5 reset)
+      summary: the §5 reset
       operationId: post_dvp_sandbox_reset
       x-phase: extended
       security:
@@ -744,7 +744,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the DVP-13, the public)
+      summary: the DVP-13, the public
       operationId: get_dvp_directory
       x-phase: extended
       security:
@@ -768,7 +768,7 @@ paths:
     get:
       tags:
       - dvp
-      summary: (the SDK-10 status)
+      summary: the SDK-10 status
       operationId: get_dvp_certification
       x-phase: extended
       security:
@@ -792,7 +792,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(the social feed, the TRD-02: the public performance, the as_of-labeled)'
+      summary: 'the social feed, the TRD-02: the public performance, the as_of-labeled'
       operationId: get_v1_trading_leaders
       x-phase: extended
       security:
@@ -816,7 +816,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the performance, the subscription CTA)
+      summary: the performance, the subscription CTA
       operationId: get_v1_trading_leaders_id
       x-phase: extended
       parameters:
@@ -846,7 +846,7 @@ paths:
     post:
       tags:
       - core
-      summary: '(the TRD-01: the config, the consent, the 2FA-class)'
+      summary: 'the TRD-01: the config, the consent, the 2FA-class'
       operationId: post_v1_trading_copy_subscriptions
       x-phase: extended
       security:
@@ -875,7 +875,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the own, the PnL, the latency stats)
+      summary: the own, the PnL, the latency stats
       operationId: get_v1_trading_copy_subscriptions
       x-phase: extended
       security:
@@ -899,7 +899,7 @@ paths:
     delete:
       tags:
       - core
-      summary: (the cancel, the open positions (the keep/close, the 2FA on the close))
+      summary: the cancel, the open positions (the keep/close, the 2FA on the close))
       operationId: delete_v1_trading_copy_subscriptions_id
       x-phase: extended
       parameters:
@@ -929,7 +929,7 @@ paths:
     post:
       tags:
       - core
-      summary: '(the TRD-06: the advanced order (the OCO, the trailing), the 2FA, the sensitive action)'
+      summary: 'the TRD-06: the advanced order (the OCO, the trailing), the 2FA, the sensitive action)'
       operationId: post_v1_trading_orders
       x-phase: extended
       security:
@@ -959,7 +959,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the TRD-05, the "PAPER" badged)
+      summary: the TRD-05, the "PAPER" badged
       operationId: get_v1_trading_paper_accounts
       x-phase: extended
       security:
@@ -982,7 +982,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the create, the virtual funding, the no-real-money)
+      summary: the create, the virtual funding, the no-real-money
       operationId: post_v1_trading_paper_accounts
       x-phase: extended
       security:
@@ -1012,7 +1012,7 @@ paths:
     get:
       tags:
       - core
-      summary: (the TRD-04, the runs, the results)
+      summary: the TRD-04, the runs, the results
       operationId: get_v1_trading_backtests
       x-phase: extended
       security:
@@ -1036,7 +1036,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the curation queue, the 24 Part A pattern)
+      summary: the curation queue, the 24 Part A pattern
       operationId: get_v1_admin_trading_leaders
       x-phase: extended
       security:
@@ -1060,7 +1060,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the 2FA, the followers' notice)
+      summary: the 2FA, the followers' notice
       operationId: post_v1_admin_trading_leaders_id_delist
       x-phase: extended
       parameters:
@@ -1096,7 +1096,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the marketplace curation)
+      summary: the marketplace curation
       operationId: get_v1_admin_trading_strategies
       x-phase: extended
       security:
@@ -1120,7 +1120,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the 2FA, the backtest-verified gate)
+      summary: the 2FA, the backtest-verified gate
       operationId: post_v1_admin_trading_strategies_id_approve
       x-phase: extended
       parameters:
@@ -1156,7 +1156,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(the tenant''s copy health: the latency, the slippage, the skip rate, the PnL)'
+      summary: 'the tenant''s copy health: the latency, the slippage, the skip rate, the PnL'
       operationId: get_v1_admin_trading_copy_stats
       x-phase: extended
       security:
@@ -1180,7 +1180,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(the TRD-07/08: the keys, the guardrails, the halt state)'
+      summary: 'the TRD-07/08: the keys, the guardrails, the halt state'
       operationId: get_v1_admin_trading_algo_keys
       x-phase: extended
       security:
@@ -1204,7 +1204,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the 2FA, the versioned config)
+      summary: the 2FA, the versioned config
       operationId: post_v1_admin_trading_algo_keys_id_guardrails
       x-phase: extended
       parameters:
@@ -1240,7 +1240,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (the 2FA, the review)
+      summary: the 2FA, the review
       operationId: post_v1_admin_trading_algo_keys_id_re_enable
       x-phase: extended
       parameters:
@@ -1276,7 +1276,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the social feed, the masked PII, the ref indirection, the Part A §8)
+      summary: the social feed, the masked PII, the ref indirection, the Part A §8
       operationId: get_v1_public_trading_leaders
       x-phase: extended
       security:
@@ -1300,8 +1300,8 @@ paths:
     post:
       tags:
       - public
-      summary: '(the TRD-07: the algo''s order, the trading:write scope, the TRD-08 pre-check, the critical
-        audit)'
+      summary: 'the TRD-07: the algo''s order, the trading:write scope, the TRD-08 pre-check, the critical
+        audit'
       operationId: post_v1_public_trading_orders
       x-phase: extended
       security:
@@ -1331,7 +1331,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the TRD-04's result, the tenant-scoped)
+      summary: the TRD-04's result, the tenant-scoped
       operationId: get_v1_public_trading_backtests_id
       x-phase: extended
       parameters:

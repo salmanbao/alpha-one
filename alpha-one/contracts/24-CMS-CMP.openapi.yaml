@@ -55,7 +55,7 @@ paths:
     post:
       tags:
       - public
-      summary: (lead submit, rate-limited)
+      summary: lead submit, rate-limited
       operationId: post_v1_public_tenant_forms_form_id
       x-phase: extended
       parameters:
@@ -96,7 +96,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (+
+      summary: CMS & Competitions GET /v1/admin/site/pages
       operationId: get_v1_admin_site_pages
       x-phase: extended
       security:
@@ -119,7 +119,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (+
+      summary: CMS & Competitions POST /v1/admin/site/pages
       operationId: post_v1_admin_site_pages
       x-phase: extended
       security:
@@ -202,7 +202,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (upload), GET
+      summary: upload — GET
       operationId: post_v1_admin_site_media
       x-phase: extended
       security:
@@ -315,7 +315,7 @@ paths:
     get:
       tags:
       - admin
-      summary: GET
+      summary: CMS & Competitions GET /v1/admin/site/leads
       operationId: get_v1_admin_site_leads
       x-phase: extended
       security:
@@ -339,7 +339,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (+
+      summary: CMS & Competitions GET /v1/admin/site/published-stats
       operationId: get_v1_admin_site_published_stats
       x-phase: extended
       security:
@@ -363,7 +363,7 @@ paths:
     get:
       tags:
       - core
-      summary: (open/active/archived for the
+      summary: open/active/archived for the
       operationId: get_v1_competitions
       x-phase: extended
       security:
@@ -387,7 +387,7 @@ paths:
     get:
       tags:
       - core
-      summary: (rules, prizes, board, their
+      summary: rules, prizes, board, their
       operationId: get_v1_competitions_id
       x-phase: extended
       parameters:
@@ -417,7 +417,7 @@ paths:
     post:
       tags:
       - core
-      summary: (the fee purchase flow —
+      summary: the fee purchase flow
       operationId: post_v1_competitions_id_entries
       x-phase: extended
       parameters:
@@ -548,7 +548,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (+ the full
+      summary: + the full
       operationId: get_v1_admin_competitions
       x-phase: extended
       security:
@@ -571,7 +571,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (+ the full
+      summary: + the full
       operationId: post_v1_admin_competitions
       x-phase: extended
       security:
@@ -601,7 +601,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the
+      summary: CMS & Competitions GET /v1/admin/competitions/{id}/dq-queue
       operationId: get_v1_admin_competitions_id_dq_queue
       x-phase: extended
       parameters:
@@ -631,7 +631,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the per-tick scores +
+      summary: the per-tick scores +
       operationId: get_v1_admin_competitions_id_scoring
       x-phase: extended
       parameters:
@@ -661,7 +661,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (CMP-15)
+      summary: CMP-15
       operationId: post_v1_admin_competitions_templates
       x-phase: extended
       security:
@@ -691,7 +691,7 @@ paths:
     get:
       tags:
       - public
-      summary: (the
+      summary: CMS & Competitions GET /v1/public/{tenant}/competitions/{id}/board
       operationId: get_v1_public_tenant_competitions_id_board
       x-phase: extended
       parameters:

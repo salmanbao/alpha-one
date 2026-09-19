@@ -1,7 +1,7 @@
 # 26 — MOB: Mobile App · JRN: Trading Journal · EDU: Education Hub · CHT: Community & Live Chat
 
 > Covers PRD modules **MOB** (8 reqs, V2), **JRN** (8 reqs, V2/V3),
-> **EDU** (9 reqs, V2/V3), and **CHT** (7 reqs, V2/V3). Four
+> **EDU** (9 reqs, V2/V3), and **CHT** (8 reqs, V2/V3). Four
 > trader-experience satellites, all post-launch: they consume the same
 > GW APIs TD uses (the 01 commitment: MOB consumes TD's backend, not a
 > new one) and each is deliberately a **thin client over existing
@@ -1239,7 +1239,7 @@ tenant decides what it means).
 
 ---
 
-# Part D — CHT: Community & Live Chat (7 reqs, V2/V3)
+# Part D — CHT: Community & Live Chat (8 reqs, V2/V3)
 
 ## 1. Purpose & scope
 
@@ -1267,8 +1267,7 @@ tenant's support bot → the SUP ticket). The in-platform forum
 built last, because the Discord bridge covers the anchor tenant
 and the forum is the long tail.
 
-Requirement coverage: `CHT-01,02,04,05,07` (V2) + `CHT-03,08`
-(V3).
+Requirement coverage: `CHT-01,02,04,05,07` (V2.0) + `CHT-03,06,08` (V3.0).
 
 ## 2. Architecture
 

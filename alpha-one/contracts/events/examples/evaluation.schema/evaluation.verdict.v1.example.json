@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `evaluation.verdict` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/evaluation.schema.json ($defs/evaluation_verdict). Per-event payload. Producer: 09 (EVL). When: every non-ok verdict (and daily ok-summary at rollover). Consumers: LCC (transitions), NOT, DOC (breach report), AUD (critical on breach), RSK (V2 case open). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "P5FGSN0PQPXBAFKR3ZVFZNFHT8",
+  "type": "evaluation.verdict",
+  "version": 1,
+  "tenant_id": "7KM284EHPMWCSY91BCZ4VRTXJB",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

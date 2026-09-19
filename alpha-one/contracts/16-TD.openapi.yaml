@@ -21,7 +21,7 @@ paths:
     get:
       tags:
       - core
-      summary: (state, phase, metrics snapshot, time left) | metrics = the EVL-49 *observed* numbers;
+      summary: state, phase, metrics snapshot, time left — | metrics = the EVL-49 *observed* numbers;
         staleness chip if tick age > 10 min |
       operationId: get_v1_accounts
       x-phase: extended
@@ -46,7 +46,7 @@ paths:
     get:
       tags:
       - core
-      summary: + GET
+      summary: Trader Dashboard GET /v1/accounts/{id}
       operationId: get_v1_accounts_id
       x-phase: extended
       parameters:
@@ -106,7 +106,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(masked; reveal = 2FA + audit) | one-time reveal: password shown once, then masked forever
+      summary: 'masked; reveal = 2FA + audit — | one-time reveal: password shown once, then masked forever
         (re-issue = support reset, BRG) |'
       operationId: get_v1_accounts_id_credentials
       x-phase: extended
@@ -161,7 +161,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own) + invoice links | |
+      summary: own — + invoice links | |
       operationId: get_v1_payments_orders
       x-phase: extended
       security:
@@ -185,7 +185,7 @@ paths:
     get:
       tags:
       - core
-      summary: (TD-26) + request form + GET
+      summary: TD-26 — + request form + GET
       operationId: get_v1_payouts_eligibility
       x-phase: extended
       security:
@@ -311,7 +311,7 @@ paths:
     get:
       tags:
       - core
-      summary: (for the UI's
+      summary: for the UI's
       operationId: get_v1_td_health
       x-phase: extended
       security:

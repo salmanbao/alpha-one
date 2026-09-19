@@ -13,34 +13,8 @@ info:
 servers:
 - url: https://api.staging.alphaone.example
   description: Staging (synthetic data only)
-tags:
-- name: admin
-  description: Tenant admin (ADM) surface
-paths:
-  /v1/admin/accounts:
-    get:
-      tags:
-      - admin
-      summary: '|'
-      operationId: get_v1_admin_accounts
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
+tags: []
+paths: {}
 components:
   schemas:
     JsonObject:

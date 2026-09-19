@@ -1,11 +1,11 @@
 # 27 — Ecosystem: SDK · DVP · TRD · PLT · CS
 
-> Covers PRD modules **SDK** (17 reqs, V3), **DVP** (18 reqs,
-> V3), **TRD** (8 reqs, V3), **PLT** (6 reqs, V3 — 5 recovered),
-> and **CS** (7 reqs, V3 — the requirement rows were in the
-> unrecovered PRD band; scoped from the docs/00 catalog: "Tenant
-> NPS, health scoring, churn prediction, QBRs" — the same
-> Phase-1 confirmation item as TD, doc 16 §1). All five are V3
+> Covers PRD modules **SDK** (18 reqs, V3), **DVP** (18 reqs,
+> V3), **TRD** (8 reqs, V3), **PLT** (6 doc-defined capabilities,
+> V3 — no PRD rows; governance over docs/06 + docs/29),
+> and **CS** (7 reqs, V3 — NPS surveys, health scoring, churn
+> prediction, onboarding workflows, playbooks, renewal tracking,
+> QBRs). All five are V3
 > by the PRD's phases; this doc is the V3 design made now, per
 > the docs/00 commitment ("Modules marked V3 still get a full
 > design doc now so architecture decisions — schemas, event
@@ -23,7 +23,7 @@
 
 ---
 
-# Part A — DVP: Developer Portal + SDK: BYO Integration (18 + 17 reqs)
+# Part A — DVP: Developer Portal + SDK: BYO Integration (18 + 18 reqs)
 
 ## 1. Purpose & scope
 
@@ -2072,17 +2072,18 @@ class))).
 # Part C — PLT: Platform Operations (6 reqs) + CS:
 Customer Success (7 reqs)
 
-## Part C.1 — PLT (6 reqs, V3 — 5 recovered)
+## Part C.1 — PLT (6 doc-defined capabilities, V3 — no PRD rows)
 
 ### 1. Purpose & scope
 
 The cross-tenant platform governance: multi-region
 deployment (PLT-01), capacity planning (PLT-02), cost
 allocation (PLT-03), incident management (PLT-05),
-capacity & cost governance (PLT-06). (PLT-04 is in the
-unrecovered band — the pattern: the "platform SLO
-ownership" class, the 06 §3.4's SLO's platform-level
-owner; scoped from the 06/29 docs' posture.)
+capacity & cost governance (PLT-06). (PLT-04, platform SLO
+ownership — the 06 §3.4 SLOs' platform-level owner —
+completes the set. PLT has no PRD backlog rows; the six
+capabilities are defined by this document as the governance
+layer over docs/06 + docs/29.)
 
 **The boundary:** PLT is the *governance layer* over the
 06 (DevOps) + the 29 (Scalability) — the 06 is the
@@ -2280,9 +2281,9 @@ the decisions, the errors are the
 
 ---
 
-## Part C.2 — CS: Customer Success (7 reqs, V3 — the
-unrecovered band, scoped from the docs/00 catalog: "Tenant
-NPS, health scoring, churn prediction, QBRs")
+## Part C.2 — CS: Customer Success (7 reqs, V3)
+
+Requirement coverage: `CS-01..07` (all V3.0: NPS surveys, health scoring, churn prediction, onboarding workflows, playbooks, renewal/expansion tracking, QBR reporting).
 
 ### 1. Purpose & scope
 
@@ -2293,10 +2294,7 @@ score), the churn prediction (the V3-late,
 the ML-class, the 29 doc's compute),
 the QBR (the quarterly business review,
 the FunderBlu's + the future tenants').
-The 7 reqs are in the unrecovered band (the
-TD/GW/CS pattern, the 16 §1's note) — the
-Phase-1 confirmation item (the FunderBlu's
-CS owner, the 00 §4's D3 class).
+FunderBlu's CS owner confirms the survey cadence + health-score weights in the V3 planning window (the 00 §4's D3 class).
 
 **The boundary:** CS is the *relationship
 layer* over the existing data (the ANA's

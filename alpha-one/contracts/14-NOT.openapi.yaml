@@ -23,7 +23,7 @@ paths:
     get:
       tags:
       - core
-      summary: (in-app list, V2 NOT-07/08)
+      summary: in-app list, V2 NOT-07/08
       operationId: get_v1_notifications
       x-phase: extended
       security:
@@ -47,7 +47,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V2), GET
+      summary: V2 — GET
       operationId: post_v1_notifications_read_all
       x-phase: extended
       security:
@@ -177,7 +177,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2 versioning)
+      summary: V2 versioning
       operationId: post_v1_admin_notifications_templates
       x-phase: extended
       security:
@@ -207,7 +207,7 @@ paths:
     post:
       tags:
       - admin
-      summary: '(NOT-20: render preview'
+      summary: 'NOT-20: render preview'
       operationId: post_v1_admin_notifications_templates_id_test
       x-phase: extended
       parameters:
@@ -267,7 +267,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (NOT-14, 2FA, preview required
+      summary: NOT-14, 2FA, preview required
       operationId: post_v1_admin_notifications_broadcast
       x-phase: extended
       security:
@@ -297,7 +297,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(NOT-22: volumes, failure rate'
+      summary: 'NOT-22: volumes, failure rate'
       operationId: get_v1_admin_notifications_dashboard
       x-phase: extended
       security:

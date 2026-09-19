@@ -16,20 +16,62 @@ servers:
 tags:
 - name: webhook
   description: Inbound provider webhook (signature-verified)
-- name: console
-  description: Platform console (CON) surface
 - name: core
   description: Core domain endpoints (trader + shared)
+- name: console
+  description: Platform console (CON) surface
 paths:
+  /healthz:
+    get:
+      tags:
+      - core
+      summary: 'liveness: the process is up (GW-14, unauthenticated)'
+      operationId: get_healthz
+      x-phase: extended
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /readyz:
+    get:
+      tags:
+      - core
+      summary: 'readiness: PG ping + Redis ping + relay lag under 60 s (GW-14, unauthenticated)'
+      operationId: get_readyz
+      x-phase: extended
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
   /v1/openapi.json:
     get:
       tags:
       - core
-      summary: Gateway & Events GET /v1/openapi.json
+      summary: the served OpenAPI document for this deployment
       operationId: get_v1_openapi_json
       x-phase: extended
-      security:
-      - sessionAuth: []
       responses:
         '200':
           description: Success (see module doc for the canonical shape)
@@ -49,7 +91,7 @@ paths:
     post:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events POST /v1/webhooks/metaapi
       operationId: post_v1_webhooks_metaapi
       x-phase: extended
       requestBody:
@@ -77,7 +119,7 @@ paths:
     post:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events POST /v1/webhooks/veriff
       operationId: post_v1_webhooks_veriff
       x-phase: extended
       requestBody:
@@ -133,7 +175,7 @@ paths:
     post:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events POST /v1/webhooks/match2pay
       operationId: post_v1_webhooks_match2pay
       x-phase: extended
       requestBody:
@@ -161,7 +203,7 @@ paths:
     post:
       tags:
       - webhook
-      summary: (EVT-10)
+      summary: provider webhook ingress (EVT-10, signature-verified)
       operationId: post_v1_webhooks_interkasa
       x-phase: extended
       requestBody:
@@ -242,7 +284,7 @@ paths:
     get:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events GET /v1/webhooks/{id}
       operationId: get_v1_webhooks_id
       x-phase: extended
       parameters:
@@ -269,7 +311,7 @@ paths:
     patch:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events PATCH /v1/webhooks/{id}
       operationId: patch_v1_webhooks_id
       x-phase: extended
       parameters:
@@ -302,7 +344,7 @@ paths:
     delete:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events DELETE /v1/webhooks/{id}
       operationId: delete_v1_webhooks_id
       x-phase: extended
       parameters:
@@ -364,7 +406,7 @@ paths:
     get:
       tags:
       - webhook
-      summary: POST
+      summary: Gateway & Events GET /v1/webhooks/{id}/deliveries
       operationId: get_v1_webhooks_id_deliveries
       x-phase: extended
       parameters:
@@ -450,7 +492,7 @@ paths:
     post:
       tags:
       - console
-      summary: (seq range, requires 2FA)
+      summary: seq range, requires 2FA
       operationId: post_v1_console_events_replay
       x-phase: extended
       security:
@@ -480,7 +522,7 @@ paths:
     get:
       tags:
       - console
-      summary: POST
+      summary: Gateway & Events GET /v1/console/dlq
       operationId: get_v1_console_dlq
       x-phase: extended
       security:
@@ -540,7 +582,7 @@ paths:
     get:
       tags:
       - console
-      summary: (lag, queue depth, publish rate)
+      summary: lag, queue depth, publish rate
       operationId: get_v1_console_relay
       x-phase: extended
       security:

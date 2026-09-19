@@ -425,7 +425,7 @@ paths:
     post:
       tags:
       - core
-      summary: POST
+      summary: Identity & Access POST /v1/auth/mfa/verify
       operationId: post_v1_auth_mfa_verify
       x-phase: extended
       security:
@@ -545,7 +545,7 @@ paths:
     get:
       tags:
       - core
-      summary: DELETE
+      summary: Identity & Access GET /v1/auth/sessions
       operationId: get_v1_auth_sessions
       x-phase: extended
       security:
@@ -599,7 +599,7 @@ paths:
     patch:
       tags:
       - core
-      summary: POST
+      summary: Identity & Access PATCH /v1/auth/profile
       operationId: patch_v1_auth_profile
       x-phase: extended
       security:
@@ -659,7 +659,7 @@ paths:
     post:
       tags:
       - core
-      summary: DELETE
+      summary: Identity & Access POST /v1/auth/2fa/confirm
       operationId: post_v1_auth_2fa_confirm
       x-phase: extended
       security:
@@ -713,7 +713,7 @@ paths:
     get:
       tags:
       - core
-      summary: (V2)
+      summary: Identity & Access GET /v1/auth/2fa/backup-codes
       operationId: get_v1_auth_2fa_backup_codes
       x-phase: extended
       security:
@@ -790,7 +790,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V2), PATCH
+      summary: V2 — PATCH
       operationId: post_v1_auth_members_invite
       x-phase: extended
       security:
@@ -856,7 +856,7 @@ paths:
     post:
       tags:
       - core
-      summary: (reason, note)
+      summary: reason, note
       operationId: post_v1_auth_members_id_suspend
       x-phase: extended
       parameters:
@@ -892,7 +892,7 @@ paths:
     post:
       tags:
       - core
-      summary: (AUTH-43)
+      summary: AUTH-43
       operationId: post_v1_auth_members_id_activate
       x-phase: extended
       parameters:
@@ -928,7 +928,7 @@ paths:
     get:
       tags:
       - core
-      summary: DELETE
+      summary: Identity & Access GET /v1/auth/api-keys
       operationId: get_v1_auth_api_keys
       x-phase: extended
       security:
@@ -951,7 +951,7 @@ paths:
     post:
       tags:
       - core
-      summary: DELETE
+      summary: Identity & Access POST /v1/auth/api-keys
       operationId: post_v1_auth_api_keys
       x-phase: extended
       security:
@@ -1041,7 +1041,7 @@ paths:
     post:
       tags:
       - console
-      summary: (AUTH-16 separation + audit) — full listing in
+      summary: AUTH-16 separation + audit — — full listing in
       operationId: post_v1_console_impersonation
       x-phase: extended
       security:

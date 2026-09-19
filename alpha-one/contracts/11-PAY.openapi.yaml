@@ -359,7 +359,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(the TD-26 preview:'
+      summary: 'the TD-26 preview:'
       operationId: get_v1_payouts_eligibility
       x-phase: extended
       security:
@@ -413,7 +413,7 @@ paths:
     get:
       tags:
       - core
-      summary: (own, history + status), GET
+      summary: own, history + status — GET
       operationId: get_v1_payouts
       x-phase: extended
       security:
@@ -467,7 +467,7 @@ paths:
     delete:
       tags:
       - core
-      summary: (cancel pre-approval)
+      summary: cancel pre-approval
       operationId: delete_v1_payouts_requests_id
       x-phase: extended
       parameters:
@@ -497,7 +497,7 @@ paths:
     get:
       tags:
       - core
-      summary: DELETE
+      summary: Payout System GET /v1/payouts/methods
       operationId: get_v1_payouts_methods
       x-phase: extended
       security:
@@ -520,7 +520,7 @@ paths:
     post:
       tags:
       - core
-      summary: DELETE
+      summary: Payout System POST /v1/payouts/methods
       operationId: post_v1_payouts_methods
       x-phase: extended
       security:
@@ -550,7 +550,7 @@ paths:
     delete:
       tags:
       - core
-      summary: (PAY-05)
+      summary: PAY-05
       operationId: delete_v1_payouts_methods_id
       x-phase: extended
       parameters:
@@ -580,7 +580,7 @@ paths:
     post:
       tags:
       - core
-      summary: (V2)
+      summary: Payout System POST /v1/payouts/methods/{id}/default
       operationId: post_v1_payouts_methods_id_default
       x-phase: extended
       parameters:
@@ -616,7 +616,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (2FA, note)
+      summary: 2FA, note
       operationId: post_v1_admin_payouts_id_approve
       x-phase: extended
       parameters:
@@ -652,7 +652,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (reason required)
+      summary: reason required
       operationId: post_v1_admin_payouts_id_reject
       x-phase: extended
       parameters:
@@ -688,7 +688,7 @@ paths:
     get:
       tags:
       - admin
-      summary: '(full detail: calc snapshot, executions, method'
+      summary: 'full detail: calc snapshot, executions, method'
       operationId: get_v1_admin_payouts_id
       x-phase: extended
       parameters:
@@ -718,7 +718,7 @@ paths:
     post:
       tags:
       - internal
-      summary: (worker trigger)
+      summary: worker trigger
       operationId: post_internal_v1_payouts_id_execute
       x-phase: extended
       parameters:

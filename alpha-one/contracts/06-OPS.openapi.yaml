@@ -21,7 +21,7 @@ paths:
     get:
       tags:
       - console
-      summary: (per-service + PG/Redis/relay/disk)
+      summary: per-service health plus PG, Redis, relay, and disk status
       operationId: get_v1_console_ops_health
       x-phase: extended
       security:
@@ -45,7 +45,7 @@ paths:
     get:
       tags:
       - console
-      summary: (history + last drill report)
+      summary: backup history plus the last restore-drill report
       operationId: get_v1_console_ops_backups
       x-phase: extended
       security:
@@ -69,7 +69,7 @@ paths:
     post:
       tags:
       - console
-      summary: (manual checksum)
+      summary: trigger a manual backup checksum verification
       operationId: post_v1_console_ops_backups_verify
       x-phase: extended
       security:
@@ -99,7 +99,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(V2 OPS-23: Hetzner + provider usage from BRG-47'
+      summary: 'V2 OPS-23: Hetzner spend plus provider usage from the BRG-47 foundation'
       operationId: get_v1_console_ops_costs
       x-phase: extended
       security:
@@ -123,7 +123,7 @@ paths:
     get:
       tags:
       - console
-      summary: (V2 OPS-40)
+      summary: 'V2 OPS-40: SLO definitions and current compliance'
       operationId: get_v1_console_ops_slos
       x-phase: extended
       security:

@@ -18,7 +18,7 @@ operations.
 1. Read [docs/00-executive-brief.md](docs/00-executive-brief.md) — what we are building,
    who it is for, and the module catalog (15 min).
 2. Read [docs/01-platform-architecture.md](docs/01-platform-architecture.md) — the system
-   you will work in: topology, data flow, the ten architectural decisions that constrain
+   you will work in: topology, data flow, the twelve architectural decisions that constrain
    everything, and the module dependency graph (30 min).
 3. Open your module's document (`docs/0N-<module>.md`). Every module document has the
    same skeleton so you can navigate predictably:
@@ -31,9 +31,10 @@ operations.
    phases are ordered so that no task has an unmet dependency, and each phase lists its
    exit criteria.
 
-**Numbering convention:** `0N` = foundation & cross-cutting (read in order),
-`10–26` = modules (any order, grouped by domain), `27–32` = cross-cutting reference
-material, `99` = the development plan (read last, then constantly).
+**Numbering convention:** `00–01` = foundation (read in order), `02–27` = modules
+(any order, grouped by domain; `27` is the V3 ecosystem bundle), `28–35` =
+cross-cutting reference material, `99` = the development plan (read last, then
+constantly).
 
 ---
 
@@ -43,7 +44,7 @@ material, `99` = the development plan (read last, then constantly).
 | Doc | Contents |
 |---|---|
 | [00-executive-brief](docs/00-executive-brief.md) | Vision, personas, 5-domain / 36-module catalog, release trains, business context |
-| [01-platform-architecture](docs/01-platform-architecture.md) | Topology, deployment, event backbone, ten binding decisions (ADRs), module dependency graph, request & data lifecycles |
+| [01-platform-architecture](docs/01-platform-architecture.md) | Topology, deployment, event backbone, twelve binding decisions (ADRs), module dependency graph, request & data lifecycles |
 
 ### 1x — Platform infrastructure (domain D4) — build in this order
 | Doc | Module |
@@ -99,19 +100,27 @@ material, `99` = the development plan (read last, then constantly).
 | [30-error-taxonomy](docs/30-error-taxonomy.md) | Global error contract + per-module error code registries |
 | [31-event-catalog](docs/31-event-catalog.md) | Every domain event, its schema, producer, consumers, delivery semantics |
 | [32-database-design](docs/32-database-design.md) | Consolidated schema: per-domain tables, indexes, partitioning, retention |
+| [33-glossary](docs/33-glossary.md) | The shared language: every precise term, its owner doc, identifier rules |
+| [34-tooling-registry](docs/34-tooling-registry.md) | **Binding** build/buy decisions: the 28 BVR rules, the integration map, license policy, adapter registry |
+| [35-testing-strategy](docs/35-testing-strategy.md) | Test pyramid, the 16-invariant suite, contract gates, load/security/migration assurance per milestone |
 
 ### Contracts
 | Path | Contents |
 |---|---|
 | [contracts/README.md](contracts/README.md) | How to read the contract pack, versioning rules |
 | [contracts/shared/](contracts/shared/) | Shared OpenAPI components: envelopes, errors, pagination, event envelope |
-| [contracts/*.openapi.yaml](contracts/) | One OpenAPI 3.1 spec per module (endpoints + schemas) |
-| [contracts/events/](contracts/events/) | Canonical event schemas (JSON Schema) per domain |
+| [contracts/*.openapi.yaml](contracts/) | One OpenAPI 3.1 spec per module (26 specs, 445 operations) |
+| [contracts/api/](contracts/api/) | Human-readable endpoint contracts per module (36: 20 binding V1 + 16 provisional post-V1) |
+| [contracts/events/](contracts/events/) | V1 baseline catalog + payloads; post-V1 topic schemas (141 events) + example fixtures |
+| [contracts/data/](contracts/data/) | Field dictionary + per-module SQL schemas (26, split from docs/32) |
+| [contracts/errors/](contracts/errors/) | Error registry: 66 binding V1 codes + 232 provisional extended |
+| [contracts/permissions/](contracts/permissions/) | Permission registry: 100 `resource.action` keys (31 binding V1 + 69 provisional) |
+| [contracts/diagrams/](contracts/diagrams/) | Architecture/lifecycle diagrams (source + renders) |
 
 ### 99 — The plan
 | Doc | Contents |
 |---|---|
-| [99-development-phases](docs/99-development-phases.md) | **The** build order: Phase 0 → Phase 6, workstreams, per-phase task lists with dependencies, exit criteria, cutover plan |
+| [99-development-phases](docs/99-development-phases.md) | **The** build order: Phase 0 → Phase 5, workstreams, per-phase task lists with dependencies, exit criteria, cutover plan, Req-ID-by-phase index (App. A), module build-order checklist (App. B) |
 
 ---
 
@@ -130,6 +139,10 @@ material, `99` = the development plan (read last, then constantly).
 - **API versioning**: URL-based (`/v1/`), additive changes only inside a version.
 - **Docs cite requirements** as `MODULE-NN` (e.g. `BRG-07`) referring to the PRD master
   backlog; module docs list which requirements they cover.
+- **The PRD backlog is the scope authority**: 1012 rows (154 V1.0 + 21 V1.1 + 631 V2.0
+  + 206 V3.0), machine-readable in `scripts/prd-backlog.json`. Every module doc's §1
+  coverage claim is cross-checked against it (`complete_contracts_pack.py --check-only`),
+  and docs/99 Appendix A maps every row to exactly one phase.
 
 ## Source material (superseded by this set)
 
@@ -141,4 +154,4 @@ The individual research reports (`trading-platform-bridge.md`,
 into this documentation set. Where they disagreed with the PRD's Tooling Register or
 Open-Questions sheet (e.g. Kafka vs Redis Streams, Kubernetes vs Compose, Auth0 vs
 in-house auth), **the PRD decisions win** and are recorded as ADRs in
-[01-platform-architecture §6](docs/01-platform-architecture.md).
+[01-platform-architecture §3](docs/01-platform-architecture.md).

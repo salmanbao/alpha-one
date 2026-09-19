@@ -11,8 +11,8 @@ environments (dev/staging/prod parity), migrations, secrets (SOPS+age), backups 
 DR, observability, alerting, and incident process. **Everything else in the
 platform runs on what this document defines** — ADR-9/10 are its anchor.
 
-Requirement coverage: `OPS-01,02,03,04,06,07,09,25,26,36,37,38` (V1-Core/Plus) +
-`05,08,10..14,16..35,39,40` (V2) — the V2 list is the ops-hardening phase.
+Requirement coverage: `OPS-01,02,03,04,06,07,09,25,26,36,37,38` (V1.0) +
+`05,08,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,27,28,29,30,31,32,33,34,35,39,40` (V2.0) — the V2 list is the ops-hardening phase.
 
 ## 2. Architecture
 
@@ -186,12 +186,14 @@ header on affected reads). Internal condition codes (metrics/alerts):
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
 Console-only (no tenant surface):
-`GET /v1/console/ops/health` (per-service + PG/Redis/relay/disk),
-`GET /v1/console/ops/backups` (history + last drill report),
-`POST /v1/console/ops/backups/verify` (manual checksum),
-`GET /v1/console/ops/costs` (V2 OPS-23: Hetzner + provider usage from BRG-47
-foundation), `GET /v1/console/ops/slos` (V2 OPS-40).
-Health: `GET /healthz`, `GET /readyz` (GW-14 — defined in 04).
+
+- `GET /v1/console/ops/health` — per-service health plus PG, Redis, relay, and disk status.
+- `GET /v1/console/ops/backups` — backup history plus the last restore-drill report.
+- `POST /v1/console/ops/backups/verify` — trigger a manual backup checksum verification.
+- `GET /v1/console/ops/costs` — V2 OPS-23: Hetzner spend plus provider usage from the BRG-47 foundation.
+- `GET /v1/console/ops/slos` — V2 OPS-40: SLO definitions and current compliance.
+
+Liveness/readiness probes (GW-14) are owned by the gateway — see 04 §3.6; they ship in the 04 spec, not here.
 ## 8. Schema
 
 No tenant-owned tables. Platform tables: `backups` (id, kind, taken_at,

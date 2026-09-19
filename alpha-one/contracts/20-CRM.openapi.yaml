@@ -23,7 +23,7 @@ paths:
     get:
       tags:
       - core
-      summary: (+ POST, POST /{id}/recompute)
+      summary: + POST, POST /{id}/recompute
       operationId: get_v1_crm_segments
       x-phase: extended
       security:
@@ -47,7 +47,7 @@ paths:
     get:
       tags:
       - core
-      summary: (size + masked top 50)
+      summary: size + masked top 50
       operationId: get_v1_crm_segments_id_preview
       x-phase: extended
       parameters:
@@ -130,7 +130,7 @@ paths:
     get:
       tags:
       - core
-      summary: (stage, tags, notes, communication history
+      summary: stage, tags, notes, communication history
       operationId: get_v1_crm_traders_id
       x-phase: extended
       parameters:
@@ -196,7 +196,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(CRM-02: the unified log — NOT delivery'
+      summary: 'CRM-02: the unified log — NOT delivery'
       operationId: get_v1_crm_history
       x-phase: extended
       security:
@@ -220,7 +220,7 @@ paths:
     post:
       tags:
       - public
-      summary: (token, no auth) +
+      summary: token, no auth — +
       operationId: post_v1_public_crm_unsubscribe
       x-phase: extended
       security:
@@ -250,7 +250,7 @@ paths:
     get:
       tags:
       - public
-      summary: '(token — the V2 prefs page: toggle'
+      summary: 'token — the V2 prefs page: toggle'
       operationId: get_v1_public_crm_preferences
       x-phase: extended
       security:

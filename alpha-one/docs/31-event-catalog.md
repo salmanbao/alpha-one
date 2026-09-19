@@ -25,7 +25,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (150 events — 18 V1 baseline, 132 extended — across 33 topics)
+## 2. The catalog (150 rows — 141 extended-topic events across 32 topics + 9 V1-only PascalCase events; the 9 dotted V1 names overlap the extended set)
 
 ### `user.*`
 

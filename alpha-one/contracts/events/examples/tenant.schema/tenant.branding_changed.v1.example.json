@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `tenant.branding_changed` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/tenant.schema.json ($defs/tenant_branding_changed). Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: web (cache bust), DOC/NOT (next render), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "JE8SPHNKCN98ACBDXKPTD5K8W1",
+  "type": "tenant.branding_changed",
+  "version": 1,
+  "tenant_id": "0MANW7KA844FH1PSKTMF6GZZJN",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

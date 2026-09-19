@@ -55,3 +55,95 @@ Every key names its owning module and description with the Req ID that justifies
 - Resolved 2026-09-17: no `tenant.impersonate` key in V1 (AUTH-16 separation-only; no impersonation endpoint exists). Enablement is V2.
 - TODO — needs owner decision: keys for staff access to sensitive data (AUD-23 audits access to KYC documents and payout methods; which permission gates that access?).
 - TODO — needs owner decision: key naming conventions above marked TODO (`audit.read`, `analytics.read`, `payout.read_queue`, masking reads).
+
+
+---
+
+## Extended (provisional) keys (design-level)
+
+> Appended 2026-09-19 by `scripts/complete_contracts_pack.py`, mined from module docs §7 endpoint tables + api specs. The V1 registry above is untouched and remains binding. Each key freezes with its module's phase (docs/99 §12); role bindings are fixed at freeze (AUTH-12 × AUTH-13 open question).
+
+| Permission key | Module (source) | Source |
+|---|---|---|
+| `account.force_pass` | evl | contracts/api/evl.md |
+| `checkout.create` | chk | contracts/api/chk.md |
+
+## Proposed post-V1 keys (design-level, 2026-09-19)
+
+> Hand-proposed from each module doc's §7 endpoint surface + PRD scope. NOT yet
+> mined from frozen contracts (unlike the section above). Each key freezes with its
+> module's phase (docs/99 §12); names may change at freeze. Role bindings
+> (AUTH-12 × AUTH-13) are fixed at freeze. MOB proposes no keys (mobile reuses
+> the TD API surface — Out Of Scope: no mobile-specific API). SDK proposes no
+> `resource.action` keys (public scopes like `trades:read` are a separate catalog,
+> docs/27 Part A §3.1).
+
+| Permission key | Module owner | Description |
+|---|---|---|
+| `ticket.create` | SUP | Open a ticket (trader: own; staff: on behalf). (SUP-01) |
+| `ticket.read` | SUP | Read own tickets (trader) / queue + detail (staff). (SUP-04, SUP-06) |
+| `ticket.reply` | SUP | Reply + attach evidence. (SUP-05) |
+| `ticket.assign` | SUP | Assign to staff, set priority. (SUP-10, SUP-11) |
+| `ticket.status.write` | SUP | Transition status; 2FA for `resolved` on money-linked tickets. (SUP-03) |
+| `ticket.note` | SUP | Internal staff notes (never trader-visible). (SUP-07) |
+| `canned.write` | SUP | Manage canned replies + templates. (V2) |
+| `support.report.read` | SUP | SLA + agent performance reports. (SUP-25, SUP-31) |
+| `segment.read` | CRM | View segments + counts. (CRM-01) |
+| `segment.write` | CRM | Create/edit segments (RSK-exclusion enforced). (CRM-02) |
+| `campaign.read` | CRM | View campaigns + delivery stats. (CRM-06) |
+| `campaign.write` | CRM | Create/edit campaigns, sequences. (CRM-06) |
+| `campaign.send` | CRM | Approve + launch a send (2FA, volume guard). (CRM-06) |
+| `consent.read` | CRM | View consent records. (CRM-07) |
+| `crm.export` | CRM | Export CRM data (portability). (CRM-16) |
+| `invoice.read` | BIL | View tenant invoices (platform: all; tenant: own). (BIL-07) |
+| `invoice.write` | BIL | Draft/adjust invoices. (BIL-16) |
+| `invoice.approve` | BIL | Approve + issue (two-op in V3). (BIL-21) |
+| `usage.read` | BIL | View metering counters. (CON-10 input) |
+| `dunning.manage` | BIL | Retry schedules, grace, suspension on non-pay. (BIL-12) |
+| `affiliate.read` | AFF | View program + own referrals/earnings. (AFF-01) |
+| `affiliate.write` | AFF | Configure program, rate cards. (AFF-05) |
+| `affiliate.approve` | AFF | Approve affiliates + manual overrides. (AFF-03) |
+| `commission.read` | AFF | View commission ledger. (AFF-10) |
+| `commission.adjust` | AFF | Manual adjustments + reversals (audited). (AFF-14) |
+| `affiliate.payout.execute` | AFF | Record affiliate payout execution. (AFF-20) |
+| `site.read` | CMS | View published site + drafts. (CMS-01) |
+| `site.publish` | CMS | Publish/unpublish (tenant admin). (CMS-08) |
+| `page.write` | CMS | Create/edit pages + sections. (CMS-03) |
+| `media.write` | CMS | Upload/manage media (tenant prefix). (CMS-06) |
+| `competition.read` | CMP | View competitions + leaderboards. (CMP-01) |
+| `competition.write` | CMP | Create/edit competitions + scoring rules. (CMP-04) |
+| `competition.score` | CMP | Run scoring + publish results. (CMP-09) |
+| `prize.award` | CMP | Award prizes (two-op, audited). (CMP-12) |
+| `entry.create` | CMP | Enter a competition (trader self-action). (CMP-02) |
+| `migration.import` | MIG | Run + dry-run importers. (MIG-01, MIG-07) |
+| `migration.reconcile` | MIG | Run reconciliation + corrections. (MIG-04) |
+| `migration.cutover` | MIG | Execute cutover (super admin, two-op). (MIG-06) |
+| `migration.report.read` | MIG | Validation reports + sign-off pack. (MIG-08) |
+| `journal.read` | JRN | Read own journal + analytics. (JRN-01) |
+| `journal.write` | JRN | Create/edit entries, tags. (JRN-02) |
+| `journal.share` | JRN | Share read-only entry links. (JRN-08, V3) |
+| `course.read` | EDU | Browse + consume courses. (EDU-01) |
+| `course.write` | EDU | Publish/edit courses + lessons. (EDU-04) |
+| `lesson.complete` | EDU | Record progress (trader self-action). (EDU-03) |
+| `channel.read` | CHT | Join/read community channels. (CHT-01) |
+| `channel.write` | CHT | Create/manage channels (staff). (CHT-04) |
+| `message.create` | CHT | Post messages (trader). (CHT-01) |
+| `message.moderate` | CHT | Delete/ban/timeout (staff, audited). (CHT-05) |
+| `role.sync` | CHT | Run Discord/Telegram role automation. (CHT-02) |
+| `devkey.create` | DVP | Create portal API keys (2FA). (DVP-06) |
+| `devkey.read` | DVP | List keys + usage. (DVP-06) |
+| `devkey.revoke` | DVP | Revoke keys (2FA). (DVP-06) |
+| `webhook.delivery.read` | DVP | View delivery logs. (DVP-05) |
+| `webhook.delivery.replay` | DVP | Replay sandbox deliveries. (DVP-05) |
+| `sandbox.reset` | DVP | Reset sandbox tenant data. (SDK-06) |
+| `copy.follow` | TRD | Follow/unfollow a strategy (trader). (TRD-01) |
+| `backtest.run` | TRD | Run backtests (quota-guarded). (TRD-04) |
+| `paper.reset` | TRD | Reset paper account. (TRD-05) |
+| `algo.deploy` | TRD | Deploy/pause personal algos. (TRD-06) |
+| `platform.health.read` | PLT | Cross-tenant SLO + incident posture. (PLT-04) |
+| `platform.cost.read` | PLT | Cost allocation + budgets. (PLT-03) |
+| `platform.capacity.read` | PLT | Capacity plans + region posture. (PLT-01, PLT-02) |
+| `tenant.health.read` | CS | Health scores + churn signals. (CS-02, CS-03) |
+| `nps.manage` | CS | Send + analyze NPS surveys. (CS-01) |
+| `qbr.read` | CS | Generate + view QBR reports. (CS-07) |
+| `playbook.execute` | CS | Run onboarding/retention playbooks. (CS-04, CS-05) |

@@ -105,7 +105,7 @@ with enforced boundaries (linter: `goimports` + custom `boundary` check in CI).
 changes within a version; breaking changes get `/v2/` and a `Deprecation`/`Sunset`
 header on the old route (GW-28).
 
-## 3. The ten binding architectural decisions (ADRs)
+## 3. The twelve binding architectural decisions (ADRs)
 
 Recorded from the PRD Open-Questions sheet (all "answered"). Each has a full write-up
 where it bites; this is the register.
@@ -123,12 +123,12 @@ where it bites; this is the register.
 | **ADR-9** | **Single Hetzner dedicated server + Docker Compose.** Kubernetes forbidden in V1. | One machine, one Compose project, healthchecks wired, restart policies. Multi-server/HA is a **Phase 4** item (V2) — single-machine is acceptable for V1 scale (§00 §5) with rehearsed DR. |
 | **ADR-10** | **Single Postgres instance + rehearsed restore.** No warm standby in V1. | Nightly `pg_basebackup` + WAL archiving to a second Hetzner box (S3-compatible, cheap). **Restore drill is a monthly ops ritual with a documented target: RPO ≤ 5 min (WAL), RTO ≤ 2 h.** The drill report is a CON screen (PLT). |
 
-**ADR-11** (supplementary): **EVL is a separate Rust service.** The hot evaluation
+**ADR-11**: **EVL is a separate Rust service.** The hot evaluation
 path (per-tick drawdown/limit checks) runs in Rust with property-tested invariants;
 Go calls it over local HTTP. Engine is stateless — all state in PG; Rust owns *math
 and verdict logic only*.
 
-**ADR-12** (supplementary): **The broker attests time.** For all trading data
+**ADR-12**: **The broker attests time.** For all trading data
 (positions, trades, equity), the broker-reported timestamp is canonical for day
 boundaries and rule evaluation. Platform clock is used only for non-trading
 lifecycle. Day boundaries are computed **per broker server timezone** (BRG-12).

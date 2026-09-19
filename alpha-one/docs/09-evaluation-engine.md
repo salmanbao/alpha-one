@@ -1,6 +1,6 @@
 # 09 — EVL: Evaluation & Rule Engine
 
-> Covers PRD module **EVL** (52 requirements). The engine that answers, on every
+> Covers PRD module **EVL** (54 requirements). The engine that answers, on every
 > sync tick, **is this account still within its rules — and if not (or if it just
 > hit a target), what exactly happened and why?** It is the module a trader's
 > livelihood is decided by, so its outputs must be *deterministic, exact, and
@@ -22,9 +22,9 @@ Out of scope: real-time *fraud/anti-gaming* detection (that is RSK, V2), pre-tra
 blocking (Alpha One has no order path — enforcement is post-trade via LCC/BRG),
 and analytics (ANA).
 
-Requirement coverage: `EVL-01,02,04,05,06,07,08,16,17,19,20,29,34,35,36,44,46,47,48,49,50,51,52,53,54` (V1) +
-`03,09,10,11,12,13,14,15,18,21,22,23,27,28,30,31,33,37,38,39,40,41,42,43,45` (V2) +
-`24,25` (V3 custom DSL / multi-asset).
+Requirement coverage: `EVL-01,02,04,05,06,07,08,16,17,19,20,29,34,35,36,44,46,47,48,49,50,51,52,53,54` (V1.0/V1.1: 20,36,51 are V1.1) +
+`03,09,10,11,12,13,14,15,18,21,22,23,26,27,28,30,31,32,33,37,38,39,40,41,42,43,45` (V2.0) +
+`24,25` (V3.0: custom DSL / multi-asset).
 
 ## 2. Architecture
 

@@ -369,7 +369,7 @@ paths:
     get:
       tags:
       - core
-      summary: PATCH
+      summary: Tenant Management GET /v1/settings
       operationId: get_v1_settings
       x-phase: extended
       security:
@@ -392,7 +392,7 @@ paths:
     patch:
       tags:
       - core
-      summary: (curated keys), GET|PUT
+      summary: curated keys — GET|PUT
       operationId: patch_v1_settings
       x-phase: extended
       security:
@@ -475,7 +475,7 @@ paths:
     post:
       tags:
       - core
-      summary: '(upload → R2, validated: type png/svg/jpg, ≤ 2 MB)'
+      summary: 'upload → R2, validated: type png/svg/jpg, ≤ 2 MB'
       operationId: post_v1_branding_assets
       x-phase: extended
       security:
@@ -505,7 +505,7 @@ paths:
     get:
       tags:
       - core
-      summary: (checklist state + progress), POST
+      summary: checklist state + progress — POST
       operationId: get_v1_onboarding
       x-phase: extended
       security:
@@ -559,7 +559,7 @@ paths:
     get:
       tags:
       - core
-      summary: (current usage vs limits)
+      summary: current usage vs limits
       operationId: get_v1_limits
       x-phase: extended
       security:
@@ -583,7 +583,7 @@ paths:
     post:
       tags:
       - console
-      summary: GET
+      summary: Tenant Management POST /v1/console/tenants
       operationId: post_v1_console_tenants
       x-phase: extended
       security:
@@ -612,7 +612,7 @@ paths:
     get:
       tags:
       - console
-      summary: GET
+      summary: Tenant Management GET /v1/console/tenants
       operationId: get_v1_console_tenants
       x-phase: extended
       security:
@@ -665,7 +665,7 @@ paths:
     patch:
       tags:
       - console
-      summary: (plan, limits, tags)
+      summary: plan, limits, tags
       operationId: patch_v1_console_tenants_id
       x-phase: extended
       parameters:
@@ -737,7 +737,7 @@ paths:
     post:
       tags:
       - console
-      summary: (failed step)
+      summary: failed step
       operationId: post_v1_console_tenants_id_provisioning_resume
       x-phase: extended
       parameters:
@@ -773,7 +773,7 @@ paths:
     get:
       tags:
       - console
-      summary: (job state)
+      summary: job state
       operationId: get_v1_console_tenants_id_provisioning
       x-phase: extended
       parameters:
@@ -803,7 +803,7 @@ paths:
     get:
       tags:
       - console
-      summary: GET
+      summary: Tenant Management GET /v1/console/tenants/{id}/usage
       operationId: get_v1_console_tenants_id_usage
       x-phase: extended
       parameters:

@@ -47,8 +47,7 @@ overview (CON-25), feature flags (CON-31 — Flipt admin surface), action
 approval (CON-32 — two-operator approval for the nuclear set), notification
 centre (CON-33).
 
-Requirement coverage: `CON-01,29,30` (V1) + `02..25,27..33` (V2) + `24,26`
-(overlaps V3 billing).
+Requirement coverage: `CON-01,29,30` (V1.0) + `02..23,25,27,28,31..33` (V2.0) + `24,26` (V3.0: data residency, billing overlap).
 
 ## 2. Architecture
 

@@ -1,6 +1,6 @@
 # 07 — LCC: Account Lifecycle
 
-> Covers PRD module **LCC** (43 requirements). LCC owns **the trader account
+> Covers PRD module **LCC** (44 requirements). LCC owns **the trader account
 > aggregate** — the thing a trader buys, trades, passes, gets funded on, pays out
 > from, and (possibly) fails. Every other core module (BRG, EVL, PAY, KYC, DOC,
 > NOT) hangs off LCC state. If LCC's state machine is wrong, everything downstream
@@ -14,9 +14,8 @@ LCC decides *what state the account is in and what may happen next*; EVL decides
 *whether a tick/verdict justifies a transition*; BRG *executes broker-side
 effects*; PAY *moves money*.
 
-Requirement coverage: `LCC-01,02,03,05,06,07,11,20,23,27,41,43` (V1-Core/Plus) +
-`04,08..10,12..19,21,22,24,25,26,28,29,31..39,40,42` (V2) + `30` (V3 scaling
-plans).
+Requirement coverage: `LCC-01,02,03,05,06,07,11,20,23,27,41,43,44` (V1.0/V1.1: 11 is V1.1) +
+`04,08..10,12..19,21,22,24..26,28,29,31..40,42` (V2.0) + `30` (V3.0: scaling plans).
 
 ## 2. Architecture
 
