@@ -45,7 +45,7 @@ Binding. "Enforced by" = who/what stops a violation.
 | BVR-11 | No commercial APM → **Prometheus + Grafana + Loki + Sentry** | observability | architecture review |
 | BVR-12 | No standalone gateway → **in-app middleware** behind Cloudflare | edge/routing | architecture review |
 | BVR-13 | No third analytics/BI tool in V1 → **read models + fixed reports** | reporting | architecture review |
-| BVR-14 | No managed IdP → **self-hosted Better Auth** + our AUTH-13 permission engine (Better Auth is TS-only: Go integrates over JWT/JWKS from a Node identity surface, or Go owns sessions — **D1**, docs/41 §3.1) | auth & identity | architecture review + Phase-0 verification |
+| BVR-14 | No managed IdP → **self-hosted identity provider** + our AUTH-13 permission engine. Implemented as **self-hosted ZITADEL** (ADR-13, decision P1, 2026-09-19); the rule's intent (no managed IdP, no per-MAU cost) is intact, the named tool moved from Better Auth to ZITADEL | auth & identity | architecture review + Phase-0 verification |
 | BVR-15 | Any new third-party dependency → **register here before merge** | all dependency PRs | code review |
 | BVR-16 | Every external integration sits behind a **defined adapter interface** | payments, KYC, broker, email, storage, tax | code review (§5 table) |
 | BVR-17 | Before upgrading Redis beyond 7.2 → **licence review** | Redis version | change request (7.4+ = RSALv2/SSPLv1) |
@@ -54,7 +54,7 @@ Binding. "Enforced by" = who/what stops a violation.
 | BVR-20 | Do not build feature flags → **Flipt** | TEN-10, CON-31 | code review |
 | BVR-21 | No secrets-manager-with-UI in V1 (SOPS+age suffices) → **Infisical** is the V2 upgrade path | OPS-09 | change request |
 | BVR-22 | Do not build consent banners → **c15t** self-hosted (not in V1) | portals, tenant sites | code review |
-| BVR-23 | Do not build an RBAC policy point before **evaluating Cerbos** for AUTH-13 (evaluation done 2026-09-19: Cerbos confirmed over OPA/Casbin/OpenFGA; **deployment mode open — D4**, docs/41 §3.2) | AUTH-13/14 | architecture review done; spike = deploy mode + policy fit |
+| BVR-23 | Do not build an RBAC policy point before **evaluating** the options for AUTH-13. Evaluation done 2026-09-19 (docs/41 §3.2): **Casbin embedded** chosen over Cerbos/OPA/OpenFGA (ADR-14, decision D4); revisit Cerbos if policy volume passes the documented trigger | AUTH-13/14 | architecture review done; Phase-1 spike = policy model + test fixture set |
 | BVR-24 | Do not build webhook dispatch/retry/signing/logs → **Hook0** | EVT-11/13/14/15 | code review |
 | BVR-25 | **BullMQ Dashboard** for job observability (no custom job UI) | OPS-17, CON-21 | code review |
 | BVR-26 | Do not build SOC2/ISO evidence collection → **Comp AI or Openlane** | AUD-17/18 | compliance review |
@@ -81,8 +81,10 @@ needed — §9), **REJECTED** (never adopt).
 | Cloudflare | DNS, CDN, WAF, DDoS, edge | TEN-02/18, GW-01/20, OPS-15, DOC-06 | free tier | NOT STARTED | DevOps | Edge for every tenant domain. Confirm Cloudflare-for-SaaS for custom domains. |
 | Cloudflare R2 | Tenant-scoped object storage, zero egress | TEN-18, DOC-06 | free 10 GB, then per GB | NOT STARTED | DevOps | Set up week 2 (DOC-01). Tenant-prefixed keys. |
 | GitHub Actions | CI/CD | OPS-03/04/36 | free/$4 | SIGNED | DevOps | Pipelines week 1. SOPS secrets integration. |
-| Better Auth | Auth foundation (registration, login, sessions, MFA, OAuth) | AUTH-01..43 | free | EVALUATING | BE-1 | Org plugin **confirmed** to fit multi-tenant orgs (per-org roles, custom + dynamic roles, invitations). Remaining: the Go integration model (**D1**, docs/41 §3.1/§7) — Better Auth is TypeScript-only, so either a Node identity surface issues JWTs Go verifies, or Go owns sessions. |
-| Cerbos | RBAC policy decision point | AUTH-13/14 | free self-hosted | EVALUATING | BE-2 | Evaluation done (docs/41 §3.2): Apache-2.0 PDP, stateless, decision logs, `PlanResources`. Spike = sidecar vs **embedded Go engine** (**D4**) + policy fit. |
+| ZITADEL | Identity provider (registration, login, sessions, MFA, SSO/SAML, SCIM, org policies) | AUTH-01..43, AUTH-24/25 | free self-hosted | **ADOPT — Phase 0** | BE-1 | ADR-13 / decision P1. One Organization per tenant; hosted login + OIDC; AGPL-3.0 → unmodified upstream only + legal review at Phase 0 exit; SCIM covers users only (no Groups). |
+| Casbin | Authorization engine (RBAC with domains, embedded) | AUTH-12/13/14 | free (Apache-2.0) | **ADOPT — Phase 1** | BE-2 | ADR-14 / decision D4. In-process behind `authorizer.Check`; policies in Postgres; Go tests replace policy-test tooling. |
+| Better Auth | Auth foundation (superseded) | AUTH-01..43 | MIT | **REJECTED** | BE-1 | Superseded by ADR-13: TypeScript-only (no Go SDK → a second runtime for auth) and V1 now needs SSO/SCIM, which its SSO plugin documents as not production-ready. Retained as the documented fallback if the ZITADEL integration fails in Phase 0. |
+| Cerbos | RBAC policy decision point (superseded as runtime) | AUTH-13/14 | Apache-2.0 | **DEFERRED** | BE-2 | ADR-14 chose embedded Casbin. Revisit (trigger: > 200 tenants or > 500 policy rows) when decision logs / `PlanResources` query plans justify a separate PDP. |
 | Resend | TS email SDK + React Email | NOT-03/04/05 | $20/mo per 50k | EVALUATING | BE-2 | Dev + non-critical. Postmark stays production. Same iface. |
 | Sentry | Error tracking + stack traces | OPS-11 (V2.0) | free 5k/mo | NOT STARTED | DevOps | Add to every service day 1. Alert routing per OPS-39. |
 
@@ -112,7 +114,7 @@ needed — §9), **REJECTED** (never adopt).
 | Tool | What it does | Serves | Status | Owner | Notes |
 |---|---|---|---|---|---|
 | UnKey | API key mgmt (issue/rotate/revoke, per-key limits, analytics) | AUTH-21, GW-16 | EVALUATING | BE-2 | Adopt with tenant API keys. AGPL — verify. |
-| Logto | Multi-tenant IdP (alt. to Better Auth) | AUTH-01..43 | EVALUATING | BE-1 | Only if Better Auth hits a wall (orgs/SCIM). |
+| Logto | Multi-tenant IdP | AUTH-01..43 | REJECTED | BE-1 | OSS build has no multi-tenant console (Cloud-only) — docs/41 §4. |
 | c15t | Consent management (self-hosted) | TD-01, ADM-01, NOT-02 | EVALUATING | FE-1 | With CMS (V3) or analytics/chat tools (BVR-22). Not V1. |
 | Infisical | Secrets manager + audit trails | OPS-09 | DEFERRED | DevOps | V2 upgrade from SOPS when audit trails required (BVR-21). |
 | html-pdf-lite | Faster/smaller HTML→PDF | DOC-01/13/14 | EVALUATING | BE-2 | Drop-in Puppeteer replacement if memory bites. |
@@ -136,7 +138,7 @@ needed — §9), **REJECTED** (never adopt).
 | n8n | Self-hosted low-code connectors | DVP-09 | EVALUATING | Sustainable-Use licence — review before deploy (BVR-18). |
 | Zapier | Commercial low-code connectors | DVP-09 | DEFERRED | Prefer n8n. Webhook-based either way. |
 | BigQuery | Warehouse + ETL target | ANA-18 | DEFERRED | Event-driven ETL from read models. |
-| Authentik | Enterprise SSO (SAML/OIDC/LDAP) | AUTH-24/25 | DEFERRED | Only when a paying tenant demands SSO. Never V1/V2. |
+| Authentik | Enterprise SSO (SAML/OIDC/LDAP) | AUTH-24/25 | REJECTED | Superseded: ZITADEL ships SAML/OIDC per organization from V1 (ADR-13); authentik's OSS/enterprise split and weaker hardening record ruled it out (docs/41 §4). |
 | Plunk | Marketing email + newsletters | CRM-06 (+NOT-14) | DEFERRED | V3 with CRM. Never transactional (Postmark/Resend). |
 | Nango | 500+ prebuilt API connectors | SDK-01/04/08/11/12/13 | DEFERRED | Elastic-2.0 — verify commercial terms. |
 | Zoneless | Stripe-compatible stablecoin rail | CHK-04, PAY-43 | DEFERRED | Regulatory review required. |
@@ -149,7 +151,7 @@ needed — §9), **REJECTED** (never adopt).
 | Kafka / Redpanda / NATS (V1) | BVR-09 | ops weight at our scale | Redis Streams |
 | Kubernetes / Nomad / Swarm | BVR-10 | on-call surface for 1 DevOps | Docker Compose |
 | HashiCorp Vault | BVR-06 | overkill V1 (+BUSL licence) | SOPS + age → Infisical (V2) |
-| Auth0 / AWS Cognito | BVR-14 | per-MAU cost + tenant-RBAC mismatch | Better Auth (self-hosted) |
+| Auth0 / AWS Cognito | BVR-14 | per-MAU cost + tenant-RBAC mismatch | self-hosted ZITADEL (ADR-13) |
 | Datadog / New Relic | BVR-11 | commercial APM cost | Prometheus + Grafana + Loki + Sentry |
 | Kong / Traefik (V1) / AWS API GW | BVR-12 | extra service; Cloudflare covers edge | in-app middleware |
 | Terraform | register | full IaC is out of scope in V1 — Compose + the runbook is the source of truth | Docker Compose + documented Hetzner provisioning (docs/06) |
@@ -172,10 +174,14 @@ needed — §9), **REJECTED** (never adopt).
 - **Review-before-deploy (fair-code / source-available):** n8n
   (Sustainable Use), Sentry self-host, Nango (Elastic-2.0) — BVR-18.
 - **AGPL in the stack (self-hosted, no SaaS distribution):**
-  Hook0, UnKey, Comp AI, Grafana, Loki. Verify the distribution
-  model matches our use (self-hosted backend, no AGPL code shipped
-  to tenants) before each adoption — recorded as a Phase-checklist
-  item in docs/99, not a blocker.
+  **ZITADEL (new, ADR-13)**, Hook0, UnKey, Comp AI, Grafana, Loki.
+  Verify the distribution model matches our use (self-hosted backend,
+  no AGPL code shipped to tenants) before each adoption — recorded as
+  a Phase-checklist item in docs/99, not a blocker. For ZITADEL the
+  extra discipline is explicit: **never patch the source**; all
+  customisation goes through Actions v2 configuration, and any needed
+  upstream fix is contributed — that keeps us a plain user of the
+  program rather than a distributor of a modified one.
 - **Forbidden:** BUSL in V1 (Vault), SSPL/RSALv2 without review.
 - Every adoption records: licence, version pin, exit path (the
   interface that lets us swap it — §5), and the decision owner.
@@ -204,7 +210,7 @@ tool swaps without touching domain code. The registry:
 | `ComplianceEvidence` (AUD-17) | 05 (V2) | Comp AI / Openlane (evaluating) |
 | `ESignature` (DOC-12) | 15 (V2) | Documenso |
 | `ConnectorPack` (SDK-04) | 27-A (V3) | Nango (deferred) |
-| `SSOProvider` (AUTH-24) | 02 (V3) | Authentik (deferred) |
+| `SSOProvider` (AUTH-24) | 02 (V1 per D2) | ZITADEL (per-org IdP, ADR-13) |
 
 **Adapter contract rules:** timeouts + retries + circuit breaking live
 in the adapter (never in domain code); provider timestamps are mapped
@@ -215,8 +221,8 @@ contract-test** mode so CI never touches a live vendor.
 ## 6. Evaluation process (EVALUATING → ADOPTED / REJECTED)
 
 1. **Spike (time-boxed, ≤2 days):** one engineer proves the single
-   riskiest fit (e.g. Better Auth org plugin multi-tenancy, Cerbos
-   latency at 2k req/s, Hook0 AGPL distribution model).
+   riskiest fit (e.g. ZITADEL org-per-tenant provisioning + hosted-login
+   hand-off, Casbin policy model at 2k req/s, Hook0 AGPL distribution model).
 2. **ADR note:** 1-page record in the owning module doc (§12) + a row
    update here (status + version pin + exit path). No separate ADR
    folder — the module doc is the ADR.
@@ -231,12 +237,12 @@ contract-test** mode so CI never touches a live vendor.
 
 | Phase (docs/99) | Adoptions (tool → Req IDs) |
 |---|---|
-| 0 — Foundation (w0–4) | Hetzner, PG16, Redis 7.2, Compose, PgBouncer, SOPS+age, GHA, Cloudflare(+R2), Postmark, Sentry-SDK, Drizzle (adopt), BullMQ (adopt), Better Auth (spike), Cerbos (spike), MetaApi (**sign**), Match2Pay/Interkasa (sign), NOWPayments (sign wk2), Veriff (confirm keys) |
+| 0 — Foundation (w0–4) | Hetzner, PG16, Redis 7.2, Compose, PgBouncer, SOPS+age, GHA, Cloudflare(+R2), Postmark, Sentry-SDK, Drizzle (adopt), BullMQ (adopt), ZITADEL (adopt, ADR-13), Casbin (adopt, ADR-14), Postgres RLS (adopt, D3), MetaApi (**sign**), Match2Pay/Interkasa (sign), NOWPayments (sign wk2), Veriff (confirm keys) |
 | 1 — Money loop (w5–16) | MetaApi (build), Veriff (build), Match2Pay/Interkasa/NOWPayments (build), Puppeteer (build) |
 | 2 — Cutover (w17–24) | Prom/Grafana/Loki/OTel (harden), Uptime Kuma (adopt), BullMQ Dashboard (embed) |
-| 3 — V2 breadth (w25–40) | Hook0, Flipt, UnKey, TV Charts, Documenso, ipinfo, QuickBooks/Xero (pick), Avalara (pick), Discord API, Comp AI/Openlane (pick), c15t (if CMS/chat), Logto (only if Better Auth fails), html-pdf-lite (only if PDFs bite), Infisical (only if secret-audit required) |
+| 3 — V2 breadth (w25–40) | Hook0, Flipt, UnKey, TV Charts, Documenso, ipinfo, QuickBooks/Xero (pick), Avalara (pick), Discord API, Comp AI/Openlane (pick), c15t (if CMS/chat), html-pdf-lite (only if PDFs bite), Infisical (only if secret-audit required) |
 | 4 — Hardening | Traefik (only if gateway splits), NATS (only if Streams bottlenecks) — both default NO |
-| 5 — V3 ecosystem | Stripe Billing, Authentik (only on tenant demand), Plunk, Nango, BigQuery, FingerprintJS (on volume), Zapier/n8n (pick), Zoneless (only after regulatory review) |
+| 5 — V3 ecosystem | Stripe Billing, Plunk, Nango, BigQuery, FingerprintJS (on volume), Zapier/n8n (pick), Zoneless (only after regulatory review) |
 
 ## 8. Cost summary (run-rate at V1.0 launch, excl. per-transaction fees)
 
@@ -267,8 +273,8 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 - [ ] **R2 setup (week 2)** — owner DevOps. Bucket + tenant prefixes.
 - [ ] **NOWPayments signup (week 2)** — owner BE-2. Networks TRC20/ERC20/BEP20.
 - [ ] **Veriff keys confirm (week 1)** — owner FunderBlu COO. Webhooks included?
-- [ ] **Better Auth spike (Phase 0)** — owner BE-1. Go integration model (**D1**, docs/41 §7) + org/membership mapping; org plugin fit itself is already confirmed.
-- [ ] **Cerbos spike (Phase 0/1)** — owner BE-2. Deployment mode (sidecar vs embedded Go engine, **D4**) + latency + policy fit; else Casbin or in-house AUTH-13 (docs/41 §3.2).
+- [ ] **ZITADEL deploy + spike (Phase 0)** — owner BE-1. Org-per-tenant provisioning, hosted-login hand-off from the web tier, token claims (`amr`/`auth_time` for the staff-MFA and step-up rules), Actions v2 event feed into AUD, AGPL legal review (ADR-13).
+- [ ] **Casbin spike (Phase 0/1)** — owner BE-2. Policy model (`g(r.sub, p.sub, r.dom)`), hierarchy/derived rules, test fixture set, Postgres policy loading + reload (ADR-14).
 - [ ] **Drizzle adopt (Phase 0)** — owners BE-1 + DevOps. Else Prisma fallback (BVR-08).
 - [ ] **Sentry SDKs day 1** — owner DevOps. Every service from the first deploy.
 - [ ] **AGPL distribution checks** (Hook0, UnKey, Comp AI, Grafana, Loki) — at each adoption.

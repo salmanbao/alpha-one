@@ -92,7 +92,7 @@ meaningful scope (see §6 for release semantics; full requirement-level mapping 
 ### D4 — Platform infrastructure
 | Module | Name | One line | Rel |
 |---|---|---|---|
-| **AUTH** | Identity, AuthN/AuthZ | Multi-tenant auth (Better Auth), roles & policies (Cerbos), API keys, 2FA, sessions | 1.0 |
+| **AUTH** | Identity, AuthN/AuthZ | Multi-tenant auth (**ZITADEL**, ADR-13), roles & policies (**Casbin**, ADR-14), API keys, 2FA, sessions | 1.0 |
 | **TEN** | Tenant Management | Tenant lifecycle, white-label (branding, domain), feature entitlements, settings | 1.0 |
 | **EVT** | Event Bus & Webhooks | Redis Streams backbone, outbox relay, consumer contracts, tenant outbound webhooks | 1.0 |
 | **GW** | API Gateway | In-app gateway layer behind Cloudflare: tenant resolution, auth, rate limits, quotas, idempotency, error contract | 1.0 |

@@ -171,7 +171,7 @@ scheduled monthly to the COO + owner.
   thresholds.
 - Permissions: `firm:owner/admin` see all reports; `firm:finance`
   financial reports; `firm:risk` risk + funnel; per-report override in the
-  registry (ANA-13) — Cerbos policies generated from the registry (the
+  registry (ANA-13) — Casbin policy rows generated from the registry (the
   report registry is the single source; CI checks policy coverage).
 
 ## 4. Events (topic `analytics` — mostly internal)

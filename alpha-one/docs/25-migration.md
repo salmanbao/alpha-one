@@ -76,7 +76,7 @@ FunderBlu legal's sign-off.
    4. CUTOVER (the T_date window, the 10-second deploy class from 06 §3):
       · DNS/branding flip (the tenant domain → Alpha One, the TEN
         custom-domain config, 03)
-      · traders log in to Alpha One (the Better Auth import: the
+      · traders log in to Alpha One (ZITADEL user import: the
         Argon2id re-hash — passwords migrate as **reset-required**
         (a forced reset at first login — the one-way hash means TTS's
         hashes can't be imported as-is unless TTS used a compatible

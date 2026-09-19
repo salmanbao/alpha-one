@@ -3,17 +3,36 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: 2026-09-17
+Last updated: 2026-09-19
 
 Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until contract freeze.
 Permission keys follow AUTH-13 (`resource.action`). Idempotency semantics cite GW-12.
-Auth foundation: Better Auth (BVR-14); argon2id password hashing (AUTH-17).
+Auth foundation: **ZITADEL, self-hosted** (ADR-13, decision P1) — credentials, MFA factors, SSO/SAML and SCIM live there; this API verifies ZITADEL tokens (JWKS, audience per realm) and owns authorization. Authorization engine: **Casbin, embedded** (ADR-14, decision D4). Password hashing (AUTH-17) is ZITADEL's Argon2id.
 
 ## Scope
 Trader registration, login, password reset and self-service change, token sessions with rotation and revocation, staff 2FA enrollment, role model, permission engine enforcement, tenant scoping, super admin separation, account suspension/unsuspension, logout. (AUTH-01, AUTH-04, AUTH-05, AUTH-07, AUTH-09, AUTH-12, AUTH-13, AUTH-15, AUTH-16, AUTH-17, AUTH-20, AUTH-39, AUTH-40, AUTH-43)
 
+## Delegated to the identity provider (ZITADEL, ADR-13 / decision P2)
+Registration, login, MFA challenge, password reset and token issuance/refresh are
+**not** part of this API any more. The web tier redirects to ZITADEL Hosted Login v2
+(tenant-scoped via `urn:zitadel:iam:org:id:{id}`), and token refresh/revocation use
+ZITADEL's OIDC endpoints (`/oauth/v2/token`, `/oauth/v2/revoke`, `/oidc/v1/userinfo`,
+`/oauth/v2/keys` for JWKS). Session listing/termination projects ZITADEL's session
+service v2; SSO/SAML configuration projects the org IdP APIs; SCIM is served by
+ZITADEL's `/scim/v2/Users` (user schema only). Consequences for this file: the
+`POST /v1/auth/register`, `/login`, `/password-reset`, `/password-reset/confirm`,
+`/2fa/enroll`, `/2fa/verify` and `/refresh` operations are **retired**; the V1
+baseline below is what remains ours, plus `POST /v1/auth/session` and the backup-code
+pair introduced by decisions D5/P2.
+
 ## Auth
-Per-route groups (GW-01): trader routes use email+password login issuing short-lived JWT access tokens with rotating refresh tokens and server-side revocation (AUTH-07). Staff routes additionally require TOTP 2FA enrolled at first login (AUTH-09). API keys are V2 (AUTH-21) — not in this contract.
+Per-route groups (GW-01): every authenticated request carries a **ZITADEL access
+token** (short-lived JWT) that the API verifies over JWKS with the audience of the
+realm it belongs to (tenant application vs console application, AUTH-16). Immediate
+revocation is ours: Redis deny-set + the `auth_sessions` projection, with reuse of a
+rotated refresh token revoking all sessions of the identity (AUTH-07). Staff routes
+additionally require an MFA assertion (`amr`) or a redeemed backup code (AUTH-09/11).
+API keys are V2 (AUTH-21) — not in this contract.
 
 ## Tenant resolution
 Tenant comes from the request domain/subdomain resolved at the edge (TEN-02) and is enforced by gateway middleware (GW-02). Every query and action is restricted to the caller's tenant in the data layer (AUTH-15, TEN-03). Requests on unknown hosts are rejected before auth runs.
@@ -26,86 +45,64 @@ Mutating requests accept an idempotency key per GW-12. Client retries on registe
 
 ## Endpoints
 
-### POST /v1/auth/register
-Auth: none (public; Trader role afterwards) — AUTH-01
+### POST /v1/auth/session
+Auth: ZITADEL access token (bearer, tenant audience) — AUTH-04/07
 Tenant: from domain (GW-02)
-Permission: none — public registration on a tenant domain
-Idempotency: required # GW-12 — retries never double-create a user
+Permission: none — materialises the identity + memberships on first login
+Idempotency: required # GW-12 — repeated calls for the same token return the same session row
 
 Request:
 ```json
-{ "email": "TODO", "password": "TODO" }
-```
-
-Response 201:
-```json
-{ "user_id": "TODO", "tenant_id": "TODO" }
-```
-
-Errors:
-- `auth.invalid_registration` 400 — payload fails validation # implied by AUTH-01 + AUTH-17
-- `auth.email_taken` 409 — email already registered on this tenant # implied by AUTH-01; enumeration-safety treatment TODO — needs owner decision
-- `tenant.suspended` 403 — registration on a suspended tenant # implied by TEN-15
-
-### POST /v1/auth/login
-Auth: none (public) — AUTH-04
-Tenant: from domain (GW-02)
-Permission: none — public login
-Idempotency: optional # GW-12; login is not a create
-
-Request:
-```json
-{ "email": "TODO", "password": "TODO", "totp_code": "TODO" }
+{ "idp_session_id": "TODO" }
 ```
 
 Response 200:
 ```json
-{ "access_token": "TODO", "refresh_token": "TODO", "expires_in": "TODO", "requires_2fa_enrollment": "TODO" }
+{ "session_id": "TODO", "user_id": "TODO", "tenant_id": "TODO",
+  "roles": ["user:trader"], "mfa_satisfied": false, "expires_at": "TODO" }
 ```
 
 Errors:
-- `auth.invalid_credentials` 401 — identical message for unknown email and wrong password (enumeration-resistant) # implied by AUTH-04
-- `auth.account_suspended` 403 — user suspended; all sessions/tokens already invalidated # implied by AUTH-20
-- `auth.totp_required` 401 — staff login missing 2FA code # implied by AUTH-09
-- `auth.totp_invalid` 401 — bad TOTP code # implied by AUTH-09
-- `tenant.suspended` 403 — tenant suspended: logins stop # implied by TEN-15
+- `auth.token_invalid` 401 — signature/issuer/audience/JWKS verification failed # AUTH-07
+- `auth.account_suspended` 403 — user suspended in ZITADEL (deactivated) or locally # implied by AUTH-20
+- `auth.tenant_suspended` 403 — tenant suspended: logins stop # implied by TEN-15
+- `auth.mfa_required` 401 — staff role without an MFA assertion and no redeemed backup code # implied by AUTH-09/11
 
-### POST /v1/auth/password-reset
-Auth: none (public) — AUTH-05
+### POST /v1/auth/2fa/backup-codes
+Auth: staff at first-login enrolment — AUTH-09/11 (V1 per decision D5)
 Tenant: from domain (GW-02)
-Permission: none
-Idempotency: optional
+Permission: self-action
+Idempotency: required
 
 Request:
-```json
-{ "email": "TODO" }
-```
-
-Response 200: always success (no account enumeration).
 ```json
 {}
 ```
 
-Errors: none distinguishable (enumeration-resistant); delivery via NOT-03 Postmark. # AUTH-05
+Response 201: plaintext codes shown once (10, single-use, Argon2id-hashed at rest).
+```json
+{ "codes": ["TODO"] }
+```
 
-### POST /v1/auth/password-reset/confirm
-Auth: none (single-use email link token) — AUTH-05
+Errors: `auth.mfa_not_enrolled` 409 — no verified factor to attach the codes to # AUTH-11
+
+### POST /v1/auth/2fa/backup-code
+Auth: staff without a working factor — AUTH-11
 Tenant: from domain (GW-02)
-Permission: none
-Idempotency: required # GW-12 — single-use link token
+Permission: self-action (sets `mfa_satisfied` on the caller's session)
+Idempotency: required
 
 Request:
 ```json
-{ "token": "TODO", "new_password": "TODO" }
+{ "code": "TODO" }
 ```
 
 Response 200:
 ```json
-{}
+{ "mfa_satisfied": true }
 ```
 
-Errors:
-- `auth.reset_token_invalid` 400 — unknown/expired/already-used single-use token # implied by AUTH-05
+Errors: `auth.backup_code_invalid` 401 — unknown/used code # implied by AUTH-11
 
 ### POST /v1/auth/password
 Auth: any logged-in user — AUTH-40
@@ -189,6 +186,9 @@ Tenant: from domain (GW-02)
 Permission: self-action
 Idempotency: optional
 
+Revokes the caller's session in the projection + deny-set and calls ZITADEL's
+session termination + OIDC end-session so the IdP-side session dies too.
+
 Request:
 ```json
 {}
@@ -250,14 +250,14 @@ AUTH-12 defines the role model (Super Admin, Tenant Admin, custom staff roles, T
 The enablement surface — impersonation consent + control UI (TEN-16, CON-07) and the impersonation audit record (AUD-08) — is V2.0 in the Master Backlog and out of V1 scope. The restriction holds vacuously in V1 and requires no audit format, consent model, or control UI. When V2 enablement lands, AUTH-16's contract will be amended; until then the console realm stays platform-scope (see `contracts/api/con.md`).
 
 ## Events emitted
-- None directly in the sheet. Suspension cascades via TEN-15 are outbox events? TODO — needs owner decision (user suspension events not named in the sheet).
+- `user.login_success` / `user.login_failure` (emitted by `/v1/auth/session` and fed by ZITADEL Actions v2 event webhooks), `user.session_revoked` (logout/forced logout), `user.2fa_enrolled` / `user.2fa_disarmed`, `user.suspended` / `user.activated`, `api_key.created` / `api_key.revoked` — shapes in docs/31 (EVT catalog). ZITADEL's own events remain the IdP-side source of record and are mirrored into `audit_events` (AUD-01).
 
 ## Open contract questions
-- TODO — needs owner decision: exact registration response shape and email-verification behavior (no verification row in V1 sheet).
-- TODO — needs owner decision: enumeration-safe response for duplicate registration emails.
-- TODO — needs owner decision: refresh-token rotation window and reuse-detection semantics (AUTH-07 says rotating + revocable but no parameters).
-- TODO — needs owner decision: session concurrency limits per user.
-- TODO — needs owner decision: CRUD surface for roles and role-permission bindings (AUTH-12/AUTH-13 imply management UI/APIs but no rows specify them).
-- TODO — needs owner decision: JWT claims structure (tenant_id, role, permission set) — needed by every other module.
-- TODO — needs owner decision: 2FA enrollment enforcement timing details ( grace period? forced at first login — what exactly?).
-- TODO — needs owner decision: rate limits on auth endpoints (GW-05 is global; auth-specific limits unspecified).
+- Resolved by ADR-13 / decision P2: registration shape and email verification are ZITADEL's org-scoped registration flow; our `/session` response shape is the canonical identity payload (see above).
+- Resolved by ADR-13: duplicate-registration / enumeration handling is ZITADEL's public error surface plus our generic `auth.token_invalid` on `/session`.
+- Resolved by P2: refresh rotation + reuse detection are ZITADEL's token semantics plus our deny-set; parameters come from the ZITADEL application/session settings (tenant-configurable V2, AUTH-34).
+- Still open (owner: BE-1): session concurrency limits per user.
+- Still open (owner: BE-1): CRUD surface for roles and role-permission bindings — the Casbin policy table is the mechanism; the ADM screen is V2 (AUTH-14).
+- Resolved by P4/ADR-14: token claims carry `sub`, audience/realm and MFA/`auth_time` facts; role/permission data is resolved by our API from `tenant_memberships` + Casbin, not from the token.
+- Resolved by D5: staff 2FA is enforced at first login with backup codes issued in the same flow; no grace period for staff roles.
+- Still open (owner: BE-1): auth-specific rate limits beyond ZITADEL's per-org login policy + GW-05.

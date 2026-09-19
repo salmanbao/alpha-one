@@ -12,7 +12,7 @@
 
 **V1 (3 — binding):**
 - **Console auth realm (CON-01):** the `platform:*` role family in a
-  separate Better Auth org/realm (AUTH-12/16): `platform:owner`
+  separate ZITADEL application/audience (AUTH-12/16): `platform:owner`
   (everything, incl. tenant suspension), `platform:ops` (health, jobs,
   incidents), `platform:support` (read-assist, tenant contact registry),
   `platform:finance` (platform financials, CON-19 V2 early-read).
@@ -82,7 +82,7 @@ the platform's own compliance posture models the tenants').
 
 | Screen | Content |
 |---|---|
-| **Login + session** | Better Auth platform org; 2FA mandatory for all platform roles (no exceptions — these accounts can suspend tenants); session list + revoke (CON-30) |
+| **Login + session** | ZITADEL console application (separate audience); 2FA mandatory for all platform roles (no exceptions — these accounts can suspend tenants); session list + revoke (CON-30) |
 | **Home** | platform health glance: relay lag, provider health (MetaApi/Veriff/NOWPayments/Postmark up/degraded — from 08/04 health endpoints), open CRITICALs (CON), last deploy + version (OPS-24), backup last-success + RPO (06) |
 | **Tenants (V1 minimum)** | list (id, name, status, created, funded-account count) + detail (the TEN record: config, entitlements display, provisioning saga state if in-flight) — read-only in V1; the wizard lands with V2 CON-03 (V1 provisioning is the TEN API + the saga visible here, FunderBlu's onboarding happens during Phase 1 anyway) |
 | **Search (V1)** | tenant id/name (CON-02 early); global entity search (accounts/traders across tenants) = V2 CON-17 |
@@ -353,12 +353,12 @@ CREATE TABLE console_announcements (             -- V2 CON-14
 | **Flipt** (flags, register) | CHOSEN — the CON-31 override surface is Flipt's admin API behind our 2FA/two-op wrapper |
 | **Uptime Kuma** (register) | CHOSEN — external checks feed the health screen (its API); internal health = the providers' own endpoints |
 | Portainer/Grafana as the console | Rejected: system-ops tools for the DevOps role; the console is the **business-ops** surface (tenants, sagas, controls) — Grafana stays in Grafana, linked from CON-08 |
-| Keycloak (V3 SSO, register) | CON auth stays Better Auth in V1/V2; V3 SSO for platform operators is a CON-01 extension |
+| ZITADEL SSO (register) | Platform operators can federate to FunderBlu's own IdP through the same ZITADEL instance (`AUTH-24` is V1 by decision D2); no second IdP product |
 
 ## 13. Technology stack
 
-Next.js 15 (web/con), TypeScript, Tailwind, shadcn/ui, SSE, Better Auth
-(platform org), Cerbos (platform:* policies), Flipt, Postgres (the small
+Next.js 15 (web/con), TypeScript, Tailwind, shadcn/ui, SSE, ZITADEL (console
+application/audience), Casbin (platform:* policies), Flipt, Postgres (the small
 console tables + read access), Uptime Kuma API, Prometheus/Grafana
 (linked), Sentry.
 
@@ -381,14 +381,14 @@ console tables + read access), Uptime Kuma API, Prometheus/Grafana
 
 ## 15. Integration — external tools
 
-Better Auth, Cerbos, Flipt, Uptime Kuma, Prometheus/Grafana (linked
+ZITADEL, Casbin, Flipt, Uptime Kuma, Prometheus/Grafana (linked
 dashboards), Sentry, (V3) Keycloak/SSO.
 
 ## 16. Implementation blueprint
 
 | Step | Owner | Est | Depends | Exit criteria |
 |---|---|---|---|---|
-| 1. Platform realm (Better Auth org, platform:* roles, Cerbos policies, 2FA-mandatory) + session management (list/revoke) | BE-1 | 2 d | AUTH | a platform operator logs in on the console subdomain; a trader/tenant-staff session is structurally rejected (tested both ways) |
+| 1. Platform realm (ZITADEL console application/audience, platform:* roles, Casbin policies, 2FA-mandatory) + session management (list/revoke) | BE-1 | 2 d | AUTH | a platform operator logs in on the console subdomain; a trader/tenant-staff token is structurally rejected (tested both ways) |
 | 2. Shell + home screen (health, providers, criticals, deploy, backup) + tenant list/detail (read) | FE-2 + BE-1 | 4 d | 1, OPS health endpoints, TEN read APIs | the wall screen renders live on staging; every number has an as_of |
 | 3. Tenant halt control (rung 1): arming (2FA), state table, "keeps working/stops" dialog, release with note, audit | BE-1 + FE-2 | 2.5 d | 2, LCC-33, TEN | halt on staging tenant: purchases/payouts/requests stop, broker sync + trading continue (the test matrix), release + audit chain complete |
 | 4. Two-operator approval wiring (A arms → B approves, self-approval 403) — built for tenant halt now, the template for V2 | BE-1 | 1.5 d | 3 | self-approval rejected; approval expiry works; the CON-32 flow is reusable (code review) |

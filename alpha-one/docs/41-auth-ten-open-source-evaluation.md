@@ -199,20 +199,103 @@ AUTH-01…43 without SSO; benefit: zero extra runtime, sessions and revocation a
 first-class in our schema, and the Phase-0 spike disappears. Best if C4 (one
 runtime, one service fewer) outranks feature reuse.
 
-## 8. Decisions needed
+## 8. Decisions — answered 2026-09-19
 
-Each of these is recorded as a row in [37-prd-open-questions](37-prd-open-questions.md)
-and then applied to §2/§12/§13 of `docs/02` and `docs/03`.
+These five decisions (and the four follow-ups they produced) are recorded as rows in
+[37-prd-open-questions](37-prd-open-questions.md) §*Design-review questions*, and are
+applied to `docs/01`, `docs/02`, `docs/03`, `docs/28`, `docs/34` and the contracts pack.
 
-| # | Decision | Options | Default if unanswered |
-|---|---|---|---|
-| **D1** | Identity component wiring | A / B / C / D above | A (keep BVR-14, make the Node hop explicit, spike 2 days) |
-| **D2** | Is SAML/OIDC SSO required by a V1 tenant? | no (PRD AUTH-24 stands at V3) / yes for one tenant at cutover / protect for it now | no — the PRD already schedules it V3 |
-| **D3** | Tenant isolation enforcement depth | app-level only (ADR-1 as written) / **+ Postgres RLS** as defense-in-depth | app-level only; RLS deferred to V2 unless approved |
-| **D4** | Authorization engine + deployment mode | Cerbos sidecar / Cerbos embedded (Go) / Casbin embedded / OPA / in-house behind `authorizer.Check` | Cerbos embedded if the spike passes, else Cerbos sidecar |
-| **D5** | V1 staff 2FA scope | all staff roles / finance + risk only | all staff (AUTH-09 as written) |
+| # | Decision | Answer |
+|---|---|---|
+| **D1** | Identity component wiring | **Option C — adopt a multi-tenant IdP** (product: **P1 = ZITADEL**, self-hosted). Better Auth (BVR-14) and its Node-identity-surface question are retired; the `AUTH-*` domain package stays the boundary. |
+| **D2** | Is SAML/OIDC SSO required by a V1 tenant? | **Yes, one tenant at cutover.** `AUTH-24` is promoted into V1 scope; `AUTH-25` (SCIM) follows per P3. |
+| **D3** | Tenant isolation enforcement depth | **Postgres RLS adopted** as a fail-closed second layer on every tenant-owned table, on top of the ADR-1 application guard. |
+| **D4** | Authorization engine + deployment mode | **Casbin, embedded in the Go `api`** (RBAC with domains). Cerbos is superseded; the `authorizer.Check(ctx, subject, action, resource)` interface is unchanged. |
+| **D5** | V1 staff 2FA scope | **All staff roles, enforced at first login, with backup codes in V1** — `AUTH-11`, `AUTH-28` and `AUTH-29` become V1 dependencies of the enrolment path. |
+
+Follow-up decisions created by the answers:
+
+| # | Decision | Answer |
+|---|---|---|
+| **P1** | Which IdP? | **ZITADEL** — single self-hosted instance, Postgres-backed, one Organization per tenant, unmodified AGPL-3.0 (legal review is a Phase-0 gate). |
+| **P2** | Where do login and session live? | **IdP-hosted login + IdP tokens at the API.** Hosted Login v2 (org-scoped), ZITADEL access tokens accepted by the Go `api`, plus our own `auth_sessions` projection and Redis deny-set for immediate revocation. |
+| **P3** | SSO/SCIM depth in V1? | **SSO + SCIM for that tenant.** Role assignment stays with us; SCIM covers users only (ZITADEL limitation, verified). |
+| **P4** | Who owns roles/membership? | **Our Postgres.** ZITADEL holds credentials, MFA, SSO links and login policy; membership, roles, custom roles and the permission registry stay ours, mirrored into tokens via Actions v2. |
+
+## 8.1 Requirement mapping for the chosen stack (ZITADEL + Casbin + RLS)
+
+`✓` = satisfied by the tool · `B` = we build it (ours either way) · `⚠` = satisfied with a
+caveat that has an owner.
+
+| Requirement | How the chosen stack satisfies it |
+|---|---|
+| AUTH-01 registration | ✓ ZITADEL Hosted Login registration, org-scoped (`urn:zitadel:iam:org:id:{id}`) so the trader lands in the right tenant org; org domain + login-name format set per tenant. |
+| AUTH-04 login | ✓ Hosted Login v2; per-org login policy (MFA, passwordless, session lifetimes, password complexity, lockout). |
+| AUTH-05 password reset | ✓ ZITADEL self-service reset (`/ui/login/…`, `POST /v2/users/{id}/password_reset` flows). |
+| AUTH-07 sessions, rotation, revocation | ✓ ZITADEL refresh tokens with rotation + `/oauth/v2/revoke`, `RevokeAllMyRefreshTokens`, session-service `DeleteSession`; **B** our `auth_sessions` projection + Redis deny-set make revocation immediate at the API even before token expiry, and reuse-detection alerting is ours. |
+| AUTH-08 session control (V2) | ✓ `ListMyUserSessions` / session v2 `ListSessions`, `DeleteSession`; **B** TD/ADM screens. |
+| AUTH-09 staff TOTP mandatory | ✓ TOTP factor + per-org login policy; **B** enforcement keyed to *our* roles (staff vs trader in the same org) — api denies staff actions without an MFA assertion (`amr`) and the console shows enrolment. ⚠ owner BE-1, verify `amr`/`auth_time` claims in the Phase-0 spike. |
+| AUTH-10 trader 2FA, AUTH-11 backup codes (V1 per D5) | ✓ factor management (`AddMyAuthFactorOTP`, self-service) — **B** backup codes are ours (schema + redemption endpoint), because ZITADEL has no recovery-code primitive; AUTH-28 (admin reset) uses ZITADEL's MFA reset APIs. |
+| AUTH-12 role model, AUTH-13 permission engine, AUTH-14 custom roles | **B** with **Casbin** as the engine: model `g(r.sub, p.sub, r.dom)`, `dom` = tenant id; role hierarchy and the `resource.action` registry (`contracts/permissions/registry.md`) are ours. ZITADEL roles are used only as a login-time mirror so tokens can carry them. |
+| AUTH-15 tenant scoping | **B** ADR-1 guard + **RLS** (D3). |
+| AUTH-16 super-admin separation | ✓⚠ two OIDC applications (or two projects) with distinct audiences — console tokens cannot be accepted by tenant routes and vice versa; **B** the realm column on `identities` and the audience check in the GW. No impersonation in V1. |
+| AUTH-17 password policy | ✓ per-org password complexity + ZITADEL's Argon2id hashing; **B** HIBP breached-password check (ZITADEL does not call HIBP) at registration/change. |
+| AUTH-18 throttling, AUTH-42 unlock (V2) | ✓ per-org lockout policy (max attempts) + ZITADEL's own rate limits; **B** our per-IP counters, `Retry-After` semantics and the unlock endpoint (`UnlockUser`). |
+| AUTH-19 login history (V2), AUTH-22 auth audit | ✓ ZITADEL's event-sourced stream is the authentication record; **B** Actions v2 `Event` webhooks → our `audit_events` (AUD-01) so login history and audit live with the rest of the platform. |
+| AUTH-20 suspend, AUTH-43 unsuspend | ✓ `DeactivateUser` / `ReactivateUser` (+ session termination) driven by our admin API; **B** the reason codes, events and audit. |
+| AUTH-21 API keys (V2) | **B** ours (SHA-256 hash + prefix + scopes) — ZITADEL machine users cover service accounts, not tenant-facing `sk_live_t_*` keys. |
+| AUTH-23 IP allowlist (V2) | **B** GW/Cloudflare middleware keyed to our role model. |
+| AUTH-24 SSO (V1 per D2), AUTH-26 passwordless (V3) | ✓ OIDC + SAML 2.0 per organization; ✓ passkeys/WebAuthn; **B** the tenant-admin SSO configuration screen and metadata exchange (ADM), plus the org-scoped login hand-off. |
+| AUTH-25 SCIM (V1 per P3) | ✓⚠ ZITADEL SCIM 2.0 server (**User schema only** — no Groups); **B** the provisioning token per tenant, the user→membership mapping, and role assignment (which stays in our ADM). |
+| AUTH-27 forced logout (V2) | ✓ session v2 `DeleteSession` / `RevokeAllMyRefreshTokens` per user; **B** the admin action, reason and audit. |
+| AUTH-29 email change, AUTH-31 terms, AUTH-32 abuse protection, AUTH-33 enumeration resistance, AUTH-34 session policy, AUTH-35 closure, AUTH-36 merge, AUTH-37 trusted devices, AUTH-38 credential hygiene, AUTH-40/41 | Mixed: ZITADEL covers email-change verification, password change and policy; **B** for trusted devices, duplicate-identity merge, terms-acceptance ledger, closure orchestration and the full audit trail. |
+| TEN-01/02/08/15/18/42 | **B** ours: `tenants` row, resolution order (custom domain → subdomain → internal → API key), entitlements, suspension cascade, storage prefixes, subdomain reservation. ZITADEL org is created by the provisioning saga (step 3) and referenced by `tenants.idp_org_id`. |
+| TEN-04 branding, TEN-05 custom domain | ✓⚠ per-org branding (label policy, message texts, login texts) via ZITADEL; per-tenant *login* domains need either the instance custom-domain feature or a Cloudflare edge that maps `firm.com/login → login.alpha1.io?org=<id>` — **B** that mapping (TEN-05/26) and the branding asset validation (TEN-44). |
+| TEN-11/12 integration secrets | **B** SOPS+age / field encryption, unchanged. |
+| TEN-36 cross-tenant isolation testing | **B** the isolation suite, now asserting **both** layers: app guard and RLS (no-context → zero rows). |
+
+## 8.2 New risks accepted with these decisions
+
+| Risk | Mitigation |
+|---|---|
+| **AGPL-3.0** on ZITADEL's main repo | Run unmodified; never patch source (contribute upstream); all customisation via Actions v2 (configuration, not derivative work); legal review at Phase 0 exit; keep the Keycloak escape hatch documented (ADR-13). |
+| A second identity store (credentials in ZITADEL, roles in our DB) | P4 makes the split explicit: ZITADEL = authentication + login policy; our DB = authorization. Drift is detected by a nightly reconciliation job and surfaced in TEN-32 access review. |
+| Login availability is now ZITADEL's availability | Single instance on the same box (ADR-9), Postgres backup/restore ritual covers both databases (docs/01 ADR-10); ZITADEL's own `/debug/healthz` joins the uptime checks (docs/29). |
+| Per-org MFA policy cannot distinguish staff from traders in one org | Enforce staff MFA in the api on the `amr` claim (AUTH-09) and force MFA in the org policy only if a tenant asks for all-user MFA; spike item for BE-1 (see AUTH-09 row above). |
+| Promotions change the release plan (AUTH-24/25 and AUTH-11/28/29 move earlier) | Recorded as post-PRD design decisions in docs/37 (D2/P3/D5) and reflected in docs/99 Phase 0/1 task lists; the PRD workbook itself is untouched — these are design-level scope changes with an explicit, citable origin. |
 
 ## 9. Sources
+
+### 9.1 Chosen stack (verified 2026-09-19)
+
+- ZITADEL organizations, per-org settings (MFA, passwordless, session lifetimes,
+  IdPs, password complexity, lockout, branding, message texts), org scopes
+  (`urn:zitadel:iam:org:id:{id}`, `…:domain:primary:{domain}`) and domain discovery —
+  [Organizations](https://zitadel.com/docs/guides/manage/console/organizations),
+  [Hosted Login UI](https://zitadel.com/docs/guides/integrate/login/hosted-login),
+  [B2B multi-tenant scenario](https://zitadel.com/docs/guides/solution-scenarios/b2b).
+- Sessions and revocation — [session service v2 (GetSession/DeleteSession/List)](https://zitadel.com/docs/apis/resources/session_service_v2/session-service-get-session),
+  [RevokeAllMyRefreshTokens](https://zitadel.com/docs/apis/resources/auth/auth-service-revoke-all-my-refresh-tokens),
+  [RevokeMyRefreshToken](https://zitadel.com/docs/apis/resources/auth/auth-service-revoke-my-refresh-token),
+  [revocation endpoint](https://help.zitadel.com/how-to-revoke-an-access-token/refresh-token).
+- User lifecycle parity for AUTH-20/43 (deactivate/reactivate, lock/unlock) —
+  [User service v2 ReactivateUser](https://zitadel.com/docs/reference/api/user/zitadel.user.v2.UserService.ReactivateUser);
+  v1 management equivalents are deprecated, so we pin the v2 API.
+- Token claims and enrichment (the P4 wiring — roles/permissions mirrored into tokens) —
+  [Claims](https://zitadel.com/docs/apis/openidoauth/claims),
+  [Actions v2 code examples](https://zitadel.com/docs/apis/actions/code-examples),
+  [role→permissions via org metadata + preAccessToken](https://help.zitadel.com/extend-authorization-in-zitadel-with-organization-metadata-preaccesstoken-action-),
+  [custom roles example](https://github.com/zitadel/actions/blob/main/examples/custom_roles.js),
+  [Actions v1→v2 trigger map](https://zitadel.com/docs/guides/integrate/actions/migrate-from-v1).
+- SCIM limit that shapes P3 — [SCIM v2.0 guide ("only the SCIM User schema … Group provisioning … not supported")](https://zitadel.com/docs/guides/manage/user/scim2),
+  [inbound SCIM issue #8140](https://github.com/zitadel/zitadel/issues/8140).
+- Licence and self-host scope — [AGPL-3.0 main repo, no MAU limits self-hosted, cloud tiers](https://doolpa.com/article/zitadel),
+  [AGPL risk framing and self-hosted feature parity](https://www.opentechhub.io/zitadel/).
+- Casbin — RBAC with domains (the model ADR-14 uses): policy matchers keyed on a
+  domain field, Postgres adapters and in-process enforcement, per the survey and
+  benchmarks already cited above.
+
+## 9.2 General landscape
 
 Vendor and comparison sources consulted 2026-09-19 (all links verified in-session):
 

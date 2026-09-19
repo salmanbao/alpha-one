@@ -4,7 +4,7 @@
 > compliance); this doc is the **threat model + the platform-wide
 > control stack** those sections implement. Binding sources:
 > ADR-1..12 (docs/01 §3), the stack (docs/01 §2), the Tooling
-> Register (docs/00 §7 — SOPS+age, Better Auth, Cerbos, Hook0,
+> Register (docs/00 §7 — SOPS+age, ZITADEL, Casbin, Hook0,
 > Cloudflare+R2, Postmark…), the 8 non-negotiables (docs/00 §8),
 > and the V1 defaults (docs/00 §6 — audit append-only, manual
 > payout approval, login-first checkout, MT5 broker).
@@ -264,8 +264,8 @@ annual pentest scope, §11)
   resolution (the 04 §3.4, the custom
   domain > the subdomain > the X-Tenant-Id
   (the internal) > the API key), the auth
-  (the session / the key, the 02), the ABAC
-  (the Cerbos, the 02 §3.4), the rate limit
+  (the ZITADEL token / the key, the 02), the ABAC
+  (the Casbin, the 02 §3.1), the rate limit
   (the 04 §3.4), the idempotency (the 04
   §3.3), the payload cap (the 10MB, the 00
   §6, the `gw.payload_too_large`), the error
@@ -396,10 +396,10 @@ the 32 doc's `audit_log` DDL (the
 
 ### 3.5 The crypto (the 02 §3.7, the 01 §2)
 
-- **The passwords:** the Argon2id (the 64MB/
-  3/4, the 02 §3.5, the register-
-  consistent (the Better Auth's
-  default, the 01 §2)).
+- **The passwords:** Argon2id (ZITADEL's
+  default parameters, consistent with the
+  64MB/3/4 target, the 02 §3.2, ADR-13);
+  the breach check (HIBP) is ours.
 - **The envelope:** the AES-256-GCM (the
   per-tenant DEK, the 02 §3.7), the
   master = the age (the 06 §3.1's SOPS,
@@ -474,11 +474,11 @@ the 32 doc's `audit_log` DDL (the
   long-lived (the signed URL, the
   TTL (the 24 Part A's 15-min, the
   13's 5-min)), the session's secret
-  (the 02 §3.5, the Better Auth's
-  secret, the SOPS), the webhook's
+  (the 02 §3.2, the ZITADEL application
+  and client secrets, the SOPS), the webhook's
   secret (the 27 §3.2's two-secrets,
-  the per-key), the Cerbos's policy
-  (the 02 §3.4, the no-secret (the
+  the per-key), the Casbin policy
+  (the 02 §3.1, the no-secret (the
   policy is the config, the
   version-controlled, the 06's
   config-repo), the Flipt's (the 01
@@ -537,25 +537,26 @@ the 32 doc's `audit_log` DDL (the
 
 ## 6. AuthN & AuthZ (recap — full design: 02)
 
-- **The foundation:** the Better Auth
-  (the 01 §2, the register; the Go
-  client / the Node BFF, the 02 §3.1's
-  Phase-0 spike), the session (the PG +
-  the Redis's deny-set, the 02 §3.5),
-  the MFA (the TOTP, the 02 §3.5, the
-  the 2FA-on-money (the 02 §3.4, the
-  the < 5-min TTL (the 02 §3.4))),
-  the password (the Argon2id, the §3.5),
+- **The foundation:** ZITADEL self-hosted
+  (ADR-13, the 01 §2, the register): hosted
+  login per tenant organization, OIDC tokens
+  verified by the api over JWKS (audience per
+  realm), sessions terminated through ZITADEL
+  APIs, MFA (TOTP) with our backup codes and
+  the staff `amr` rule (the 02 §3.2),
+  the 2FA-on-money (the 02 §3.1, the
+  the < 5-min TTL (the 02 §3.1))),
+  the password policy per org (Argon2id),
   the refresh (the single-use, the
-  reuse-detection, the 02 §3.5),
-  the anomaly (the 02 §3.6, the score,
+  reuse-detection, the 02 §3.2),
+  the anomaly (the 02 §10.5, the score,
   the block/MFA), the API key (the
-  02 §3.5, the sha256, the scope,
-  the 600/min).
-- **The authorization:** the Cerbos
-  PDP (the 01 §2, the register;
-  the fallback: the in-house behind
-  the `authorizer.Check` (the 02
+  02 §3.4, the sha256, the scope,
+  the 600/min), the HIBP check (ours).
+- **The authorization:** Casbin
+  embedded (ADR-14, the 01 §2, the register;
+  RBAC with domains, `dom` = tenant id)
+  behind the `authorizer.Check` (the 02
   §3.1's spike outcome)), the ABAC
   (the 02 §3.4: the own-data,
   the money-MFA, the risk.override's
@@ -990,7 +991,7 @@ dependency)
 | Phase | The security work | Owner | Depends |
 |---|---|---|---|
 | **P0 (the infra, the 06):** the SOPS+age (the secrets, the §5), the Cloudflare (the origin-auth, the §3.1), the UFW (the §3.1), the compose (the no-published-data-port, the §3.1), the egress-allowlist (the §3.1, the T5), the CI (the `gitleaks`, the dep-scan, the SAST, the §11), the backup (the WAL + the daily, the 06 §3.2), the restore-drill (the monthly, the 06 §3.2, the §5's triple) | DevOps | the 01 §1's compose, the 01 §2's stack |
-| **P1 (the AUTH, the 02):** the Better Auth (the session, the §6), the Argon2id (the §3.5), the MFA (the TOTP, the §6), the refresh-reuse (the §6), the anomaly (the §6, the 02 §3.6), the envelope (the per-tenant DEK, the §3.3, the 02 §3.7), the API-key (the sha256, the §6, the 02 §3.5), the Cerbos (the ABAC, the §6, the 02 §3.4) | BE-1 | P0 |
+| **P1 (the AUTH, the 02):** ZITADEL deploy + org-per-tenant provisioning (ADR-13), the hosted-login hand-off + JWKS verification (the §6), the MFA (the TOTP + our backup codes, the §6), the refresh-reuse (the §6), the anomaly (the §6, the 02 §10.5), the envelope (the per-tenant DEK, the §3.3, the 02 §10.2), the API-key (the sha256, the §6, the 02 §3.4), Casbin embedded (the ABAC, the §6, the 02 §3.1) | BE-1 | P0 |
 | **P2 (the GW + the EVT, the 04):** the chain (the tenant-resolution, the §3.2, the 04 §3), the rate-limit (the §3.2, the 04 §3.4), the idempotency (the §3.2, the 04 §3.3), the error-contract (the §3.2, the 04 §6, the 30 doc), the webhook (the HMAC, the §8, the 04 §5.6), the DLQ (the §8, the 04 §5.6), the isolation-test (the §3.3, the 04 §11) | BE-1 | P1 |
 | **P3 (the AUD + the LED, the 05):** the audit (the fail-closed, the §3.4, the 05 §3.3), the append-only (the trigger, the 05 §9), the critical-tier (the §3.4, the 05 §3.3), the 7-yr (the §3.4, the 05 §3.5), the snapshot + the hash (the §3.4, the 05 §3.5), the reconciliation (the §7, the 11 §3.5) | BE-1 | P2 |
 | **P4 (the money, the 11/12/13/17):** the payout (the 16-check, the §7, the 11 §3.1), the HWM (the §7, the 11 §3.2), the 2FA-on-approve (the §7, the 02 §3.4), the method-cooldown (the §7, the 11 §3.3), the checkout (the frozen-price, the §7, the 12 §3.2), the capture-match (the §7, the 12 §3.2), the refund-machine (the §7, the 12 §3.3), the KYC (the envelope, the §3.3, the 13), the reverify (the §3.3, the 13 §3.3), the ADM (the two-op, the §3.4, the 17 §3.3), the export-limit (the §3.4, the 17 §3.4) | BE-1 + BE-2 | P3 |

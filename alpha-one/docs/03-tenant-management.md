@@ -112,7 +112,7 @@ DOC). Admin preview in ADM (`ADM-19` settings pages). No JS theme injection.
 |---|---|---|---|
 | 1 | validate application (KYB basics, sanctions list check, jurisdiction) | — | `tenant.provisioning_failed` |
 | 2 | create `tenants` row (`status=provisioning`), slug unique | delete row | idempotent retry |
-| 3 | provision AUTH org + owner membership | destroy org | retry ×2 |
+| 3 | provision ZITADEL organization + project/application + owner membership (Admin API), store `idp_org_id`; per-org login policy, password policy, lockout and branding defaults | destroy org | retry ×2 |
 | 4 | branding defaults + legal defaults | delete rows | retry |
 | 5 | subdomain DNS (Cloudflare API: `CNAME {slug}.alpha1.io`) | delete record | retry; custom domain = V1.1 step |
 | 6 | default broker group ref (BRG-12) + default rule packs (EVL seed) | delete refs | retry |
@@ -350,12 +350,14 @@ branding) + in-mem LRU 60 s; invalidation via `tenant.*_changed` events + pub/su
 
 - **Isolation**: every table here is tenant-owned except `tenants` itself (platform
   realm). `tenant_id` immutability enforced at write (reject updates to the column).
-  **Enforcement depth is open (D3):** ADR-1 gives app-level enforcement only (Go
-  tenant guard + sqlc + CI guard test), where a forgotten predicate leaks *all*
-  tenants' rows; Postgres RLS with transaction-scoped
-  `set_config('app.tenant_id', …, true)`, `FORCE ROW LEVEL SECURITY` and a
-  `(tenant_id, …)` index per policy table makes the same mistake return *zero* rows
-  at 2–4 % query cost. Mechanics and failure modes: docs/41 §5.
+  **Enforcement depth (decided D3, 2026-09-19): two layers.** ADR-1's app-level
+  guard (Go tenant guard + sqlc + CI guard test) stays, and every tenant-owned table
+  additionally gets **Postgres RLS**: `FORCE ROW LEVEL SECURITY`, a policy reading
+  `current_setting('app.tenant_id', true)` set per transaction via
+  `set_config(…, true)` (mandatory under PgBouncer transaction mode, ADR-8), and a
+  `(tenant_id, …)` index on every policy table. A forgotten predicate then returns
+  *zero* rows instead of all of them, at 2–4 % query cost. Mechanics and failure
+  modes: docs/41 §5; negative tests are part of TEN-36.
 - **KYB gate** (V1): a tenant cannot reach `active` with `kyb_status != verified` —
   verification = CON staff review of legal entity docs (manual in V1; Veriff business
   flows V3). Sanctions screening of the legal entity + primary contact before
@@ -392,25 +394,27 @@ branding) + in-mem LRU 60 s; invalidation via `tenant.*_changed` events + pub/su
 | Option | Verdict |
 |---|---|
 | Flipt (self-hosted) | **CHOSEN** — code-level feature flags & per-tenant gating (PRD register) |
-| Postgres RLS (same database, second enforcement layer) | **Open (D3):** fail-closed, 2–4 % overhead, needs `FORCE RLS` + `SET LOCAL`/`set_config(…, true)` under PgBouncer transaction mode and a `(tenant_id, …)` index per policy table (docs/41 §5) |
+| Postgres RLS (same database, second enforcement layer) | **CHOSEN (D3, 2026-09-19):** fail-closed, 2–4 % overhead, needs `FORCE RLS` + transaction-scoped `set_config(…, true)` under PgBouncer and a `(tenant_id, …)` index per policy table (docs/41 §5). Adopted on every tenant-owned table; the app guard stays as the first layer |
 | Schema-per-tenant / DB-per-tenant | Rejected (ADR-1): N× migrations, catalog bloat, PgBouncer friction, connection-limit pressure; the isolation gain is not worth it at ≤ 200 tenants |
 | Spiffy/Temporal (provisioning) | Rejected V1: saga is 9 steps, one orchestrator loop in `workers` with PG job rows is simpler and observable; revisit if steps > 20 |
 | Nile/Citus (tenant sharding) | Rejected V1 (ADR-1); revisit at > 200 tenants |
-| Cerbos (tenant-level policies) | Same PDP as AUTH; tenant config policies live in the same policy repo |
+| Casbin (tenant-level policies) | Same engine as AUTH (ADR-14, embedded): tenant config policies are Casbin rows in the same policy table, keyed by `dom = tenant_id` |
 | Documenso | Only for DOC-12 e-sign (V2) — not a TEN component |
 | Kong-style tenant gateways | Rejected (ADR-4) |
 
 ## 13. Technology stack
 
 Go domain package in `api`; provisioning orchestrator in `workers` (PG job queue);
-Flipt (Compose service); Cloudflare API (DNS records); R2 (branding assets);
-Postmark via NOT (invite emails); Sentry (provisioning failure alerts).
+**ZITADEL Admin API** (organization, project/application, org policies, branding —
+step 3 of the saga); Flipt (Compose service); Cloudflare API (DNS records); R2
+(branding assets); Postmark via NOT (invite emails); Sentry (provisioning failure
+alerts).
 
 ## 14. Integration — internal modules (glue)
 
 | Module | How |
 |---|---|
-| **AUTH** | provisioning step 3 creates the org + owner membership; `tenant.suspended` kills its sessions; console realm separates platform staff |
+| **AUTH** | provisioning step 3 creates the ZITADEL organization + project/application + owner membership and writes `idp_org_id`; `tenant.suspended` kills its sessions (our deny-set + ZITADEL session termination); console realm separates platform staff |
 | **GW** | tenant resolution source; quota & entitlement gate reads TEN rows; `suspended` → immediate 403 |
 | **BRG** | `settings.trading.broker_group` selects the MetaApi server group (BRG-12); account caps enforced here |
 | **EVL** | provisioning seeds default rule packs; tenant custom rules live in EVL but capped by `max_custom_rules` |

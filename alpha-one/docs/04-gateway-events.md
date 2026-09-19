@@ -31,7 +31,7 @@ EVT `01,02,03,05,08,10,20` (V1.0: outbox, relay, envelope, consumers, event log,
 │ client   │──► 1 security headers & hardening            │   │ domain tx:  write + outbox  │
 └──────────┘  │ 2 tenant resolution (GW-02)               │   └──────────────┬──────────────┘
               │ 3 authn (session|service|api-key)         │                  ▼
-              │ 4 authz (Cerbos; AUTH-13)                 │   ┌─────────────────────────────┐
+              │ 4 authz (Casbin; AUTH-13)                 │   ┌─────────────────────────────┐
               │ 5 rate limit: IP (edge) + user + tenant   │   │ relay (1 instance, PG lock) │
               │ 6 quota + entitlement gate (TEN)          │   │  poll outbox (keyset, 500)  │
               │ 7 idempotency (Redis, 24h, scoped)        │   │  XADD topic.<domain>        │
@@ -67,7 +67,7 @@ each doc's §7.1.
 | 1 | Edge handoff | Trust Cloudflare: `CF-Connecting-IP` (only if CF proxy chain verified, GW-33), WAF/DDoS done at edge | GW-20, GW-33 |
 | 2 | Tenant resolution | **V1: domain/subdomain only** (edge resolves, TEN-02; rejected before auth runs; unknown → `404 tenant.unknown_host`). Extended (V2+): header for internal calls, API-key binding (AUTH-21 is V2) — §02 §3.3 order | GW-02, TEN-02 |
 | 3 | Authn | **V1:** JWT (trader/staff) or console realm session verified on every protected route; invalid → `401 auth.invalid_credentials`. API keys are V2 (AUTH-21). Extended: service HMAC for internal | GW-03, GW-16 |
-| 4 | Authz | **V1:** module-declared `resource.action` permission keys (AUTH-13) enforced per route; registry `contracts/permissions/registry.md`; denied → `403 permission.denied`. Engine: policy evaluation behind `authorizer.Check` (Cerbos is the candidate engine — an implementation detail; the contract is the key model). Console realm separate (CON-01) | GW-04, AUTH-13 |
+| 4 | Authz | **V1:** module-declared `resource.action` permission keys (AUTH-13) enforced per route; registry `contracts/permissions/registry.md`; denied → `403 permission.denied`. Engine: policy evaluation behind `authorizer.Check` (Casbin embedded — ADR-14; an implementation detail, the contract is the key model). Console realm separate (CON-01) | GW-04, AUTH-13 |
 | 5 | Rate limit | edge (per-IP) → per-user (Redis 100 rpm default) → per-route (auth 10/5 min, payout 5/h) | GW-05 |
 | 6 | Tenant quota + entitlement | plan limits (RPM, concurrency) + module entitlement gate; suspended tenant → 403 | GW-06, GW-22, GW-23 |
 | 7 | Idempotency | `X-Idempotency-Key` (UUIDv4) → `SETNX t:{ten}:idem:{method}:{path}:{key}` TTL 24 h (GW-31); stored result replayed verbatim (same status); **conflict** (same key, different body hash) → `409 request.idempotency_conflict` (GW-12 V1 code) | GW-12, GW-31, GW-37 |

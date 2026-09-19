@@ -19,127 +19,21 @@ tags:
 - name: console
   description: Platform console (CON) surface
 paths:
-  /v1/auth/register:
+  /v1/auth/session:
     post:
       tags:
       - core
-      summary: Identity & Access POST /v1/auth/register
-      operationId: post_v1_auth_register
+      summary: Identity & Access POST /v1/auth/session
+      operationId: post_v1_auth_session
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
       x-idempotency: required
-      x-auth: none (public; Trader role afterwards) — AUTH-01
+      x-auth: ZITADEL access token (bearer, tenant audience) — AUTH-04/07
       x-v1-errors:
-      - auth.invalid_registration
-      - auth.email_taken
-      - tenant.suspended
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/login:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/login
-      operationId: post_v1_auth_login
-      x-phase: V1
-      x-v1-baseline: contracts/api/auth.md
-      x-idempotency: optional
-      x-auth: none (public) — AUTH-04
-      x-v1-errors:
-      - auth.invalid_credentials
+      - auth.token_invalid
       - auth.account_suspended
-      - auth.totp_required
-      - auth.totp_invalid
-      - tenant.suspended
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/password-reset:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/password-reset
-      operationId: post_v1_auth_password_reset
-      x-phase: V1
-      x-v1-baseline: contracts/api/auth.md
-      x-idempotency: optional
-      x-auth: none (public) — AUTH-05
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/password-reset/confirm:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/password-reset/confirm
-      operationId: post_v1_auth_password_reset_confirm
-      x-phase: V1
-      x-v1-baseline: contracts/api/auth.md
-      x-idempotency: required
-      x-auth: none (single-use email link token) — AUTH-05
-      x-v1-errors:
-      - auth.reset_token_invalid
+      - auth.tenant_suspended
+      - auth.mfa_required
       security:
       - sessionAuth: []
       requestBody:
@@ -199,16 +93,18 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/2fa/enroll:
+  /v1/auth/2fa/backup-codes:
     post:
       tags:
       - core
-      summary: Identity & Access POST /v1/auth/2fa/enroll
-      operationId: post_v1_auth_2fa_enroll
+      summary: Identity & Access POST /v1/auth/2fa/backup-codes
+      operationId: post_v1_auth_2fa_backup_codes
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
-      x-idempotency: optional
-      x-auth: Tenant Admin / Staff at first login — AUTH-09
+      x-idempotency: required
+      x-auth: Staff at first-login enrolment — AUTH-09/11 (V1 per D5)
+      x-v1-errors:
+      - auth.mfa_not_enrolled
       security:
       - sessionAuth: []
       requestBody:
@@ -232,53 +128,19 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/2fa/verify:
+  /v1/auth/2fa/backup-code:
     post:
       tags:
       - core
-      summary: Identity & Access POST /v1/auth/2fa/verify
-      operationId: post_v1_auth_2fa_verify
+      summary: Identity & Access POST /v1/auth/2fa/backup-code
+      operationId: post_v1_auth_2fa_backup_code
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
-      x-idempotency: optional
-      x-auth: Tenant Admin / Staff — AUTH-09
+      x-permission: mfa_satisfied
+      x-idempotency: required
+      x-auth: Staff without a working factor — AUTH-11
       x-v1-errors:
-      - auth.totp_invalid
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/refresh:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/refresh
-      operationId: post_v1_auth_refresh
-      x-phase: V1
-      x-v1-baseline: contracts/api/auth.md
-      x-idempotency: optional
-      x-auth: refresh token (rotating) — AUTH-07
-      x-v1-errors:
-      - auth.session_revoked
+      - auth.backup_code_invalid
       security:
       - sessionAuth: []
       requestBody:
@@ -421,21 +283,15 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/mfa/verify:
-    post:
+  /v1/auth/sessions:
+    get:
       tags:
       - core
-      summary: Identity & Access POST /v1/auth/mfa/verify
-      operationId: post_v1_auth_mfa_verify
+      summary: and DELETE
+      operationId: get_v1_auth_sessions
       x-phase: extended
       security:
       - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
       responses:
         '200':
           description: Success (see module doc for the canonical shape)
@@ -451,51 +307,21 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/password/forgot:
-    post:
+  /v1/auth/sessions/{id}:
+    delete:
       tags:
       - core
-      summary: Identity & Access POST /v1/auth/password/forgot
-      operationId: post_v1_auth_password_forgot
+      summary: both project ZITADEL's
+      operationId: delete_v1_auth_sessions_id
       x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
       security:
       - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/password/reset:
-    post:
-      tags:
-      - core
-      summary: GET /.well-known/openid-configuration (V3 prep)
-      operationId: post_v1_auth_password_reset_2
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
       responses:
         '200':
           description: Success (see module doc for the canonical shape)
@@ -541,60 +367,6 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/sessions:
-    get:
-      tags:
-      - core
-      summary: Identity & Access GET /v1/auth/sessions
-      operationId: get_v1_auth_sessions
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/sessions/{id}:
-    delete:
-      tags:
-      - core
-      summary: Identity & Access DELETE /v1/auth/sessions/{id}
-      operationId: delete_v1_auth_sessions_id
-      x-phase: extended
-      parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-      security:
-      - sessionAuth: []
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
   /v1/auth/profile:
     patch:
       tags:
@@ -610,114 +382,6 @@ paths:
           application/json:
             schema:
               $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/password/change:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/password/change
-      operationId: post_v1_auth_password_change
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/2fa/confirm:
-    post:
-      tags:
-      - core
-      summary: Identity & Access POST /v1/auth/2fa/confirm
-      operationId: post_v1_auth_2fa_confirm
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: shared/openapi.yaml#/components/schemas/JsonObject
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/2fa:
-    delete:
-      tags:
-      - core
-      summary: Identity & Access DELETE /v1/auth/2fa
-      operationId: delete_v1_auth_2fa
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/auth/2fa/backup-codes:
-    get:
-      tags:
-      - core
-      summary: Identity & Access GET /v1/auth/2fa/backup-codes
-      operationId: get_v1_auth_2fa_backup_codes
-      x-phase: extended
-      security:
-      - sessionAuth: []
       responses:
         '200':
           description: Success (see module doc for the canonical shape)

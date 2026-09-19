@@ -270,7 +270,7 @@ TradingView Lightweight Charts, react-hook-form/zod, Storybook, Sentry
 | Module | How |
 |---|---|
 | **GW** | every call; tenant by subdomain; session cookie; SSE route; the error contract is the UI's contract |
-| **AUTH** | login/2FA/recovery UI (Better Auth frontend), step-up dialog, profile |
+| **AUTH** | login/2FA/recovery entry points that hand off to ZITADEL Hosted Login (tenant org scope), step-up dialog, profile |
 | **LCC** | account home, state badge, steps strip (EVT-17 saga), credentials |
 | **BRG** | positions/deals/equity read APIs; tick-age chip (08) |
 | **EVL/ANA** | metrics (observed numbers) + equity curve read model |
@@ -283,7 +283,7 @@ TradingView Lightweight Charts, react-hook-form/zod, Storybook, Sentry
 
 ## 15. Integration — external tools
 
-Better Auth (frontend), Veriff (checkout embed iframe), Cloudflare (assets +
+ZITADEL Hosted Login (tenant-branded, org-scoped), Veriff (checkout embed iframe), Cloudflare (assets +
 edge), Sentry (browser), TradingView (charts, no data leaves the browser —
 public CDN script, allowed exception to the no-third-party rule for a
 rendering library with zero payload).

@@ -2,6 +2,13 @@
 
 > Covers PRD module **AUTH** (43 requirements). Every section from the standard
 > template is present. Requirements are cited as `AUTH-NN`.
+>
+> **Decided 2026-09-19 (ADR-13): ZITADEL is the identity provider.** Authentication,
+> credential storage, MFA, SSO/SAML and SCIM are ZITADEL's; roles, membership,
+> permissions and every AUTH lifecycle event stay ours. **ADR-14: Casbin (embedded)
+> is the authorization engine.** Evidence and the decision trail:
+> [41 — AUTH + TEN open-source evaluation](41-auth-ten-open-source-evaluation.md) §8/§10;
+> open rows: none (D1–D5 and P1–P4 all answered in docs/37).
 
 ## 1. Purpose & scope
 
@@ -11,15 +18,18 @@ It serves four kinds of clients:
 
 | Client | Method | Notes |
 |---|---|---|
-| Traders / tenant staff (web) | Session cookie (Better Auth) | Tenant-scoped subdomain |
+| Traders / tenant staff (web) | OIDC **login at ZITADEL Hosted Login v2**; the web tier keeps the tokens server-side (BFF) and calls the `api` with a bearer token | Tenant-scoped subdomain; login is org-scoped (`urn:zitadel:iam:org:id:{id}`) so branding/policies are the tenant's |
 | Machine-to-machine (internal) | Service token (HMAC) | bridge → api, api → engine |
-| Tenant integrators (external) | API key (V2: `DVP-11`/`AUTH-21`) | Tenant-scoped, hashed at rest |
-| Platform staff (console) | Session, separate **platform auth realm** | Never shares tenant sessions |
+| Tenant integrators (external) | API key (V2: `DVP-11`/`AUTH-21`) | Tenant-scoped, hashed at rest — ours, not ZITADEL's |
+| Platform staff (console) | OIDC login against the **console application** (distinct audience) | Structurally rejected by tenant routes: no tenant scopes, no membership, no impersonation in V1 (`AUTH-16`) |
 
-**In scope (V1):** registration, login, sessions, 2FA (TOTP) for staff, password
-management, role/permission model, tenant membership, suspension, API-key primitives.
+**In scope (V1):** registration, login, sessions, 2FA (TOTP) for staff **with backup
+codes**, password management, role/permission model, tenant membership, suspension,
+API-key primitives, **SSO (SAML/OIDC) and SCIM for the tenant that needs it at cutover**
+(`AUTH-24/25` promoted by design decisions D2/P3 — post-PRD scope, recorded in docs/37).
 **Out of scope (V2+):** social login, email verification UX, staff invitations, step-up
-authentication, IP allowlists, login history, SSO/SAML (V3), passkeys (V3).
+authentication surface, IP allowlists, login history UX, passkeys (V3), trader-optional
+2FA (`AUTH-10`, V2).
 
 Requirement coverage: `AUTH-01,04,05,07,09,12,13,15,16,17,20,39,40,43` (V1.0) +
 `AUTH-02,03,06,08,10,11,14,18,19,21,22,23,27,28,29,30,31,32,33,34,35,36,37,38,41,42` (V2.0) +
@@ -28,45 +38,71 @@ Requirement coverage: `AUTH-01,04,05,07,09,12,13,15,16,17,20,39,40,43` (V1.0) +
 ## 2. Architecture
 
 ```
- browser ──(subdomain)──► Next.js (TD/ADM/CON)
-                             │  cookies: {tenant}.alpha1.io scope
-                             ▼
-                    Go api — AUTH domain package
-                       ├── authn: Better Auth identity surface (Node) → JWT/JWKS,
-                       │          sessions + memberships owned in PG   [decision D1]
-                       ├── authz: Cerbos PDP (policy files in repo, versioned)
-                       ├── rate limit / lockout (Redis sliding window)
-                       └── field encryption (broker passwords, TOTP secrets)
-                             │
-                ┌────────────┼─────────────┐
-                ▼            ▼             ▼
-             Postgres      Redis       Postmark (verification,
-        identities,     sessions,   reset, invite emails)
+ browser ──(subdomain)──► Next.js (TD/ADM/CON)  ── OIDC redirect ──► ZITADEL
+                             │  web-tier session (HttpOnly cookie, {tenant} scope)   Hosted Login v2
+                             │  server-side tokens (BFF)                              (per-org branding,
+                             ▼                                                        MFA, SSO, SAML, SCIM)
+                    Go api — AUTH domain package                                     │
+                       ├── authn: verify ZITADEL access token (JWKS, audience per     │
+                       │          realm) → identity_id, tenant, role, amr, auth_time │
+                       ├── authz: Casbin enforcer, embedded (RBAC with domains;       │
+                       │          policies in DB, model file in repo)   [ADR-14]      │
+                       ├── rate limit / lockout (Redis sliding window)                │
+                       └── field encryption (broker passwords, backup codes,          │
+                                  API-key material)                                   │
+                             │                                                        │
+                ┌────────────┼──────────────┬─────────────────────────────────────────┘
+                ▼            ▼              ▼
+             Postgres      Redis      ZITADEL Postgres (identities, credentials,
+        identities,   deny-set,      MFA factors, sessions, orgs, SSO links)
         memberships,  lockouts,
-        mfa, sessions, rate-limit
-        api_keys
+        roles,        rate-limit
+        auth_sessions
+        (projection),
+        api_keys, backup_codes
 ```
 
-- **Better Auth** (PRD-mandated foundation, `AUTH-01..43`): sessions, users,
-  organizations (tenant = org), 2FA TOTP, password hashing (Argon2id).
-  **Corrected 2026-09-19** ([docs/41](41-auth-ten-open-source-evaluation.md) §3.1):
-  Better Auth is TypeScript-only and ships **no Go SDK** — the earlier "Go client"
-  phrasing was not implementable. The org plugin *is* confirmed to support per-org
-  member roles, custom and runtime-created roles, invitations and org hooks, so the
-  old Phase-0 spike is answered. What remains open is the *wiring* (**D1** in
-  [docs/37](37-prd-open-questions.md), options A–D in docs/41 §7): either keep
-  Better Auth and give Go a documented token contract (JWT plugin + JWKS, verified
-  with `lestrrat-go/jwx`), let Go own the session/refresh tables, adopt a
-  multi-tenant IdP (Zitadel/Keycloak) or build the domain in Go. Until D1 is
-  answered, this doc assumes **Option A** and the domain package stays the boundary.
-- **Cerbos** (PRD-mandated PDP for `AUTH-13/14`): policies live in-repo
-  (`infra/policies/`), versioned with the code; the `api` asks the PDP per request
-  and caches decisions per `(role, resource, action)` 60 s. **Deployment mode is
-  open (D4):** the PRD-era text implied a Compose sidecar, but Cerbos' engine is Go
-  and can be embedded in-process, which removes both the extra process and the
-  "PDP unreachable" failure mode (docs/41 §3.2). If the Phase-1 spike proves
-  integration cost > 3 person-days, AUTH-13 becomes an in-house policy engine behind
-  the same Go interface (`authorizer.Check(ctx, subject, action, resource)`).
+**ZITADEL mapping (ADR-13).** One self-hosted instance on the same box (ADR-9, Compose),
+one **Organization per tenant** (`tenants.idp_org_id`), one **project + OIDC application**
+for the tenant realm and a second application pair for the console realm. ZITADEL owns:
+credentials (Argon2id), password policy per org, MFA factors (TOTP, WebAuthn), login
+policy (lockout, session lifetimes), SSO/SAML connections per org, SCIM users, and the
+event stream. We own: `identities` (our id ↔ `idp_user_id`), memberships, roles,
+custom roles, the permission registry, API keys, backup codes, deny-set/revocation
+projection, and every domain event.
+
+- **Login is hosted, tokens are ZITADEL's (decision P2).** The web tier starts an
+  Authorization Code + PKCE flow with `urn:zitadel:iam:org:id:{tenant_org}` so the
+  tenant's branding, password policy and MFA settings apply, and keeps the resulting
+  tokens server-side (HttpOnly, `{tenant}.alpha1.io`), handing the `api` a bearer
+  access token. The `api` verifies signature/issuer/**audience** via JWKS and never
+  stores a password. Token lifetimes are ZITADEL's; our contract is the
+  rotation/revocation *semantics* (AUTH-07, §3.2).
+- **Two realms = two audiences (AUTH-16).** Tenant traffic only accepts the tenant
+  application's audience; console traffic only the console application's. A platform
+  operator has no membership row and no tenant-audience token, so "console acts inside
+  a tenant" is structurally impossible; V1 adds no impersonation.
+- **Casbin is embedded (ADR-14).** `authorizer.Check(ctx, subject, action, resource)`
+  is the only policy entry point; the model (`g(r.sub, p.sub, r.dom)`, domain =
+  `tenant_id`) and the policy rows live with our code and schema, so an authz decision
+  never leaves the process. Cerbos' policy tests are replaced by Go tests over the model
+  + fixtures (§16 step 4).
+
+- **ZITADEL, self-hosted (ADR-13)** replaces Better Auth (BVR-14) and the whole
+  Node-identity-surface question: a single Go binary + Postgres in the Compose stack,
+  one Organization per tenant, per-org login policy/branding/IdP, OIDC + SAML +
+  SCIM. Authentication facts live there; authorization facts stay here (§2). The
+  evaluation that produced this decision, including why Better Auth was retired
+  (TypeScript-only, no Go SDK) and why Keycloak/authentik/Ory/Logto were rejected,
+  is [docs/41](41-auth-ten-open-source-evaluation.md) §3–§4 and §10.
+- **Casbin, embedded (ADR-14)** replaces Cerbos (BVR-23) as the policy decision
+  point: `authorizer.Check(ctx, subject, action, resource)` is unchanged, but the
+  enforcer runs in-process with the RBAC-with-domains model (`dom` = `tenant_id`),
+  policies stored in Postgres and loaded at boot with a watch channel. An authz
+  decision is a function call (sub-millisecond), there is no PDP to be unreachable,
+  and policy review happens through Go tests + fixtures. Trade-off accepted: no
+  Cerbos-style decision log/explainability, so the `api` logs every denial itself
+  (AUD-23) with the matched policy row.
 
 ## 3. System design
 
@@ -116,7 +152,9 @@ level; the V1 key registry above is the binding subset):
 | `firm:finance` | orders, payouts process, refunds, reports |
 | `user:trader` | own: accounts, trades, purchases, payouts request, KYC submit, profile |
 
-ABAC policies (extended, beyond the V1 key model; Cerbos as candidate engine):
+ABAC policies (extended, beyond the V1 key model; evaluated in the embedded Casbin
+model — role bindings are rows, attribute rules are the model's matchers plus a small
+Go policy layer):
 - **own-data only**: `trader.read` allowed iff `resource.user_id == subject.id`
   (and `resource.tenant_id == subject.tenant_id` — always checked first).
 - **payout step-up**: `payout.approve` denied unless
@@ -129,34 +167,50 @@ ABAC policies (extended, beyond the V1 key model; Cerbos as candidate engine):
   separate realm; tenant roles never satisfy console policies and vice versa.
   **V1 has no impersonation path at all** (separation-only — see the V1
   baseline rules above); V2 enablement would add the impersonation policy +
-  audit format (AUD-08).
+  audit format (AUD-08). The realm is carried by the token **audience**
+  (console app vs tenant app) and by `identities.realm`; Casbin policies are
+  keyed per realm domain (`platform` vs the tenant id).
 
 ### 3.2 Authentication flows
 
-**Login (V1):** `POST /v1/auth/login {email, password}` → Argon2id verify →
-session created (PG) + cookie set (subdomain-scoped, HttpOnly, Secure, SameSite=Lax)
-→ `user.login_success` audit + event. Failures: per-IP + per-identity counters
-(Redis, 5-min window); 10 fails/5 min per identity → soft lock 15 min +
-`user.login_throttled` event (unlock after wait, `AUTH-42` V2). **Enumeration
-resistance** (`AUTH-33`, V2): identical error + constant-time path for unknown email.
+**Registration / login (V1):** no password endpoint of ours exists any more — the web
+tier redirects to ZITADEL Hosted Login v2 (register or sign in), org-scoped for tenant
+traffic. ZITADEL returns the code; the web tier exchanges it (PKCE) and issues the `api`
+a bearer access token. Our `POST /v1/auth/session` (new) *materialises* the session:
+upsert `identities` by `idp_user_id`, resolve the tenant from the request domain and the
+user's membership, write the `auth_sessions` projection row, emit `user.login_success`
+(AUD/NOT/RSK). ZITADEL is the source of truth for *authentication* facts; our row is the
+source of truth for *authorization* facts. **Enumeration resistance** (`AUTH-33`, V2) is
+now ZITADEL's generic error surface plus ours on `/session`; throttling and lockout come
+from ZITADEL's per-org lockout policy with our per-IP counters as the second layer.
 
-**Sessions** (`AUTH-07`, `TD-20`): **V1 baseline (binding, `contracts/api/auth.md`):**
-login issues a short-lived access token with a **rotating refresh token** and
-**server-side revocation** (reuse of a rotated refresh token = revoke-all,
-critical audit). Implementation: Better Auth (BVR-14) sessions in PG + Redis
-deny-set — the contract is the rotation/revocation semantics; token format is
-an implementation choice. Extended: device list, step-up state, sliding idle
-30 min / absolute 24 h V1 default; tenant-configurable V2 `AUTH-34`. Trader can
-list/revoke sessions from TD.
+**Sessions** (`AUTH-07`, `TD-20`): ZITADEL access tokens (short-lived, JWT) + rotating
+refresh tokens; `api` keeps a **Redis deny-set** (jti/session-id, 24 h TTL) and the
+`auth_sessions` projection so revocation is immediate. **V1 baseline survives
+intact (binding):** rotating refresh, server-side revocation, and *reuse of a rotated
+refresh token → revoke all sessions of the identity + CRITICAL audit* — reuse detection
+is implemented by us (ZITADEL's `RevokeAllMyRefreshTokens` + session v2 `DeleteSession`
+do the killing). Sliding idle 30 min / absolute 24 h are per-org ZITADEL session
+lifetimes (tenant-configurable V2, `AUTH-34`). Trader lists/revokes sessions in TD via
+`GET /v1/auth/sessions` and `DELETE /v1/auth/sessions/{id}` (both project ZITADEL's
+session APIs).
 
-**2FA** (`AUTH-09` staff-mandatory, `AUTH-10` trader-optional V2): TOTP (RFC 6238),
-secret field-encrypted; backup codes (10, hashed, single-use, `AUTH-11` V2).
-Mandatory for: payout approval, tenant setting changes, API-key management,
-suspension actions — enforced by the step-up policy (§3.1), not by client.
+**2FA** (`AUTH-09` staff-mandatory — V1 scope widened by decision D5: *all* staff roles,
+enforced at first login, **backup codes included in V1**): TOTP (RFC 6238) enrolment and
+verification happen in ZITADEL; the `api` **enforces** staff 2FA by requiring an MFA
+assertion in the token (`amr` contains `otp`/`webauthn`, `auth_time` fresh for step-up)
+for every staff-role action. Backup codes (`AUTH-11`) are ours: 10 single-use codes,
+Argon2id-hashed, issued at first-login enrolment, redeemed at `/v1/auth/2fa/backup-code`;
+exhaustion or reset routes through `AUTH-28` (admin-assisted reset, V1 dependency).
+Trader-optional 2FA (`AUTH-10`) stays V2. Step-up (`AUTH-30`, V2) is a re-authentication
+prompt (`prompt=login`/`max_age`) whose freshness we check from `auth_time`.
 
-**Password policy** (tenant-overridable within platform bounds): min 10 / max 128,
-breached-password check (Kibana/HaveIBeenPwned range API), no reuse of last 5,
-self-service change (`AUTH-40`) requires current password + (staff) 2FA.
+**Password policy** (per-org in ZITADEL, within platform bounds we set at provisioning):
+min 10 / max 128, complexity, no reuse of last 5 (ZITADEL history), self-service change
+(`AUTH-40`) requires the current password + (staff) 2FA. **HIBP breached-password check
+stays ours** (ZITADEL does not call HIBP): registration and change flows pass the
+candidate password through our range-API check before ZITADEL accepts it (Actions v2
+`preuserinfo`/`preaccesstoken` hook or a pre-flight call from the web tier).
 
 ### 3.3 Tenant resolution (binding order)
 
@@ -193,15 +247,20 @@ before/after); `actor` = the human or `system:auth`.
 ## 5. Lifecycles
 
 **Identity:** `pending_verification → active → suspended → banned | deactivated`.
-- Suspension reasons: `risk`, `kyc_failed`, `payment_dispute`, `platform_policy`,
-  `manual`. Suspension kills all sessions (Redis pub/sub → api instances evict).
-- Deactivation (GDPR) is in [13-kyc-verification §7](13-kyc.md)
-  (KYC-08/09) + this doc's §10.4; **financial obligations block deletion**
-  (open payout, unsettled refund → hold in `deletion_pending` 30-day grace).
+Our `identities.status` is the authorization-side state; each transition is mirrored
+to ZITADEL (`DeactivateUser` / `ReactivateUser` / session termination) so login is
+blocked at the IdP as well as the API. Reasons: `risk`, `kyc_failed`,
+`payment_dispute`, `platform_policy`, `manual`. Suspension kills all sessions
+(Redis pub/sub → api instances evict) **and** calls ZITADEL session termination.
+Deactivation (GDPR) is in [13-kyc-verification §7](13-kyc.md) (KYC-08/09) + this
+doc's §10.4; **financial obligations block deletion** (open payout, unsettled
+refund → hold in `deletion_pending` 30-day grace).
 
-**Session:** `active → (idle>30m|abs>24h) expired | revoked`. Reuse-detection:
-refresh token is single-use; a replay of a rotated token revokes **all** sessions
-of that identity + CRITICAL security alert (token-theft pattern).
+**Session:** `active → (idle>30m|abs>24h) expired | revoked`. Our `auth_sessions`
+row is a projection of the ZITADEL session (id, jti, device, ip, amr, auth_time,
+expiries) used for listing, revocation fan-out and audit. Reuse-detection: our
+refresh exchange is single-use; a replay of a rotated token revokes **all** sessions
+of that identity (`RevokeAllMyRefreshTokens` + mirror rows) + CRITICAL security alert.
 
 **API key:** `active → expired | revoked`.
 
@@ -209,6 +268,14 @@ of that identity + CRITICAL security alert (token-theft pattern).
 ### 6.1 V1 baseline codes — authoritative
 
 From `contracts/errors/taxonomy.md` (the V1 execution sheet; module AUTH). These are the exact codes the V1 surfaces return; the envelope is GW-18 (`code`, `message`, `correlation_id`).
+
+> **Post-decision note (ADR-13 / P2):** the codes that belonged to the *login form*
+> (`auth.totp_required`, `auth.totp_invalid`, `auth.invalid_credentials`,
+> `auth.reset_token_invalid`, `auth.email_taken`, `auth.invalid_registration`) are now
+> returned by ZITADEL's hosted-login surface, not by our API. They stay in the registry
+> because tenant-facing copy and support runbooks reference them; our API's equivalents
+> for the same situations are `auth.token_invalid`, `auth.mfa_required`,
+> `auth.backup_code_invalid` and `auth.account_suspended` (§7.0).
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) | "Please check your details and try again." |
@@ -250,18 +317,31 @@ Global contract: [30-error-taxonomy](30-error-taxonomy.md). Module codes (namesp
 Logging rule: never log passwords, tokens, TOTP secrets, full API keys (prefix ok).
 
 ## 7. API endpoints
+### 7.0 Delegated to ZITADEL (ADR-13 / decision P2)
+
+These surfaces are **no longer ours**: credentials, MFA factors, SSO, sessions and
+SCIM are served by ZITADEL. The paths below are ZITADEL's (written without the
+HTTP-method prefix so the contract generator does not mistake them for our API):
+
+| ZITADEL surface | Endpoint(s) | Replaces |
+|---|---|---|
+| Hosted Login v2 | `/ui/login` (+ org scope `urn:zitadel:iam:org:id:{id}` / `…:domain:primary:{domain}`) | `AUTH-01` registration, `AUTH-04` login, `AUTH-05` reset UX |
+| OIDC endpoints | `/oauth/v2/authorize`, `/oauth/v2/token`, `/oauth/v2/revoke`, `/oauth/v2/introspect`, `/oidc/v1/userinfo`, `/oauth/v2/keys` (JWKS) | `AUTH-07` token issuance/rotation |
+| Session service v2 | `/v2/sessions/{id}` (get/delete), `/v2/sessions` (list) | `AUTH-07/08/27` session list + termination |
+| User service v2 | `/v2/users/{id}/password`, `/password_reset`, `/deactivate`, `/reactivate`, `/lock`, `/unlock`, `/v2/users/me/tokens/refresh/_revoke_all` | `AUTH-17/20/40/43`, forced logout |
+| MFA / passkeys | `/v2/users/{id}/totp`, `/v2/users/me/auth_factors`, WebAuthn registration APIs | `AUTH-09/10/26` factors |
+| SSO / SAML | `/v2/orgs/me/idps`, SAML metadata + ACS endpoints, `/v2/settings/login/idps` | `AUTH-24` federation (per-org IdP) |
+| SCIM 2.0 | `/scim/v2/Users` (user schema only — no Groups) | `AUTH-25` provisioning |
+| Actions v2 | targets + executions (`/v2/actions/…`), signed webhooks on `user.*`, `session.*` | `AUTH-19/22` login history + audit feed |
+
 ### 7.1 V1 baseline — `auth` (authoritative: `contracts/api/auth.md`)
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/auth/register` | none (public; Trader role afterwards) — AUTH-01 | none — public registration on a tenant domain | required | `auth.invalid_registration`, `auth.email_taken`, `tenant.suspended` |
-| `POST /v1/auth/login` | none (public) — AUTH-04 | none — public login | optional | `auth.invalid_credentials`, `auth.account_suspended`, `auth.totp_required`, `auth.totp_invalid`, `tenant.suspended` |
-| `POST /v1/auth/password-reset` | none (public) — AUTH-05 | none | optional | standard |
-| `POST /v1/auth/password-reset/confirm` | none (single-use email link token) — AUTH-05 | none | required | `auth.reset_token_invalid` |
+| `POST /v1/auth/session` | ZITADEL access token (bearer, tenant audience) — AUTH-04/07 | none — materialises the identity + memberships on first login | required | `auth.token_invalid`, `auth.account_suspended`, `auth.tenant_suspended`, `auth.mfa_required` |
 | `POST /v1/auth/password` | any logged-in user — AUTH-40 | self-action (no resource key; identity = caller) # AUTH-13 model | optional | `auth.invalid_credentials`, `auth.weak_password` |
-| `POST /v1/auth/2fa/enroll` | Tenant Admin / Staff at first login — AUTH-09 | self-action | optional | standard |
-| `POST /v1/auth/2fa/verify` | Tenant Admin / Staff — AUTH-09 | self-action | optional | `auth.totp_invalid` |
-| `POST /v1/auth/refresh` | refresh token (rotating) — AUTH-07 | none | optional | `auth.session_revoked` |
+| `POST /v1/auth/2fa/backup-codes` | Staff at first-login enrolment — AUTH-09/11 (V1 per D5) | self-action | required | `auth.mfa_not_enrolled` |
+| `POST /v1/auth/2fa/backup-code` | Staff without a working factor — AUTH-11 | self-action (sets the session's `mfa_satisfied`) | required | `auth.backup_code_invalid` |
 | `POST /v1/auth/logout` | any user — AUTH-39 | self-action | optional | standard |
 | `POST /v1/auth/users/{user_id}/suspend` | Tenant Admin — AUTH-20 | `user.suspend` # AUTH-13, key from AUTH-20 story | required | `auth.user_not_found`, `auth.cannot_suspend_self` |
 | `POST /v1/auth/users/{user_id}/unsuspend` | Tenant Admin — AUTH-43 | `user.unsuspend` # AUTH-13, key from AUTH-43 story | required | `auth.user_not_found`, `auth.user_not_suspended` |
@@ -272,15 +352,19 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/auth.md` 
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Public (pre-auth): `POST /v1/auth/register`, `POST /v1/auth/login`,
-`POST /v1/auth/mfa/verify`, `POST /v1/auth/password/forgot`,
-`POST /v1/auth/password/reset`, `GET /.well-known/openid-configuration` (V3 prep).
+Public (pre-auth): *moved to ZITADEL* — registration, login, MFA challenge, password
+forgot/reset and `/.well-known/openid-configuration` are the IdP's surfaces (§7.0);
+our API exposes no pre-auth password endpoint any more. `GET /.well-known/openid-configuration`
+is published by ZITADEL, and our `/.well-known/alpha1-config` (tenant resolution hints
+for the web tier) is the only public config endpoint we host.
 
 Authenticated (self): `POST /v1/auth/logout`, `POST /v1/auth/logout-all`,
-`GET /v1/auth/sessions`, `DELETE /v1/auth/sessions/{id}`,
-`PATCH /v1/auth/profile`, `POST /v1/auth/password/change`,
-`POST /v1/auth/2fa/enroll`, `POST /v1/auth/2fa/confirm`, `DELETE /v1/auth/2fa`,
-`GET /v1/auth/2fa/backup-codes` (V2).
+`GET /v1/auth/sessions` (V2, `AUTH-08`; projects ZITADEL session v2 list),
+`DELETE /v1/auth/sessions/{id}` (V2, `AUTH-08/27`; projects `DeleteSession`),
+`PATCH /v1/auth/profile`, `POST /v1/auth/password` (change, V1 — above).
+Factor management (TOTP/passkey enrolment, removal, MFA reset) is ZITADEL's
+surface (§7.0); our V1 extra is the backup-code pair above, and listing codes is
+deliberately impossible (they are shown once at issue).
 
 Authenticated (staff, in-tenant): `GET|POST /v1/auth/members`,
 `POST /v1/auth/members/invite` (V2), `PATCH /v1/auth/members/{id}/role`,
@@ -294,10 +378,12 @@ Console (platform realm): `GET /v1/console/tenants/{id}/members`,
 ## 8. Schema (key API shapes)
 
 ```jsonc
-// POST /v1/auth/login → 200
-{ "data": { "session_id": "01J9...", "user": { "id": "01J9...", "email": "trader@x.com",
-    "display_name": "T. Rader", "roles": ["user:trader"], "tenant": { "id": "01J9...",
-    "name": "FunderBlu", "slug": "funderblu" } } } , "meta": { "request_id": "..." } }
+// POST /v1/auth/session → 200 (token verified; identity + membership materialised)
+{ "data": { "session_id": "01J9...", "user": { "id": "01J9...", "idp_user_id": "28910...",
+    "email": "trader@x.com", "display_name": "T. Rader", "roles": ["user:trader"],
+    "mfa_satisfied": false, "tenant": { "id": "01J9...", "name": "FunderBlu",
+    "slug": "funderblu" } }, "expires_at": 1758282000000 },
+  "meta": { "request_id": "..." } }
 
 // GET /v1/auth/sessions
 { "data": { "sessions": [ { "id": "01J9...", "device": "Chrome · macOS",
@@ -320,6 +406,9 @@ Console (platform realm): `GET /v1/console/tenants/{id}/members`,
 -- platform-wide identity (no tenant_id by design)
 CREATE TABLE identities (
   id            ULID PRIMARY KEY,
+  idp_user_id   TEXT UNIQUE,                -- ZITADEL user id (sub); NULL until first login
+  realm         TEXT NOT NULL DEFAULT 'tenant'
+                CHECK (realm IN ('tenant','platform')),   -- AUTH-16 audience realm
   email         CITEXT UNIQUE NOT NULL,
   email_verified BOOLEAN NOT NULL DEFAULT false,
   phone         TEXT, phone_verified BOOLEAN NOT NULL DEFAULT false,
@@ -331,9 +420,9 @@ CREATE TABLE identities (
   status        TEXT NOT NULL DEFAULT 'pending_verification'
                 CHECK (status IN ('pending_verification','active','suspended','banned','deactivated')),
   suspension_reason TEXT,
-  mfa_enabled   BOOLEAN NOT NULL DEFAULT false,
-  mfa_totp_secret TEXT,                     -- AES-256-GCM field-encrypted (envelope, §10)
-  mfa_backup_codes_hash JSONB,              -- V2
+  mfa_enabled   BOOLEAN NOT NULL DEFAULT false,   -- mirror of ZITADEL factor state
+  mfa_enrolled_at TIMESTAMPTZ,                    -- D5: staff 2FA enforced from first login
+  -- TOTP secrets live in ZITADEL and are never stored here (§10.2)
   failed_logins INT NOT NULL DEFAULT 0,
   locked_until  TIMESTAMPTZ,
   last_login_at TIMESTAMPTZ,
@@ -357,22 +446,36 @@ CREATE TABLE tenant_memberships (
 CREATE INDEX idx_membership_tenant ON tenant_memberships(tenant_id, status);
 CREATE INDEX idx_membership_identity ON tenant_memberships(identity_id);
 
+-- projection of the ZITADEL session + our revocation state (P2)
 CREATE TABLE auth_sessions (
   id            ULID PRIMARY KEY,
   identity_id   ULID NOT NULL REFERENCES identities(id),
   tenant_id     ULID REFERENCES tenants(id),        -- NULL for console sessions
   is_console    BOOLEAN NOT NULL DEFAULT false,     -- platform realm (AUTH-16)
-  refresh_hash  TEXT NOT NULL UNIQUE,               -- single-use, rotated
+  idp_session_id TEXT NOT NULL,                     -- ZITADEL session id
+  idp_token_jti  TEXT,                              -- current access-token jti
+  refresh_hash  TEXT UNIQUE,                        -- single-use, rotated (ours)
   prev_refresh_hash TEXT,                           -- for reuse detection
+  amr           TEXT[] NOT NULL DEFAULT '{}',       -- otp/webauthn/pwd (AUTH-09)
   user_agent TEXT, ip INET, geo JSONB,
-  mfa_verified_at TIMESTAMPTZ,                      -- step-up freshness
+  mfa_verified_at TIMESTAMPTZ,                      -- step-up freshness (auth_time)
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   idle_expires_at TIMESTAMPTZ NOT NULL,
   abs_expires_at  TIMESTAMPTZ NOT NULL,
-  revoked_at TIMESTAMPTZ, revocation_reason TEXT,
-  CHECK (NOT (revoked_at IS NOT NULL)) OR TRUE      -- keep history
+  revoked_at TIMESTAMPTZ, revocation_reason TEXT
 );
 CREATE INDEX idx_sessions_identity ON auth_sessions(identity_id, revoked_at);
+CREATE INDEX idx_sessions_idp ON auth_sessions(idp_session_id);
+
+-- backup codes are ours (AUTH-11, V1 per D5): 10 single-use, Argon2id-hashed
+CREATE TABLE auth_backup_codes (
+  id ULID PRIMARY KEY,
+  identity_id ULID NOT NULL REFERENCES identities(id),
+  code_hash TEXT NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_backup_codes_identity ON auth_backup_codes(identity_id) WHERE used_at IS NULL;
 
 CREATE TABLE api_keys (
   id         ULID PRIMARY KEY,
@@ -427,50 +530,47 @@ KYC module's storage, AUTH stores only status pointers.
 
 | Surface | V1 design | Failure mode & fix |
 |---|---|---|
-| Login p99 | < 300 ms (Argon2id ~150 ms dominates) | CPU-bound: cap logins/IP at edge (Cloudflare); if needed, move Argon2 to a worker pool (V2) |
-| Session check (per request) | Redis deny-set O(1); PG only on miss/refresh | Redis down → fail-open to PG check (degraded, alerted) |
-| Authz | Cerbos in-proc decision cache 60 s per (role,action,resource); PDP local to the api unit (sidecar or embedded — **D4**) | PDP down → deny (authz failures fail **closed**); embedded mode (docs/41 §3.2) removes the dependency entirely |
+| Login p99 | < 300 ms end-to-end (ZITADEL's Argon2id verify dominates; now in its process, not ours) | ZITADEL scales vertically on the same box; login bursts are capped at the Cloudflare edge |
+| Session check (per request) | JWKS-verified JWT (cached keys) + Redis deny-set O(1) | JWKS fetch failure → cached keys (24 h) then fail closed; Redis down → fail-open to the `auth_sessions` row (degraded, alerted) |
+| Authz | Casbin enforcer in-process, decisions < 1 ms, no network hop | none — the only failure mode is a bad policy, caught by the model tests in CI |
 | Tenant resolution | 2-level cache (in-mem 30 s + Redis 5 min), 99%+ hit | cache flush storm → PG can absorb (keyed lookup, indexed) |
 | Lockouts | Redis INCR/EXPIRE | Redis down → per-instance in-mem counters (weaker, alerted) |
 | Scale headroom | 10k traders × 5 req/min = 830 req/min ≈ 14 req/s — 1 instance does 2k+ req/s | scale-out = add api replicas (stateless); session table needs only read replica (V2) |
 
 ## 12. Open-source solutions
 
-> Re-evaluated 2026-09-19 against the full `AUTH-01..43` set — the OpenID Connect
-> marketplace, the embedded libraries and the IdP servers were all scored on the
-> PRD's own constraints (one identity across tenants, two realms, Go runtime, one
-> Hetzner box, shared schema). Evidence, scoring and the rejected candidates:
-> [41 — AUTH + TEN open-source evaluation](41-auth-ten-open-source-evaluation.md).
-> The rows below are the decisions; §8 of docs/41 lists the five that are still open.
+> Decided 2026-09-19. Full scoring (every candidate, every constraint, sources):
+> [41 — AUTH + TEN open-source evaluation](41-auth-ten-open-source-evaluation.md) §3–§4.
 
 | Option | Verdict |
 |---|---|
-| **Better Auth** (TS library, orgs, sessions, 2FA, MIT) | **CHOSEN** (PRD, BVR-14). But TS-only — Go integrates over JWT/JWKS from a Node identity surface, or Go owns sessions (**D1**). Org plugin confirmed: per-org member roles, custom + dynamic roles, invitations, hooks |
-| Keycloak / Authentik (IdP servers) | Rejected V1: Java ops weight (1–2 GB idle), Organizations only since 26.0, SCIM still preview, tenant-RBAC fit needs custom SPI. Authentik (MIT) kept as **V3 SSO** option, Keycloak as the deep-SAML/LDAP escape hatch |
-| Zitadel (Go, AGPL-3.0) | Best feature fit of any IdP (orgs as first-class, per-org IdP/branding, SAML/OIDC/**SCIM 2.0** built in, ~600 MB) but **AGPL-3.0** plus a second identity store we'd have to reconcile with `tenants` — only on the table if **D2** answers yes |
-| Ory Kratos/Hydra/Keto | Rejected: **no OSS multi-tenancy** — official guidance is one instance per tenant, and B2B orgs/SSO/SCIM are commercial. Apache-2.0 and Go, but per-tenant instances collide with ADR-9 |
-| Logto / Casdoor / Authelia / SuperTokens / FusionAuth | As before — Logto's OSS build has no multi-tenant console, Casdoor is UI-first with no advantage over Zitadel, Authelia has no SAML/tenancy, SuperTokens is plausible only if SDK-embedded Go auth is wanted, FusionAuth is commercial |
-| **Cerbos** (Apache-2.0 PDP) | **CHOSEN** PDP (PRD, BVR-23). Stateless, policy tests, decision logs, `PlanResources` query plans. **Deployment mode open (D4):** sidecar vs embedded Go library |
-| Casbin (Apache-2.0, embedded) | Runner-up PDP: RBAC-with-domains models tenant-scoped roles directly, sub-ms decisions, no extra process — but no decision log/explainability, so policy review is on us |
-| OPA / SpiceDB | OPA = more flexible, steeper ops and no authz domain model; SpiceDB/OpenFGA = ReBAC overkill for role + ABAC needs, and adds a tuple store to keep in sync |
-| Auth0 / Cognito | **Forbidden** (PRD): cost, tenant-RBAC mismatch |
-| Argon2 (password) | Standard library, all runtimes |
-| TOTP: `pquerna/otp` (Go) | Standard |
-| Breached passwords: HIBP range API | Standard, no key needed for range API |
-| SAML-only gap (V3) | Ory Polis (Apache-2.0, ex-BoxyHQ SAML Jackson) bridges SAML for any OIDC-only choice |
+| **ZITADEL** (Go, AGPL-3.0, self-hosted, Postgres) | **CHOSEN — the identity provider (ADR-13, decision P1).** Organizations = tenants, per-org policies/branding/IdP, OIDC + SAML + SCIM (users) + passkeys, event-sourced audit stream, Actions v2 for token claims and audit webhooks, ~100–600 MB idle, no MAU limits self-hosted. Conditions: unmodified source (AGPL discipline), single instance, `tenants.idp_org_id` link, Oct-2026 legal review at Phase-0 exit |
+| **Better Auth** (MIT, TS library) | **Superseded (BVR-14)** by ADR-13. Retired because it is TypeScript-only (no Go SDK → a second runtime for auth) and because V1 now needs SSO + SCIM, which its SSO plugin documents as not production-ready. Kept in docs as the fallback if the ZITADEL integration fails in Phase 0 |
+| Keycloak (Apache-2.0, Java) | Rejected: 1–2 GB idle JVM, Organizations only since 26.0, SCIM still preview and not covering Organizations. **Kept as the documented escape hatch** if a tenant demands deep SAML/LDAP federation (ADR-13 fallback) |
+| authentik (MIT core, Python) | Rejected: weaker hardening record than ZITADEL for fund-holding accounts; enterprise carve-out. No longer the V3 SSO plan — ZITADEL covers SSO from V1 |
+| Ory Kratos/Hydra/Keto | Rejected: no OSS multi-tenancy (one instance per tenant), B2B orgs/SSO/SCIM are commercial, 3–4 components to run |
+| Logto / Casdoor / Authelia / SuperTokens / FusionAuth | Rejected: Logto OSS has no multi-tenant console (Cloud-only), Casdoor has no advantage over ZITADEL, Authelia has no SAML/tenancy, SuperTokens' SAML needs a bridge and its enterprise bits are `ee/`-gated, FusionAuth is commercial |
+| **Casbin** (Apache-2.0, embedded Go) | **CHOSEN — the authorization engine (ADR-14, decision D4).** RBAC with domains maps `role × tenant` directly, sub-millisecond in-process decisions, policies in Postgres, Go tests as the policy suite. Trade-off: no decision log — we log denials ourselves |
+| Cerbos (Apache-2.0 PDP) | **Superseded (BVR-23)** by ADR-14. Rejected as *runtime* only: an extra process on a one-box deployment for gain we do not need at 50 tenants; its decision logs/query plans remain the reason it would be revisited if policy complexity grows (documented trigger: > 200 tenants or > 500 policy rows) |
+| OPA / SpiceDB / OpenFGA | Rejected: OPA = steeper ops + no authz domain model; SpiceDB/OpenFGA = ReBAC overkill that adds a tuple store to keep in sync |
+| Auth0 / Cognito | **Forbidden** (PRD/BVR-14): cost, tenant-RBAC mismatch |
+| HIBP range API (breached passwords) | Standard, no key needed — **ours**, ZITADEL does not call it |
+| Backup codes / API keys / trusted devices | Ours (ZITADEL has no recovery-code primitive; API keys are tenant-facing product surface) |
+| SAML-only bridge (fallback) | Ory Polis (Apache-2.0, ex-BoxyHQ SAML Jackson) if ZITADEL's SAML ever proves insufficient — not needed for the V1 tenant |
 
 ## 13. Technology stack
 
-Go (domain package in `api`), Better Auth behind its Node identity surface (JWT/JWKS
-contract, **D1**), Cerbos (PDP — sidecar or embedded, **D4**; policies in
-`infra/policies/`), Postgres, Redis, Postmark (emails), Sentry (auth-failure alerts),
-Flipt (feature-flag-gated rollout of 2FA mandate per tenant), Cloudflare (edge rate
+Go (AUTH domain package in `api`), **ZITADEL** (Compose service, own Postgres
+database, Hosted Login v2 + OIDC/SAML/SCIM), **Casbin** (Go library, embedded — no
+service), Postgres, Redis (deny-set, rate limits, caches), Postmark (transactional
+email: verify, reset, invite, security notice — ZITADEL notifications disabled for
+these), Sentry, Flipt (rollout of 2FA mandate per tenant), Cloudflare (edge rate
 limits + WAF for login routes).
 
-**Service-count note (ADR-9):** if **D1 = A/B** the Compose stack grows by one
-`auth` (Node) unit; if **D4 = sidecar** it grows by one `cerbos` unit. Both are
-Compose services on the same box, not new infrastructure; docs/01 §deployables must
-list them once D1/D4 are answered.
+**Service-count change (ADR-9):** one new Compose unit (`zitadel`) and one new
+database in the same Postgres instance — no new box, no Kubernetes. Cerbos never
+existed as a deployed unit (the fallback was in-process too), so ADR-14 removes a
+service rather than adding one. Deployables are listed in docs/01 §5.
 
 ## 14. Integration — internal modules (glue)
 
@@ -488,28 +588,41 @@ list them once D1/D4 are answered.
 
 ## 15. Integration — external tools
 
-Better Auth (foundation), Cerbos (PDP), Postmark (transactional email: verify,
-reset, invite, security notice), HIBP (breached passwords), ipinfo (geo for
-sessions + anomaly; register "NOW"), Sentry (CRITICAL security alerts),
-Flipt (rollout flags), Cloudflare (edge). Device fingerprinting: ipinfo now,
+**ZITADEL** (identity provider: hosted login, credentials, MFA factors, SSO/SAML,
+SCIM, sessions, org policies; SMTP/notifications from ZITADEL disabled in favour of
+ours unless a tenant's SSO requires IdP-sent mail), **Casbin** (embedded PDP),
+Postmark (transactional email: verify, reset, invite, security notice), HIBP
+(breached passwords — called by us), ipinfo (geo for sessions + anomaly; register
+"NOW"), Sentry (CRITICAL security alerts), Flipt (rollout flags), Cloudflare (edge,
+login routes, DNS for the IdP hostname). Device fingerprinting: ipinfo now,
 FingerprintJS deferred (PRD default).
 
 ## 16. Implementation blueprint
 
+> Re-planned 2026-09-19 for ADR-13/ADR-14 and decisions D1–D5/P1–P4. Estimates are
+> person-days excluding OPS setup time.
+
 | Step | Owner | Est | Depends | Exit criteria |
 |---|---|---|---|---|
-| 1. Phase-0 spike: Better Auth org plugin fit; Cerbos hello-policy | BE-1 | 2 d | OPS env | Written ADR: org plugin or own membership |
-| 2. Schemas + guard: identities, memberships, sessions, api_keys; isolation test passes | BE-1 | 2 d | 1 | `isolation.test` green for AUTH |
-| 3. Authn: register/login/logout, sessions, cookies, lockout, password policy | BE-1 | 5 d | 2 | TD login works on staging subdomain |
-| 4. Authz: Cerbos service + role catalog + own-data/step-up policies; `authorizer` interface | BE-1 | 4 d | 2 | policy tests: trader can't read other's trades; payout w/o MFA denied |
-| 5. 2FA TOTP enroll/confirm + step-up enforcement | BE-2 | 3 d | 3,4 | staff login requires TOTP on staging |
-| 6. Suspension/activation + session kill pub/sub; platform-realm separation | BE-1 | 2 d | 4 | suspended user's live session dies < 1 s |
+| 1. Deploy ZITADEL (Compose + own DB) and harden it: TLS host, SMTP off, backups in the ADR-10 ritual, AGPL legal review closed | BE-1 | 3 d | OPS env | `/debug/healthz` green; console reachable; login works for a scratch org |
+| 2. Tenant provisioning hooks: create org + project/application, per-org password/lockout/session policies + branding defaults, write `tenants.idp_org_id` (idempotent, compensatable) | BE-1 | 3 d | 1, TEN step | re-running the saga step is a no-op; a second saga run never duplicates an org |
+| 3. Token path: hosted-login hand-off from the web tier (PKCE, org scope), JWKS verification middleware (issuer + audience per realm), `POST /v1/auth/session`, `auth_sessions` projection + Redis deny-set, logout with `DeleteSession` + end-session | BE-1 | 5 d | 2 | TD + ADM login on a staging subdomain; a revoked session is refused < 1 s; console-audience token refused by tenant routes (AUTH-16) |
+| 4. Authorization: Casbin model (`g(r.sub, p.sub, r.dom)`), policy table + loader/reload, role catalog, the `authorizer.Check` interface, denial logging | BE-1 | 4 d | 2 | fixture tests: trader can't read another's trades; ≥ 30 permission keys resolved by role; a policy change reloads without redeploy |
+| 5. 2FA enforcement + backup codes: staff first-login enrolment flow (hosted), `amr`/`auth_time` rule in the API, `/v1/auth/2fa/backup-codes` + `/backup-code`, admin reset path (AUTH-28) | BE-2 | 4 d | 3 | staff login without a factor is refused by the API; backup code redeems once; reset flow audited |
+| 6. Suspension/activation: status mirror to ZITADEL (deactivate/reactivate, session termination) + event fan-out + platform-realm separation test | BE-1 | 2 d | 3, 4 | suspended user's live session dies < 1 s; unsuspend restores with audit |
 | 7. API-key primitives (create/revoke/hash/scopes) | BE-2 | 2 d | 3 | key works end-to-end against one read route |
-| 8. Audit wiring + security headers + anomaly counters (V2 hooks) | BE-2 | 2 d | 5 | AUD-23 sensitive-access audit visible |
-| 9. V1.1: email verification UX, staff invites, login history, 2FA backup codes | FE-1 + BE-2 | 5 d | 8 | AUTH V1.1 req list green |
-| 10. V2: social login, step-up API surface, IP allowlists, session policy config | BE-2 | 8 d | 9 | — |
-| 11. V3: SAML SSO (Authentik or direct), SCIM, passkeys | BE-1 | 10 d | V2 base | — |
+| 8. RLS layer: policies + `FORCE ROW LEVEL SECURITY` + transaction-scoped `set_config` in the DB wrapper + negative tests (D3) | BE-1 | 3 d | 2 | isolation suite green under both layers; no-context query returns zero rows |
+| 9. Audit + login history feed: Actions v2 event webhooks → `audit_events`, anomaly counters, security headers | BE-2 | 3 d | 5 | AUD-23 sensitive-access audit visible; login history rows appear |
+| 10. SSO + SCIM for the cutover tenant (AUTH-24/25): org IdP config, metadata exchange, attribute→role mapping on our side, SCIM user provisioning token + deactivation path | BE-1 + BE-2 | 5 d | 3, 4 | the tenant's staff sign in through their IdP; SCIM create/deactivate lands as our membership rows |
+| 11. V2: social login, step-up API surface, IP allowlists, session policy config, email-change + closure flows | BE-2 | 8 d | 10 | — |
+| 12. V3: passkeys, duplicate-identity merge, trusted devices, advanced federation | BE-1 | 10 d | V2 base | — |
 
-**Risks:** Better Auth org plugin mismatch (mitigation: spike first, fallback
-designed in step 1); Cerbos latency (mitigation: decision cache + local PDP);
-cookie subdomain complexity in testing (mitigation: staging uses `*.staging.alpha1.io`).
+**Risks:** ZITADEL upgrade/migration ops (mitigation: pin the version, rehearse the
+upgrade on staging, it shares the ADR-10 backup ritual); hosted-login UX divergence
+from our design system (mitigation: per-org branding + the planned custom
+`.well-known/alpha1-config` entry point, custom UI only if a tenant pays for it);
+`amr`/`auth_time` claim shape (mitigation: spike in step 5 before enforcing);
+AGPL interpretation (mitigation: unmodified upstream, Actions-only customisation,
+legal review closed at step 1); identity-store drift (mitigation: nightly
+reconciliation job + TEN-32 access review); SCIM user-only limitation (mitigation:
+role assignment stays in ADM, documented in docs/41 §8.1).

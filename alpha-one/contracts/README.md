@@ -22,7 +22,7 @@ python3 scripts/complete_contracts_pack.py   # post-V1 api specs, examples, exte
 contracts/
 ├── shared/openapi.yaml        # shared components (all specs $ref into this)
 ├── 02-AUTH.openapi.yaml       # one OpenAPI 3.1 spec per module doc (26 specs, 02…27)
-├── …                          #   445 operations total
+├── …                          #   434 operations total
 ├── 27-SDK-DVP-TRD-PLT-CS.openapi.yaml
 ├── api/                       # human-readable endpoint contracts, one file per module (36)
 │   ├── auth.md … tenant.md    #   V1 baseline: 20 files, Req-ID-cited, binding at freeze
@@ -117,7 +117,7 @@ dedicated HTTP surface (console screens + jobs — see their api specs).
 
 | Component | Purpose |
 |---|---|
-| `securitySchemes.sessionAuth` | Bearer session token (Better Auth) — public/console/dvp |
+| `securitySchemes.sessionAuth` | Bearer **ZITADEL access token** (short-lived JWT, audience per realm; ADR-13) — public/console/dvp |
 | `securitySchemes.apiKeyAuth` | `Authorization: Bearer sk_live_t_…` — customer API (docs/02 key model) |
 | `securitySchemes.internalService` | `X-Internal-Token` — internal paths only |
 | `securitySchemes.webhookSignature` | `X-AlphaOne-Signature`: `HMAC-SHA256(timestamp + "." + body)`, `ts` header, ±5 min replay window (docs/04) |

@@ -10,7 +10,7 @@
       "raised_by": "Design review (docs/41)",
       "owner": "Tech Lead, BE-1",
       "deadline": "Before Phase 0 exit",
-      "answer": "Open"
+      "answer": "**Answered 2026-09-19 — option C, product P1: ZITADEL** (self-hosted, AGPL-3.0, one instance, Organization per tenant). Better Auth (BVR-14) and Cerbos (BVR-23) are superseded by ADR-13/ADR-14. See docs/41 §10."
     },
     {
       "id": "D2",
@@ -20,7 +20,7 @@
       "raised_by": "Design review (docs/41 §4)",
       "owner": "Sales owner, Tech Lead",
       "deadline": "Before Phase 0 exit",
-      "answer": "Open"
+      "answer": "**Answered 2026-09-19 — yes:** one V1 tenant requires SSO at cutover. AUTH-24 (SAML/OIDC federation) is promoted into V1.0/V1.1 scope and AUTH-25 (SCIM) is promoted with it per P3. Recorded as a post-PRD design decision (docs/41 §10), not a PRD workbook row."
     },
     {
       "id": "D3",
@@ -30,7 +30,7 @@
       "raised_by": "Design review (docs/41 §5)",
       "owner": "Tech Lead, BE-1, DevOps",
       "deadline": "Before tenant-scoped tables are frozen",
-      "answer": "Open"
+      "answer": "**Answered 2026-09-19 — yes: Postgres RLS is adopted** as the fail-closed second enforcement layer on every tenant-owned table (docs/01 §7.8, docs/03 §10). App-level guard (ADR-1) stays."
     },
     {
       "id": "D4",
@@ -40,7 +40,7 @@
       "raised_by": "Design review (docs/41 §3.2)",
       "owner": "Tech Lead, BE-2",
       "deadline": "Phase 1 start (before AUTH-13)",
-      "answer": "Open"
+      "answer": "**Answered 2026-09-19 — Casbin, embedded** in the Go api, RBAC-with-domains model. Cerbos is superseded (ADR-14); the `authorizer.Check` interface is unchanged. See docs/41 §10."
     },
     {
       "id": "D5",
@@ -50,7 +50,47 @@
       "raised_by": "Design review (docs/41 §8)",
       "owner": "Tech Lead, FunderBlu COO",
       "deadline": "Kickoff +2 days",
-      "answer": "Open"
+      "answer": "**Answered 2026-09-19 — all staff roles, enforced at first login, with backup codes in V1**: AUTH-11 (backup codes) is promoted with AUTH-09; AUTH-29 (email change) and AUTH-28 (admin-assisted 2FA reset) become explicit V1 dependencies of the forced-enrolment path."
+    },
+    {
+      "id": "P1",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Which identity provider do we adopt (D1 = option C)?",
+      "raised_by": "Design review (docs/41 §10)",
+      "owner": "Tech Lead",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 — ZITADEL**, self-hosted single instance + Postgres (AGPL-3.0, unmodified). Keycloak rejected on ops weight (1-2 GB, Java) and organisation fit; authentik rejected on hardening track record for fund-holding accounts. Legal review of AGPL obligations is a Phase-0 gate; policy: never patch ZITADEL source, contribute upstream."
+    },
+    {
+      "id": "P2",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Where do the login page and session live (D1 = C)?",
+      "raised_by": "Design review (docs/41 §10)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 — IdP-hosted login + IdP tokens at the API.** Users log in on ZITADEL Hosted Login v2 (org-scoped via `urn:zitadel:iam:org:id:{id}`), the api accepts the ZITADEL access token and keeps a Redis deny-set + `auth_sessions` projection for immediate revocation (AUTH-07/20/27/39). Our `/v1/auth/login|refresh` contract is retired in favour of OIDC endpoints; `contracts/api/auth.md` and `contracts/shared/openapi.yaml` are updated accordingly."
+    },
+    {
+      "id": "P3",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "With SSO needed at cutover, how far does SSO/SCIM go in V1 (D2 = yes)?",
+      "raised_by": "Design review (docs/41 §10)",
+      "owner": "Tech Lead, Sales owner",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 — SSO + SCIM for that tenant.** AUTH-24 and AUTH-25 both promoted into V1. ZITADEL limits SCIM to the User schema (no Groups, verified 2026-09-19), so deprovisioning is user-level; role assignment stays with us (P4) and group-to-role mapping is out of scope for the SCIM path."
+    },
+    {
+      "id": "P4",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Roles and membership: which system owns them (AUTH-12/13/14, TEN-32)?",
+      "raised_by": "Design review (docs/41 §10)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 — our Postgres is authoritative** for tenant membership, roles, custom roles and the `resource.action` permission registry. ZITADEL organizations are used for login scoping, per-org policies and SSO routing; ZITADEL user grants mirror our roles only so tokens can carry them (Actions v2 `preAccessToken`), and a reconciliation job reports drift (TEN-32 access review)."
     }
   ]
 }

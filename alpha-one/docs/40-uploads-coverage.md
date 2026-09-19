@@ -106,7 +106,7 @@ interface, and leaves implementation to the module build.
 | Research file | KB | Landed in | What was taken |
 |---|---|---|---|
 | `account-lifecycle.md` | 84 | `docs/07-account-lifecycle.md` | state machine, phase/spawn semantics, disable-then-close ordering, reconciliation job |
-| `auth-authz-multi-tenancy.md` | 145 | `docs/02-identity-access.md`, `docs/03-tenant-management.md`, `docs/28-security.md` | Better Auth evaluation, org/tenant model, RBAC policy decision point (Cerbos), K8s NetworkPolicy isolation notes, auth API shape |
+| `auth-authz-multi-tenancy.md` | 145 | `docs/02-identity-access.md`, `docs/03-tenant-management.md`, `docs/28-security.md` | Better Auth evaluation (superseded), org/tenant model, RBAC policy decision point, K8s NetworkPolicy isolation notes, auth API shape |
 | `checkout-and-billing.md` | 143 | `docs/12-checkout-billing.md`, `docs/22-billing.md` | PSP comparison (Match2Pay/Interkasa/NOWPayments), hosted-flow PCI scope, pricing engine concept |
 | `multi-tenant-billing.md` | 98 | `docs/22-billing.md`, `docs/34` §3 | Lago metering model, usage events → billable metrics, revenue-share engine shape (deferred to V3 per BVR rules) |
 | `multi-tenant-management.md` | 179 | `docs/03-tenant-management.md`, `docs/25-migration.md` | tenant lifecycle, subdomain/domain mapping, entitlements, migration/cutover mechanics |
