@@ -53,7 +53,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 05 (LED/AUD). When: LED. Consumers: AUD (mirror), ANA, CON (platform finance). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 05 (LED/AUD). When: LED. Consumers: ext. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -73,7 +73,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 05 (LED/AUD). When: LED. Consumers: AUD, ANA, NOT (tenant finance). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 05 (LED/AUD). When: LED. Consumers: ext. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -93,7 +93,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 05 (LED/AUD). When: worker. Consumers: NOT (tenant owner + CON), ADM queue. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 05 (LED/AUD). When: worker. Consumers: ext. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }

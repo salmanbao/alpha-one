@@ -20,8 +20,9 @@
   live in `command_queue` and never appear in this catalog.
 - **Every event carries** (EVT-03, exactly): `id` (ULID), `type` (event
   name), `version` (integer, starts 1), `tenant_id` (ULID), `occurred_at`
-  (int64 epoch ms, UTC), `payload` (event-specific, per-event schema in
-  `contracts/events/payloads/`).
+  (int64 epoch ms, UTC), `correlation_id` (ULID — the originating request's
+  correlation, required since the ninth pass: docs/49 C1), `payload`
+  (event-specific, per-event schema in `contracts/events/payloads/`).
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 

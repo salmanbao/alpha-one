@@ -2,7 +2,8 @@
 
 > Covers PRD modules **LED** (26 requirements) and **AUD** (26 requirements). The deep
 > review of this module — findings F1–F10 and decisions D25–D27 — is
-> [48 — Ledger & Audit: Deep Review](48-ledger-audit-review.md).
+> [48 — Ledger & Audit: Deep Review](48-ledger-audit-review.md); the chain review and the
+> open-source/library evaluation are [49 — chain review + OSS](49-chain-review-ledger-audit-oss.md).
 > LED is the **only** place money math happens twice: every payment, fee, payout,
 > and refund posts as a balanced double-entry journal. AUD is the tamper-evident
 > record of **who did what, when, from where** — for every sensitive action.
@@ -355,7 +356,15 @@ event (AUD-23: staff viewing a trader's KYC documents or payout wallet).
 - **Integrity:** V1 = append-only (DB privileges) + nightly hash snapshot (all
   rows → R2, checksummed). V2 = true hash chain (`entry_hash =
   sha256(prev_entry_hash || canonical(row))`, per-tenant chain, AUD-14) +
-  verification job (AUD-24) + breach-evidence export (AUD-25).
+  verification job (AUD-24) + breach-evidence export (AUD-25). The chain design
+  follows the distilled rules in [49 — LED/AUD open-source evaluation](49-ledger-audit-open-source-evaluation.md)
+  §6: **per-tenant stream** (not one global chain), a transaction-scoped
+  **advisory lock per stream** so concurrent appends cannot fork the chain, a
+  **versioned canonical string** covering every immutable field (content itself
+  enters only as a `content_hash`, so PII redaction/erasure nulls fields without
+  breaking verification — erasure by redact-in-place, never rewrite), and an
+  external anchor (RFC 3161 timestamp or a transparency log) for the
+  nightly chain head.
 - **Access:** tenant audit readable by the `audit.read` holders per
   `roles.yaml` — `firm:owner`, `firm:admin`, `firm:compliance` (D14; the
   "compliance/owner only" wording here predates the ratified bindings)
@@ -395,15 +404,19 @@ event (AUD-23: staff viewing a trader's KYC documents or payout wallet).
 
 | Option | Verdict |
 |---|---|
-| **Postgres journal** (our design) | **CHOSEN V1** — PRD: Postgres is system of record |
-| TigerBeetle | V2+ upgrade path if payout throughput 10× (register: consideration) |
+| **Postgres journal** (our design) | **CHOSEN V1** — PRD: Postgres is system of record; at ~500 entries/day every purpose-built alternative is ops weight (full scoring: [49](49-ledger-audit-open-source-evaluation.md) §4) |
+| TigerBeetle | V2+ upgrade path if payout throughput 10× (register: consideration); open-source engine, engine-level double-entry, self-hosted — the same posture we already run |
+| **Formance Ledger** (MIT core + Numscript) | **Consider-later (the same 10× review point as TigerBeetle)** — self-hostable programmable ledger, one instance hosts many isolated ledgers; rejected for V1 as a second storage+API stack for trivial volume; its posting-template (Numscript) model is the reference for our `reason_code` posting flows |
+| Midaz (Lerian) | Watch — Go, multi-asset double-entry, but **source-available (not OSI)**; fails the docs/34 license posture today |
+| Fragment / Modern Treasury / Moov | Rejected — managed-cloud only (self-host posture, ADR-9); QLDB-class managed ledgers are the cautionary precedent (vendor-controlled roadmap) |
 | Apache Iceberg / DWH for financials | Not needed; PG partitions + R2 archive suffice to V3 |
+| **go-money / shopspring/decimal** (Go libs) | **ADOPTED (V1, edges only)** — `go-money` for cent arithmetic + currency formatting in reports/exports, `shopspring/decimal` where provider payloads/CSVs arrive as decimals; the DB rule is unchanged (integer `_cents`, docs/32) — libraries never store floats |
 | QuickBooks/Xero connector (register "consider-later") | V2 LED-20 — REST connector, one-way export of journal summaries |
 | Documenso | Not LED-related (DOC-12) |
 
 ## 13. Technology stack
 
-Go domain packages (`ledger`, `audit`) in `api`; workers: reconciliation,
+Go domain packages (`ledger`, `audit`) in `api`; money math at the edges: `go-money` (cent arithmetic, currency formatting) + `shopspring/decimal` (provider payload parsing) — never floats (docs/32); workers: reconciliation,
 balance refresh, hash-snapshot, export runner; Postgres (partitions, triggers,
 privileges); R2 (exports, archives, hash snapshots); Postmark (export-ready
 emails via NOT); Sentry (integrity alerts); Comp AI/Openlane (V2 evidence).
@@ -414,7 +427,7 @@ emails via NOT); Sentry (integrity alerts); Comp AI/Openlane (V2 evidence).
 |---|---|
 | **CHK** | consumes `checkout.order_paid/refunded` → posts LED-04/LED-05 entries (worker `ledger-applier`) |
 | **PAY** | `payout.approved` → LED-07 and `PayoutPaid` → LED-08 (the V1 applier consumes the catalog names); **V1 eligibility does not read the ledger** — it computes `available = gross − settled_paid` from payout history (docs/11 §3); the V2 `balances` table (LED-10) becomes the fast path then |
-| **AUD consumers** | every domain event in the catalog mirrors to `audit_events` (tier decided by catalog) — this is the AUD-02 "mandatory coverage" mechanism (V2 formalizes the lint) |
+| **AUD consumers** | every domain event in the catalog mirrors to `audit_events` (the **audit-applier**): **actor** from the payload's `*_by` field (`approved_by`/`executed_by`), else the producing service as `actor_kind='system'`, `actor=<producer>` (ninth pass, docs/49 C1 — the envelope's `correlation_id` fills `audit_events.correlation_id`); **tier by rule** (ninth pass, docs/49 C2 — "decided by the catalog" was never a mapping): `critical` = suspensions/terminations/reversals/audit-tamper classes, `sensitive` = every money-adjacent event (`payout.*`, `order.*`, `payment.*`) and KYC events, `standard` = the rest — this is the AUD-02 "mandatory coverage" mechanism (V2 formalizes the lint) |
 | **GW** | sensitive-route audit flag triggers direct `audit.Write` (sensitive reads that aren't events) |
 | **CON** | platform finance views, legal holds (V2), integrity dashboards |
 | **ANA** | financial read models join `journal_entry` (never mutate) |

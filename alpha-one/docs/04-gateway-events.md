@@ -281,9 +281,11 @@ Every domain module's endpoints inherit the GW envelope, pagination
 { "code": "...", "message": "...", "correlation_id": "01J9..." }
 
 // event envelope (EVT-03) — canonical: contracts/events/payloads/envelope.schema.json
-// exactly: id, type, version, tenant_id, occurred_at, payload
-// Extended (post-V1) internal enrichment goes inside `payload`:
-// correlation_id, causation_id, actor{kind,id,tenant_id}
+// exactly: id, type, version, tenant_id, occurred_at, correlation_id, payload
+// correlation_id is REQUIRED from the ninth pass (docs/49 C1): GW step 8's
+// propagation promise ("events (correlation_id)") is now part of the envelope
+// contract; workers mint one at job start. Actor context stays payload-level
+// (`*_by` fields) extended by causation_id/actor{kind,id,tenant_id} post-V1.
 
 // GET /v1/console/relay
 { "data": { "lag_seconds": 1.2, "queue_depth": 42, "publish_rate_per_min": 3200,

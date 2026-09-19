@@ -294,7 +294,10 @@ consolidated authorization specification, findings A1–A4), the seventh-pass ar
 `docs/47-multi-tenancy-model.md` (the consolidated multi-tenancy specification, findings
 M1–M10, owner decisions W/U/D recorded in its §15) and the eighth-pass artifact is
 `docs/48-ledger-audit-review.md` (the LED + AUD deep review, findings F1–F10, owner
-decisions D25–D27); like docs/42 these change V1 design detail only — **no PRD workbook row was
+decisions D25–D27) and the ninth-pass artifact is `docs/49-chain-review-ledger-audit-oss.md`
+(the four-domain chain review — findings C1/C2, the required event `correlation_id` — and
+the LED/AUD open-source evaluation with the V2 hash-chain design rules); like docs/42
+these change V1 design detail only — **no PRD workbook row was
 changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)

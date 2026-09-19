@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `billing.entitlement_degraded` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/billing.schema.json ($defs/billing_entitlement_degraded). Per-event payload. Producer: 22 (BIL). When: grace flag set. Consumers: TEN (banner), NOT. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `billing.entitlement_degraded` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/billing.schema.json ($defs/billing_entitlement_degraded). Per-event payload. Producer: 22 (BIL). When: grace flag set. Consumers: TEN (banner), NOT. Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "6M49D4SKPVKH80B5TR872BJ71Q",
   "type": "billing.entitlement_degraded",
   "version": 1,
   "tenant_id": "6MTXD3SDZH7QY676HZ5SQ18ASM",
   "occurred_at": 1758278400000,
+  "correlation_id": "01JCORRELATION0000000000",
   "payload": {}
 }

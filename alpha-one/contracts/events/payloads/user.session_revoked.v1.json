@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.session_revoked.v1.json",
-  "title": "Alpha One \u2014 event user.session_revoked v1",
+  "title": "Alpha One — event user.session_revoked v1",
   "description": "V1 catalog event `user.session_revoked` (v1). Envelope per EVT-03. Consumers: AUD (all revocations are audited; AUTH-20/39, AUTH-27 in V2).",
   "allOf": [
     {
@@ -14,6 +14,9 @@
         },
         "version": {
           "const": 1
+        },
+        "correlation_id": {
+          "$ref": "envelope.schema.json#/$defs/ULID"
         },
         "payload": {
           "type": "object",

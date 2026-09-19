@@ -4,27 +4,72 @@
   "title": "Alpha One — Event envelope (EVT-03)",
   "description": "Every event carries exactly these fields (EVT-03): id, type, version, tenant_id, occurred_at, payload. The `payload` object is event-specific and defined per event in this directory (each file pins `type` and `version`). Field typing conventions: id/tenant_id = ULID (crockford base32, 26 chars); version = integer (bumped on any payload change, additive-only between freezes); occurred_at = int64 epoch milliseconds, UTC.",
   "$defs": {
-    "ULID": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" },
-    "TimestampMs": { "type": "integer", "minimum": 0, "description": "int64 epoch milliseconds, UTC" },
+    "ULID": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "TimestampMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "int64 epoch milliseconds, UTC"
+    },
     "Money": {
       "type": "object",
-      "required": ["amount", "currency"],
+      "required": [
+        "amount",
+        "currency"
+      ],
       "properties": {
-        "amount": { "type": "integer", "description": "minor units (cents). Never floats." },
-        "currency": { "type": "string", "enum": ["USD"], "description": "V1 is USD-only (Out Of Scope: no multi-currency)." }
+        "amount": {
+          "type": "integer",
+          "description": "minor units (cents). Never floats."
+        },
+        "currency": {
+          "type": "string",
+          "enum": [
+            "USD"
+          ],
+          "description": "V1 is USD-only (Out Of Scope: no multi-currency)."
+        }
       },
       "additionalProperties": false
     },
     "envelope": {
       "type": "object",
-      "required": ["id", "type", "version", "tenant_id", "occurred_at", "payload"],
+      "required": [
+        "id",
+        "type",
+        "version",
+        "tenant_id",
+        "occurred_at",
+        "correlation_id",
+        "payload"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/ULID" },
-        "type": { "type": "string", "description": "the event name (e.g. `order.paid`, `AccountCreated`)" },
-        "version": { "type": "integer", "const": 1 },
-        "tenant_id": { "$ref": "#/$defs/ULID" },
-        "occurred_at": { "$ref": "#/$defs/TimestampMs" },
-        "payload": { "type": "object" }
+        "id": {
+          "$ref": "#/$defs/ULID"
+        },
+        "type": {
+          "type": "string",
+          "description": "the event name (e.g. `order.paid`, `AccountCreated`)"
+        },
+        "version": {
+          "type": "integer",
+          "const": 1
+        },
+        "tenant_id": {
+          "$ref": "#/$defs/ULID"
+        },
+        "occurred_at": {
+          "$ref": "#/$defs/TimestampMs"
+        },
+        "correlation_id": {
+          "$ref": "#/$defs/ULID",
+          "description": "Request/job correlation id (GW-09/GW-36): every event carries the originating request's X-Correlation-Id; workers mint one at job start. Consumed by the audit mirror (audit_events.correlation_id) and the trace join."
+        },
+        "payload": {
+          "type": "object"
+        }
       },
       "additionalProperties": false
     }

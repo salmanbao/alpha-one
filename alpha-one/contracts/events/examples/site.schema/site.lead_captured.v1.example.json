@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `site.lead_captured` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/site.schema.json ($defs/site_lead_captured). Per-event payload. Producer: 24 (CMS/CMP). When: form submission. Consumers: CRM (contact), SUP (ticket), NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `site.lead_captured` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/site.schema.json ($defs/site_lead_captured). Per-event payload. Producer: 24 (CMS/CMP). When: form submission. Consumers: CRM (contact), SUP (ticket), NOT, AUD. Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "6BX38DSJRRDGAAXT95P0MTX00M",
   "type": "site.lead_captured",
   "version": 1,
   "tenant_id": "XAM1154KS14N1933Q5J3N2YBC8",
   "occurred_at": 1758278400000,
+  "correlation_id": "01JCORRELATION0000000000",
   "payload": {}
 }

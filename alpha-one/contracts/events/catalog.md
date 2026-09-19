@@ -6,7 +6,7 @@ Version: v1
 Last updated: 2026-09-17
 
 Derived from the `V1 Execution Sheet` (releases V1.0 and V1.1 only) of `Alpha One PRD.xlsx`.
-Every event uses the EVT-03 envelope: `id`, `type`, `version`, `tenant_id`, `occurred_at`, `payload`.
+Every event uses the EVT-03 envelope: `id`, `type`, `version`, `tenant_id`, `occurred_at`, `correlation_id`, `payload` (correlation_id required since the ninth pass — docs/49 C1; it is GW step 8's propagation promise made contractual).
 Delivery is at-least-once with idempotent consumers (EVT-05). Payload field values are TODO until owners fill them in.
 
 ## Lifecycle events — producer: LCC (LCC-23, emitted through the outbox per EVT-01)
