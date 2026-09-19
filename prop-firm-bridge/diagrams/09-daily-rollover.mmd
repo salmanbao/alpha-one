@@ -1,0 +1,20 @@
+flowchart TB
+    CRON["Cron trigger at tenant roll-over TZ<br/>(e.g. 00:00 Europe/London, server NTP authoritative)"]
+    BATCH["Shard active accounts by tenant<br/>(parallel workers, lease-based, idempotent)"]
+    SNAP0["Load DaySnapshot {day, start_equity,<br/>start_balance, open_positions_at_rollover,<br/>traded_today flag}"]
+    CALC["Compute: day_pnl = equity_end - start_equity<br/>dd_used, HWM update (trailing packs),<br/>min_days increment if traded_today"]
+    CHECK{"Any rule crossed<br/>at rollover moment?"}
+    OK["Write new DaySnapshot (unique constraint<br/>account+date = single-flight)"]
+    BREACH["Emit Verdict BREACH -> challenge FSM,<br/>halt control cmd, notification"]
+    TRAIL["If trailing: raise HWM to new high-water equity"]
+    EMIT["Emit RolloverCompleted (per account)"]
+    AUD["Audit row (hash-chained): inputs, rule pack ver,<br/>verdict, worker id"]
+
+    CRON --> BATCH --> SNAP0 --> CALC --> CHECK
+    CHECK -->|no| TRAIL
+    CHECK -->|yes| BREACH
+    TRAIL --> OK
+    BREACH --> OK
+    OK --> EMIT
+    OK --> AUD
+    EMIT -.->|"portals update live"| OK

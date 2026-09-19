@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alphaone://events/user",
+  "title": "Alpha One events (extended) \u2014 topic `user.*`",
+  "description": "Extended (post-V1) schemas for the `user.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
+  "$defs": {
+    "EventEnvelope": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "version",
+        "tenant_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "type": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "user_registered": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.registered"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: identity + tenant + source. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_login_success": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.login_success"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: failure carries attempt count, ip, ua. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_suspended": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.suspended"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH (on AUTH-20/43). Consumers: suspension reason code. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_role_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.role_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: old+new role. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_session_revoked": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.session_revoked"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: which session, by whom. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_password_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.password_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: \u2014. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/user_registered"
+    },
+    {
+      "$ref": "#/$defs/user_login_success"
+    },
+    {
+      "$ref": "#/$defs/user_suspended"
+    },
+    {
+      "$ref": "#/$defs/user_role_changed"
+    },
+    {
+      "$ref": "#/$defs/user_session_revoked"
+    },
+    {
+      "$ref": "#/$defs/user_password_changed"
+    }
+  ]
+}

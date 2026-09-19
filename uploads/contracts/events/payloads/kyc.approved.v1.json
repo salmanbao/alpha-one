@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 — in V1 scope, resolved 2026-09-16 (Decision 5)",
+    "consumers": ["NOT-01", "LCC-06", "PAY-03", "ANA-01"]
+  },
+  "id": "TODO",
+  "type": "kyc.approved",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "trader_id": "TODO",
+    "provider": "TODO",
+    "provider_reference": "TODO"
+  }
+}

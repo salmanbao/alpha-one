@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "PAY-09",
+    "consumers": ["NOT-01", "ANA-01"]
+  },
+  "id": "TODO",
+  "type": "payout.rejected",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "payout_id": "TODO",
+    "account_id": "TODO",
+    "reason": "TODO"
+  }
+}

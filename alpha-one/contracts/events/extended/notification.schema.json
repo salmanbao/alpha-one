@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alphaone://events/notification",
+  "title": "Alpha One events (extended) \u2014 topic `notification.*`",
+  "description": "Extended (post-V1) schemas for the `notification.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
+  "$defs": {
+    "EventEnvelope": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "version",
+        "tenant_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "type": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "notification_sent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "notification.sent"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 14 (NOT). When: channel accept (provider ref). Consumers: AUD (low tier), ANA (V2). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "notification_failed_final": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "notification.failed_final"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 17 (ADM). When: ops alert surface (V1: a simple \"ops alerts\" list on the home; V2: routing ADM-37). Consumers: ops alert surface (V1: a simple \"ops alerts\" list on the home; V2: routing ADM-37). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "notification_suppressed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "notification.suppressed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 14 (NOT). When: dedupe/prefs/quiet-hours/bounce. Consumers: AUD (low), ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "notification_bounce": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "notification.bounce"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 14 (NOT). When: provider webhook. Consumers: AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "notification_broadcast_sent": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "notification.broadcast_sent"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 14 (NOT). When: staff broadcast. Consumers: AUD (critical). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/notification_sent"
+    },
+    {
+      "$ref": "#/$defs/notification_failed_final"
+    },
+    {
+      "$ref": "#/$defs/notification_suppressed"
+    },
+    {
+      "$ref": "#/$defs/notification_bounce"
+    },
+    {
+      "$ref": "#/$defs/notification_broadcast_sent"
+    }
+  ]
+}

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alphaone://events/site",
+  "title": "Alpha One events (extended) \u2014 topic `site.*`",
+  "description": "Extended (post-V1) schemas for the `site.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
+  "$defs": {
+    "EventEnvelope": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "version",
+        "tenant_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "type": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "site_page_published": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "site.page_published"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 24 (CMS/CMP). When: pointer flip. Consumers: AUD (critical on legal pages), ANA (cache purge hint). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "site_lead_captured": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "site.lead_captured"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 24 (CMS/CMP). When: form submission. Consumers: CRM (contact), SUP (ticket), NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "site_pricing_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "site.pricing_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 24 (CMS/CMP). When: TEN catalog change. Consumers: ANA (widget cache invalidation), AUD (low). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "site_visit": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "site.visit"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 24 (CMS/CMP). When: page view (anonymous, first-party). Consumers: ANA (funnel: visit \u2192 signup, the CRM-08/ANA-09 top of funnel). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/site_page_published"
+    },
+    {
+      "$ref": "#/$defs/site_lead_captured"
+    },
+    {
+      "$ref": "#/$defs/site_pricing_changed"
+    },
+    {
+      "$ref": "#/$defs/site_visit"
+    }
+  ]
+}

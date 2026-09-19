@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PayoutPaid.v1.json",
+  "title": "Alpha One \u2014 event PayoutPaid v1",
+  "description": "V1 catalog event `PayoutPaid` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LED-08 (settlement posting), DOC-04 (certificate), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "PayoutPaid"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payout_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "amount": {
+              "$ref": "envelope.schema.json#/$defs/Money"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "executed_by": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "executed_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "payout_id",
+            "account_id",
+            "amount",
+            "provider",
+            "reference",
+            "executed_at"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+sequenceDiagram
+    autonumber
+    participant EA as Terminal + EA
+    participant B as Bridge (may be a DIFFERENT node)
+    participant R as Redis (session registry)
+    participant K as Kafka
+    participant PG as PostgreSQL
+
+    Note over EA: network drop / terminal restart.<br/>EA spooled local events (seq 482..517) in ring buffer
+    EA->>B: WS reconnect + hello (fast path: session_token)
+    B->>R: lookup session by account (sticky hash may move nodes)
+    R-->>B: session state {last_server_seq=481, sess_key}
+    B-->>EA: reauth_ok {last_server_seq=481, expect_snapshot=true}
+    EA->>EA: gap detected: local seq 482..517 not acked
+    EA->>B: snapshot_request
+    B-->>EA: snapshot_command {collect full state}
+    EA->>EA: gather: balances, margin, all open positions,<br/>closed deals since deal_id of last server ack
+    EA->>B: snapshot_chunk 1..N {state, deals, checksum}
+    B->>B: verify checksum, merge, mark snapshot applied
+    B->>K: SnapshotApplied {account, seq_range=482..517}
+    K->>PG: consumer persists recovered state (idempotent by deal_id)
+    B->>PG: read missed server-side control commands (halt flags)
+    B-->>EA: resync_complete {baseline_seq=517, active control cmds}
+    EA->>EA: resume normal seq flow from 518
+    Note over B: reconciliation timer armed (next full diff within 60s),<br/>account tagged "recovered-window" for audit reporting

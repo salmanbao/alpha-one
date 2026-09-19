@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "checkout.session.expired.v1.json",
+  "title": "Alpha One \u2014 event checkout.session.expired v1",
+  "description": "V1 catalog event `checkout.session.expired` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ANA-01 (funnel/abandonment read model). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "checkout.session.expired"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "challenge_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "expired_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "session_id",
+            "challenge_id",
+            "expired_at"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,335 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — NOT (Notifications)
+  version: 1.0.0
+  description: 'Channels, templates, in-app, push, preferences, dedupe.
+
+
+    Module doc: [docs/14-notifications.md](../docs/14-notifications.md). V1 baseline: operations with
+    `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/not.md);
+    `x-phase: extended` operations are the post-V1 design surface (provisional URL plan). Error codes:
+    [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md) (NOT namespace; the V1 set in contracts/errors/taxonomy.md).
+    Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md). Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: admin
+  description: Tenant admin (ADM) surface
+- name: core
+  description: Core domain endpoints (trader + shared)
+paths:
+  /v1/notifications:
+    get:
+      tags:
+      - core
+      summary: (in-app list, V2 NOT-07/08)
+      operationId: get_v1_notifications
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/notifications/read-all:
+    post:
+      tags:
+      - core
+      summary: (V2), GET
+      operationId: post_v1_notifications_read_all
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/notifications/history:
+    get:
+      tags:
+      - core
+      summary: Notifications GET /v1/notifications/history
+      operationId: get_v1_notifications_history
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/notifications/preferences:
+    get:
+      tags:
+      - core
+      summary: Notifications GET /v1/notifications/preferences
+      operationId: get_v1_notifications_preferences
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    put:
+      tags:
+      - core
+      summary: Notifications PUT /v1/notifications/preferences
+      operationId: put_v1_notifications_preferences
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/notifications/templates:
+    get:
+      tags:
+      - admin
+      summary: Notifications GET /v1/admin/notifications/templates
+      operationId: get_v1_admin_notifications_templates
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    post:
+      tags:
+      - admin
+      summary: (V2 versioning)
+      operationId: post_v1_admin_notifications_templates
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/notifications/templates/{id}/test:
+    post:
+      tags:
+      - admin
+      summary: '(NOT-20: render preview'
+      operationId: post_v1_admin_notifications_templates_id_test
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/notifications/mappings:
+    get:
+      tags:
+      - admin
+      summary: + POST (NOT-21)
+      operationId: get_v1_admin_notifications_mappings
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/notifications/broadcast:
+    post:
+      tags:
+      - admin
+      summary: (NOT-14, 2FA, preview required
+      operationId: post_v1_admin_notifications_broadcast
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/notifications/dashboard:
+    get:
+      tags:
+      - admin
+      summary: '(NOT-22: volumes, failure rate'
+      operationId: get_v1_admin_notifications_dashboard
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

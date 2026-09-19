@@ -1,0 +1,259 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — RSK (Risk Management)
+  version: 1.0.0
+  description: 'Fraud/anti-gaming detectors, signals, cases, holds.
+
+
+    Module doc: [docs/10-risk-management.md](../docs/10-risk-management.md). V1 baseline: operations with
+    `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/rsk.md);
+    `x-phase: extended` operations are the post-V1 design surface (provisional URL plan). Error codes:
+    [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md) (RSK namespace; the V1 set in contracts/errors/taxonomy.md).
+    Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md). Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: core
+  description: Core domain endpoints (trader + shared)
+- name: admin
+  description: Tenant admin (ADM) surface
+paths:
+  /v1/admin/risk/cases:
+    post:
+      tags:
+      - admin
+      summary: Risk Management POST /v1/admin/risk/cases
+      operationId: post_v1_admin_risk_cases
+      x-phase: V1
+      x-v1-baseline: contracts/api/rsk.md
+      x-permission: risk.case.create
+      x-idempotency: required
+      x-auth: staff — RSK-10 (manual opening)
+      x-v1-errors:
+      - risk.account_not_found
+      - risk.case_already_open
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/risk/cases:
+    post:
+      tags:
+      - core
+      summary: (ADM, risk role) with
+      operationId: post_v1_risk_cases
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    get:
+      tags:
+      - core
+      summary: (ADM), GET
+      operationId: get_v1_risk_cases
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/risk/cases/{id}:
+    get:
+      tags:
+      - core
+      summary: Risk Management GET /v1/risk/cases/{id}
+      operationId: get_v1_risk_cases_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/risk/cases/{id}/decide:
+    post:
+      tags:
+      - core
+      summary: '{outcome, note}'
+      operationId: post_v1_risk_cases_id_decide
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/risk/cases/{id}/hold-release:
+    post:
+      tags:
+      - core
+      summary: (manual release, reason)
+      operationId: post_v1_risk_cases_id_hold_release
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/risk/cases/{id}/signals:
+    get:
+      tags:
+      - core
+      summary: Risk Management GET /v1/risk/cases/{id}/signals
+      operationId: get_v1_risk_cases_id_signals
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

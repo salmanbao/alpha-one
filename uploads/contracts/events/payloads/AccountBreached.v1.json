@@ -1,0 +1,17 @@
+{
+  "_citations": {
+    "producer": "LCC-23",
+    "consumers": ["NOT-01", "ANA-01"]
+  },
+  "id": "TODO",
+  "type": "AccountBreached",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "account_id": "TODO",
+    "rule": "TODO",
+    "observed_value": "TODO",
+    "threshold": "TODO"
+  }
+}

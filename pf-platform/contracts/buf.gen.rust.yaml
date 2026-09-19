@@ -1,0 +1,10 @@
+# Rust codegen (doc §10.1). Run from repo root:  scripts/gen.sh rust
+# Prereqs:  cargo add tonic prost --features in rust/crates/canonical,
+#           tonic_build in build.rs, protoc on PATH.
+version: v2
+plugins:
+  - local: protoc-gen-prost
+    out: ../../rust/crates/canonical/proto
+  - local: protoc-gen-tonic
+    out: ../../rust/crates/canonical/proto
+    opt: attrs=.server(#[tonic::async_trait])

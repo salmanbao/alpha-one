@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alphaone://events/ticket",
+  "title": "Alpha One events (extended) \u2014 topic `ticket.*`",
+  "description": "Extended (post-V1) schemas for the `ticket.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
+  "$defs": {
+    "EventEnvelope": {
+      "type": "object",
+      "required": [
+        "id",
+        "type",
+        "version",
+        "tenant_id",
+        "occurred_at",
+        "payload"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "type": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tenant_id": {
+          "type": "string",
+          "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+        },
+        "occurred_at": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "payload": {
+          "type": "object"
+        }
+      }
+    },
+    "ticket_created": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ticket.created"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 18 (SUP). When: created (surface: trader/staff). Consumers: NOT (email ack to trader; staff notify), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "ticket_replied": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ticket.replied"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 18 (SUP). When: any message (kind). Consumers: NOT (the other side, per kind), ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "ticket_status_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ticket.status_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 18 (SUP). When: status transition. Consumers: NOT, ANA, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "ticket_escalated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ticket.escalated"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 18 (SUP). When: SLA breach / manual. Consumers: NOT (owner chain), AUD (critical if money-linked). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "ticket_satisfaction_submitted": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "ticket.satisfaction_submitted"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 18 (SUP). When: survey response. Consumers: ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ticket_created"
+    },
+    {
+      "$ref": "#/$defs/ticket_replied"
+    },
+    {
+      "$ref": "#/$defs/ticket_status_changed"
+    },
+    {
+      "$ref": "#/$defs/ticket_escalated"
+    },
+    {
+      "$ref": "#/$defs/ticket_satisfaction_submitted"
+    }
+  ]
+}

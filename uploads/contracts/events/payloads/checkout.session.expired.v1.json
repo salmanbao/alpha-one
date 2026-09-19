@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "CHK-43 (scheduled expiry worker, via outbox per EVT-01) — added by Decision 7, resolved 2026-09-16",
+    "consumers": ["ANA-01"]
+  },
+  "id": "TODO",
+  "type": "checkout.session.expired",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "session_id": "TODO",
+    "trader_id": "TODO",
+    "reservation_expires_at": "TODO"
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "pf-platform/contracts/rulepack/v1/rulepack.schema.json",
+  "title": "RulePack v1",
+  "description": "Immutable, versioned, tenant-scoped rule definition (doc §6.2). One pack per account scope (challenge/verification/funded). The rules engine compiles this into a typed plan; the hot path never touches JSON.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_id", "currency", "start_balance", "day", "rules"],
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_-]+:[a-z0-9_-]+:[a-z0-9_.-]+:v[0-9]+$",
+      "description": "tenant:scope:code:version — immutable per version"
+    },
+    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "start_balance": { "type": "number", "minimum": 0 },
+    "day": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timezone", "basis", "breach"],
+      "properties": {
+        "timezone": { "type": "string", "description": "IANA tz, e.g. Europe/London" },
+        "basis": { "enum": ["equity", "balance"], "description": "what the loss limits are measured on" },
+        "breach": { "enum": ["intraday", "eod"], "description": "intraday = breach the moment the limit is crossed; eod = judged at rollover" }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_daily_loss_pct", "max_overall_loss_pct", "profit_target_pct", "min_trading_days"],
+      "properties": {
+        "max_daily_loss_pct": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "max_overall_loss_pct": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["mode", "value"],
+              "properties": {
+                "mode": { "enum": ["static", "trailing"] },
+                "value": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+              }
+            },
+            { "type": "number", "exclusiveMinimum": 0, "maximum": 100, "description": "shorthand = static" }
+          ]
+        },
+        "profit_target_pct": { "type": "number", "exclusiveMinimum": 0 },
+        "min_trading_days": { "type": "integer", "minimum": 0 },
+        "time_limit_days": { "type": ["integer", "null"], "minimum": 1 },
+        "news": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "tiers": { "type": "array", "items": { "enum": ["high", "medium", "low"] }, "default": ["high"] },
+            "instruments": { "type": "string", "description": "glob list, e.g. 'FX_majors,indices' or explicit symbols", "default": "*" },
+            "source": { "type": "string", "description": "calendar source + pinned version" },
+            "pre_positioned": { "enum": ["flag", "fail", "close"], "default": "flag" }
+          }
+        },
+        "weekend": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": { "enum": ["no_hold", "no_new", "off"], "default": "off" },
+            "cutoff": { "type": "string", "description": "e.g. 'Fri 21:00 Europe/London'" },
+            "action": { "enum": ["close_all", "flag"], "default": "close_all" }
+          }
+        },
+        "overnight": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "max_hold_hours": { "type": "number", "minimum": 1 }
+          }
+        },
+        "spread_max_pips": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 },
+          "description": "symbol -> max spread in pips; key 'default' applies to the rest",
+          "default": {}
+        },
+        "volume_max": { "type": "number", "exclusiveMinimum": 0, "default": 100 },
+        "open_positions_max": { "type": "integer", "minimum": 1, "default": 100 },
+        "allowed_symbols": { "type": "array", "items": { "type": "string" }, "default": ["*"] },
+        "denied_symbols": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "pnl_tolerance": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0.01,
+          "description": "minor-unit tolerance for recomputed-vs-reported PnL before an integrity alert (doc §5.4)"
+        }
+      }
+    },
+    "funded": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Only for funded scope (doc §6.8).",
+      "properties": {
+        "split_pct": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+        "payout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "first_payout_day": { "type": "integer", "minimum": 1 },
+            "every_days": { "type": "integer", "minimum": 1 },
+            "min_withdrawal": { "type": "number", "minimum": 0 }
+          }
+        },
+        "hedge_drift": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_ticks": { "type": "integer", "minimum": 0 },
+            "max_latency_ms": { "type": "integer", "minimum": 0 },
+            "on_breach": { "enum": ["alert", "suspend"], "default": "alert" }
+          }
+        }
+      }
+    }
+  }
+}

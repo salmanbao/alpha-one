@@ -1,0 +1,10 @@
+# Go codegen (doc §10.1). Run from repo root:  scripts/gen.sh go
+# Prereqs:  go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: ../../go/bridge/pb
+    opt: paths=source_relative
+  # - local: protoc-gen-go-grpc
+  #   out: ../../go/bridge/pb
+  #   opt: paths=source_relative   # enable with the Guard service once the Rust crate ships

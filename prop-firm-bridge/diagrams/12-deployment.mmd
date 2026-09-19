@@ -1,0 +1,41 @@
+flowchart TB
+    subgraph CLOUD ["Kubernetes (multi-region active-passive, RTO target < 15 min)"]
+        direction TB
+        subgraph RG1 ["Region A (primary)"]
+            ING["Ingress (TLS 1.3, WAF, geo-fencing)"]
+            WSP["Bridge WS nodes x N (HPA by connections/msg rate)<br/>consistent-hash by account_id for soft stickiness"]
+            GWP["API Gateway x N"]
+            COREP["Core services (Go) x N"]
+            REP["Rules Engine (Rust) x N (stateless, sharded by account)"]
+            RECP["Reconciliation + Risk workers"]
+        end
+        subgraph DATA ["Managed data (HA)"]
+            KAF["Kafka/Redpanda x3 (rack aware, 2x replication, LZ4)"]
+            PGP["PostgreSQL: primary + 2 replicas, PITR 35d"]
+            RDCL["Redis: 3-shard cluster, AOF everysec"]
+            CHCL["ClickHouse: 2 shards x 2 replicas, 90d hot + object-storage cold"]
+        end
+        OBS2["OTel collector -> Prometheus/Grafana/Loki + alerting (PagerDuty)"]
+    end
+    subgraph EXT
+        BROKER2["Broker infra (trading servers)"]
+        PAYP["Payment providers"]
+    end
+    TR2(["Traders"]) --> ING
+    ING --> WSP
+    ING --> GWP
+    GWP --> COREP
+    WSP --> KAF
+    COREP --> KAF
+    KAF --> REP
+    REP --> KAF
+    COREP --> PGP
+    COREP --> RDCL
+    REP --> RDCL
+    WSP --> RDCL
+    KAF --> CHCL
+    WSP <--> BROKER2
+    COREP <--> PAYP
+    RG1 -.-> OBS2
+    WSP -->|"EA executes orders at"| BROKER2
+    REC2["ArgoCD GitOps + Terraform, per-env clusters,<br/>chaos drills, blue-green for core, canary for bridge"]

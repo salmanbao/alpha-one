@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant EA as Terminal + EA
+    participant B as Bridge
+    participant K as Kafka (bridge.events)
+    participant RE as Rules Engine (Rust)
+    participant CH as Challenge Service (Go)
+    participant N as Notification Service
+
+    EA->>B: position_closed {deal_id, entry_px, exit_px,<br/>volume, commission, swap, broker_ts, sig}
+    B->>B: idempotency (deal_id), PnL recompute from stored entry,<br/>discrepancy check vs EA-reported (tolerance: 1 pip)
+    alt PnL mismatch beyond tolerance
+        B->>K: DataIntegrityAlert (flags account for reconciliation)
+    end
+    B->>K: TradeClosed (canonical)
+    K->>RE: consume
+    RE->>RE: mark open position out, recalc equity & margin
+    RE->>RE: evaluate rule pack v{N} (pure, deterministic):<br/>daily_loss, max_dd (static/trailing, HWM),<br/>target, min_days, news/weekend/overnight policies
+    alt ALL PASS
+        RE->>K: Verdict {account, date, rule_results, new_hwm,<br/>day_pnl, status=OK}
+        B-->>EA: ack + account_state_push {balance, equity,<br/>day_pnl, dd_used, hwm, rules_pack_ver}
+    else BREACH (e.g. daily loss 5% hit intraday)
+        RE->>K: Verdict {status=BREACH, rule=daily_max_loss}
+        K->>CH: consume
+        CH->>CH: state machine InEvaluation -> Failed (idempotent)
+        CH->>K: ControlCommand {account, cmd=TRADING_HALT,<br/>reason, close_all=true}
+        K->>B: consume (control fan-out by account)
+        B-->>EA: control: trading_halt {reason, close_all=true}
+        EA->>EA: freeze terminal, optionally CloseAll()
+        K->>N: consume -> trader email/push/in-app
+    end

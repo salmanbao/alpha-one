@@ -1,0 +1,578 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — GW+EVT (Gateway & Events)
+  version: 1.0.0
+  description: 'API gateway middleware chain, outbox, relay, event bus, webhooks, SSE.
+
+
+    Module doc: [docs/04-gateway-events.md](../docs/04-gateway-events.md). V1 baseline: operations with
+    `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/gw.md); `x-phase:
+    extended` operations are the post-V1 design surface (provisional URL plan). Error codes: [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md)
+    (GW+EVT namespace; the V1 set in contracts/errors/taxonomy.md). Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md).
+    Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: webhook
+  description: Inbound provider webhook (signature-verified)
+- name: console
+  description: Platform console (CON) surface
+- name: core
+  description: Core domain endpoints (trader + shared)
+paths:
+  /v1/openapi.json:
+    get:
+      tags:
+      - core
+      summary: Gateway & Events GET /v1/openapi.json
+      operationId: get_v1_openapi_json
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/metaapi:
+    post:
+      tags:
+      - webhook
+      summary: POST
+      operationId: post_v1_webhooks_metaapi
+      x-phase: extended
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/veriff:
+    post:
+      tags:
+      - webhook
+      summary: POST
+      operationId: post_v1_webhooks_veriff
+      x-phase: extended
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/nowpayments:
+    post:
+      tags:
+      - webhook
+      summary: Gateway & Events POST /v1/webhooks/nowpayments
+      operationId: post_v1_webhooks_nowpayments
+      x-phase: extended
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/match2pay:
+    post:
+      tags:
+      - webhook
+      summary: POST
+      operationId: post_v1_webhooks_match2pay
+      x-phase: extended
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/interkasa:
+    post:
+      tags:
+      - webhook
+      summary: (EVT-10)
+      operationId: post_v1_webhooks_interkasa
+      x-phase: extended
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks:
+    get:
+      tags:
+      - core
+      summary: Gateway & Events GET /v1/webhooks
+      operationId: get_v1_webhooks
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    post:
+      tags:
+      - core
+      summary: Gateway & Events POST /v1/webhooks
+      operationId: post_v1_webhooks
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/{id}:
+    get:
+      tags:
+      - webhook
+      summary: POST
+      operationId: get_v1_webhooks_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - webhook
+      summary: POST
+      operationId: patch_v1_webhooks_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    delete:
+      tags:
+      - webhook
+      summary: POST
+      operationId: delete_v1_webhooks_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/{id}/test:
+    post:
+      tags:
+      - webhook
+      summary: Gateway & Events POST /v1/webhooks/{id}/test
+      operationId: post_v1_webhooks_id_test
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/{id}/deliveries:
+    get:
+      tags:
+      - webhook
+      summary: POST
+      operationId: get_v1_webhooks_id_deliveries
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/webhooks/{id}/replay:
+    post:
+      tags:
+      - webhook
+      summary: Gateway & Events POST /v1/webhooks/{id}/replay
+      operationId: post_v1_webhooks_id_replay
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/events:
+    get:
+      tags:
+      - console
+      summary: Gateway & Events GET /v1/console/events
+      operationId: get_v1_console_events
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/events/replay:
+    post:
+      tags:
+      - console
+      summary: (seq range, requires 2FA)
+      operationId: post_v1_console_events_replay
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/dlq:
+    get:
+      tags:
+      - console
+      summary: POST
+      operationId: get_v1_console_dlq
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/dlq/{id}/retry:
+    post:
+      tags:
+      - console
+      summary: Gateway & Events POST /v1/console/dlq/{id}/retry
+      operationId: post_v1_console_dlq_id_retry
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/relay:
+    get:
+      tags:
+      - console
+      summary: (lag, queue depth, publish rate)
+      operationId: get_v1_console_relay
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

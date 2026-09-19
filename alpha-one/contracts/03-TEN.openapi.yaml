@@ -1,0 +1,877 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — TEN (Tenant Management)
+  version: 1.0.0
+  description: 'Tenant lifecycle, white-label, entitlements, creation saga.
+
+
+    Module doc: [docs/03-tenant-management.md](../docs/03-tenant-management.md). V1 baseline: operations
+    with `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/tenant.md);
+    `x-phase: extended` operations are the post-V1 design surface (provisional URL plan). Error codes:
+    [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md) (TEN namespace; the V1 set in contracts/errors/taxonomy.md).
+    Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md). Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: core
+  description: Core domain endpoints (trader + shared)
+- name: console
+  description: Platform console (CON) surface
+paths:
+  /v1/tenants:
+    post:
+      tags:
+      - core
+      summary: Tenant Management POST /v1/tenants
+      operationId: post_v1_tenants
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.create
+      x-idempotency: required
+      x-auth: Super Admin (console realm) — TEN-01
+      x-v1-errors:
+      - tenant.subdomain_taken
+      - tenant.subdomain_reserved
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/{tenant_id}:
+    get:
+      tags:
+      - core
+      summary: Tenant Management GET /v1/tenants/{tenant_id}
+      operationId: get_v1_tenants_tenant_id
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.read
+      x-idempotency: n/a
+      x-auth: Super Admin — TEN-01
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - core
+      summary: Tenant Management PATCH /v1/tenants/{tenant_id}
+      operationId: patch_v1_tenants_tenant_id
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.update
+      x-idempotency: required
+      x-auth: Super Admin — TEN-01
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/{tenant_id}/suspend:
+    post:
+      tags:
+      - core
+      summary: Tenant Management POST /v1/tenants/{tenant_id}/suspend
+      operationId: post_v1_tenants_tenant_id_suspend
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.suspend
+      x-idempotency: required
+      x-auth: Super Admin — TEN-15
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/{tenant_id}/terminate:
+    post:
+      tags:
+      - core
+      summary: Tenant Management POST /v1/tenants/{tenant_id}/terminate
+      operationId: post_v1_tenants_tenant_id_terminate
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.terminate
+      x-idempotency: required
+      x-auth: Super Admin — TEN-01
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/subdomain-check:
+    get:
+      tags:
+      - core
+      summary: Tenant Management GET /v1/tenants/subdomain-check
+      operationId: get_v1_tenants_subdomain_check
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.create
+      x-idempotency: n/a
+      x-auth: Super Admin — TEN-42
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/{tenant_id}/entitlements:
+    put:
+      tags:
+      - core
+      summary: Tenant Management PUT /v1/tenants/{tenant_id}/entitlements
+      operationId: put_v1_tenants_tenant_id_entitlements
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.entitlement.change
+      x-idempotency: required
+      x-auth: Super Admin — TEN-08
+      x-v1-errors:
+      - tenant.not_found
+      - module.unknown
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/tenants/{tenant_id}/integrations:
+    put:
+      tags:
+      - core
+      summary: Tenant Management PUT /v1/tenants/{tenant_id}/integrations
+      operationId: put_v1_tenants_tenant_id_integrations
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.integration.write
+      x-idempotency: required
+      x-auth: Tenant Admin — TEN-11
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    get:
+      tags:
+      - core
+      summary: Tenant Management GET /v1/tenants/{tenant_id}/integrations
+      operationId: get_v1_tenants_tenant_id_integrations
+      x-phase: V1
+      x-v1-baseline: contracts/api/tenant.md
+      x-permission: tenant.integration.read
+      x-idempotency: n/a
+      x-auth: Tenant Admin — TEN-11
+      x-v1-errors:
+      - tenant.not_found
+      parameters:
+      - name: tenant_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/settings:
+    get:
+      tags:
+      - core
+      summary: PATCH
+      operationId: get_v1_settings
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - core
+      summary: (curated keys), GET|PUT
+      operationId: patch_v1_settings
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/branding:
+    get:
+      tags:
+      - core
+      summary: Tenant Management GET /v1/branding
+      operationId: get_v1_branding
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    put:
+      tags:
+      - core
+      summary: Tenant Management PUT /v1/branding
+      operationId: put_v1_branding
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/branding/assets:
+    post:
+      tags:
+      - core
+      summary: '(upload → R2, validated: type png/svg/jpg, ≤ 2 MB)'
+      operationId: post_v1_branding_assets
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/onboarding:
+    get:
+      tags:
+      - core
+      summary: (checklist state + progress), POST
+      operationId: get_v1_onboarding
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/onboarding/complete-step:
+    post:
+      tags:
+      - core
+      summary: Tenant Management POST /v1/onboarding/complete-step
+      operationId: post_v1_onboarding_complete_step
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/limits:
+    get:
+      tags:
+      - core
+      summary: (current usage vs limits)
+      operationId: get_v1_limits
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants:
+    post:
+      tags:
+      - console
+      summary: GET
+      operationId: post_v1_console_tenants
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    get:
+      tags:
+      - console
+      summary: GET
+      operationId: get_v1_console_tenants
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}:
+    get:
+      tags:
+      - console
+      summary: Tenant Management GET /v1/console/tenants/{id}
+      operationId: get_v1_console_tenants_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - console
+      summary: (plan, limits, tags)
+      operationId: patch_v1_console_tenants_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}/suspend:
+    post:
+      tags:
+      - console
+      summary: '| /activate | /deactivate'
+      operationId: post_v1_console_tenants_id_suspend
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}/provisioning/resume:
+    post:
+      tags:
+      - console
+      summary: (failed step)
+      operationId: post_v1_console_tenants_id_provisioning_resume
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}/provisioning:
+    get:
+      tags:
+      - console
+      summary: (job state)
+      operationId: get_v1_console_tenants_id_provisioning
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}/usage:
+    get:
+      tags:
+      - console
+      summary: GET
+      operationId: get_v1_console_tenants_id_usage
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/console/tenants/{id}/health:
+    get:
+      tags:
+      - console
+      summary: Tenant Management GET /v1/console/tenants/{id}/health
+      operationId: get_v1_console_tenants_id_health
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

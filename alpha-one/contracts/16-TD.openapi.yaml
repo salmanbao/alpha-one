@@ -1,0 +1,349 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — TD (Trader Dashboard)
+  version: 1.0.0
+  description: 'Trader portal (FE) API surface: equity, rules, payout, documents.
+
+
+    Module doc: [docs/16-trader-dashboard.md](../docs/16-trader-dashboard.md). V1 baseline: operations
+    with `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/td.md);
+    `x-phase: extended` operations are the post-V1 design surface (provisional URL plan). Error codes:
+    [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md) (TD namespace; the V1 set in contracts/errors/taxonomy.md).
+    Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md). Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: core
+  description: Core domain endpoints (trader + shared)
+paths:
+  /v1/accounts:
+    get:
+      tags:
+      - core
+      summary: (state, phase, metrics snapshot, time left) | metrics = the EVL-49 *observed* numbers;
+        staleness chip if tick age > 10 min |
+      operationId: get_v1_accounts
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/accounts/{id}:
+    get:
+      tags:
+      - core
+      summary: + GET
+      operationId: get_v1_accounts_id
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/accounts/{id}/positions:
+    get:
+      tags:
+      - core
+      summary: '|deals (BRG read) + SSE | positions/deals paginated, 100 max page |'
+      operationId: get_v1_accounts_id_positions
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/accounts/{id}/credentials:
+    get:
+      tags:
+      - core
+      summary: '(masked; reveal = 2FA + audit) | one-time reveal: password shown once, then masked forever
+        (re-issue = support reset, BRG) |'
+      operationId: get_v1_accounts_id_credentials
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/payments/catalog:
+    get:
+      tags:
+      - core
+      summary: → checkout (CHK) → redirect → /orders | checkout is the only page with a redirect out |
+      operationId: get_v1_payments_catalog
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/payments/orders:
+    get:
+      tags:
+      - core
+      summary: (own) + invoice links | |
+      operationId: get_v1_payments_orders
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/payouts/eligibility:
+    get:
+      tags:
+      - core
+      summary: (TD-26) + request form + GET
+      operationId: get_v1_payouts_eligibility
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/payouts:
+    get:
+      tags:
+      - core
+      summary: '| eligibility re-fetched on open (server-side) — never trust the cached preview |'
+      operationId: get_v1_payouts
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/documents:
+    get:
+      tags:
+      - core
+      summary: + signed URLs (15 §7) | |
+      operationId: get_v1_documents
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/accounts…:
+    get:
+      tags:
+      - core
+      summary: Trader Dashboard GET /v1/accounts…
+      operationId: get_v1_accounts_2
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/td/streams/{account_id}:
+    get:
+      tags:
+      - core
+      summary: Trader Dashboard GET /v1/td/streams/{account_id}
+      operationId: get_v1_td_streams_account_id
+      x-phase: extended
+      parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/td/health:
+    get:
+      tags:
+      - core
+      summary: (for the UI's
+      operationId: get_v1_td_health
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph FEAT ["Feature Extraction (stream, per account)"]
+        F1["order latency: click->fill vs venue norm<br/>(latency arbitrage)"]
+        F2["trade frequency, volume bursts,<br/>EA signature hash"]
+        F3["news proximity: fills within N sec of<br/>red-folder events (calendar join)"]
+        F4["spread consumption, slippage pattern,<br/>stop-hunt distance stats"]
+        F5["cross-account graph: same device/IP/<br/>payment fingerprint across accounts"]
+        F6["equity path shape: martingale/grid<br/>detection, weekend-gap exposure"]
+    end
+
+    subgraph SCORE ["Scoring"]
+        S1["Deterministic rules (hard breaches)<br/>versioned, explainable"]
+        S2["ML risk score (calibrated, drift-monitored)<br/>retrain offline, champion/challenger"]
+        S3["Fusion: score + rules + tenant policy<br/>(thresholds per risk appetite)"]
+    end
+
+    subgraph ACT ["Actions (risk desk console)"]
+        A1["watch: extra reconciliation cadence"]
+        A2["hold: freeze new challenges / payouts"]
+        A3["review: case file (evidence pack auto-built)"]
+        A4["terminate: terminate + clawback, audit trail"]
+    end
+
+    F1 --> S1
+    F2 --> S1
+    F3 --> S1
+    F4 --> S2
+    F5 --> S3
+    F6 --> S2
+    S1 --> S3
+    S2 --> S3
+    S3 --> A1
+    S3 --> A2
+    S3 --> A3
+    S3 --> A4

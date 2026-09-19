@@ -1,0 +1,308 @@
+// contracts/proto/bridge/v1/bridge.proto
+//
+// The canonical contract for the Platform Bridge (doc §5, §10).
+//   - Envelope: every message between a trading terminal and the bridge fleet.
+//   - Canonical events: terminal -> core (the event log that the rules engine consumes).
+//   - Control commands: core -> terminal (halt, close-all, param updates, ...).
+//   - Guard service: the FFI/gRPC seam where the Rust per-message pipeline plugs in
+//     (doc §5.4, §10.1). The Go bridge of this scaffold implements the same
+//     semantics natively; in production the same crate serves this RPC.
+//
+// Codegen (see contracts/buf.gen.yaml + buf.gen.rust.yaml):
+//   Go:   go/bridge/pb (protoc-gen-go)          -> replace hand-written structs
+//   Rust: rust/crates/canonical (tonic/prost)   -> replace serde types
+//
+// Conventions:
+//   - All money values are int64 minor units at 8 decimal places (Decimal(20,8) in PG).
+//   - broker_ts is ALWAYS the broker-attested timestamp (epoch millis) — the rule clock.
+//   - ts_client is recorded for skew analytics only and is NEVER trusted (doc §5.6).
+//   - deal_id is the global idempotency key for trade events (doc §5.4).
+
+syntax = "proto3";
+
+package pf.bridge.v1;
+
+option go_package = "pf-platform/go/bridge/pb;bridgev1";
+
+
+// ---------------------------------------------------------------------------
+// Envelope — wraps every frame on the wire (JSON-v1 / protobuf-v2)
+// ---------------------------------------------------------------------------
+
+message Envelope {
+  uint32 v = 1;                    // protocol version (1)
+  string id = 2;                   // ULID; origin side (client or server)
+  Kind kind = 3;                   // frame class
+  string type = 4;                 // event/command type, e.g. "order_filled"
+  string tenant = 5;               // tenant binding — Guard check #4
+  string account = 6;              // account binding — Guard check #4
+  uint64 seq = 7;                  // client-origin monotonic per account-session (Guard #2)
+  int64 ts_client = 8;             // client clock, epoch ms — analytics only (Guard #3)
+  int64 ts_server = 9;             // bridge NTP clock, epoch ms — authoritative ordering
+  string nonce = 10;               // replay guard, per session, 60 s window (Guard #3)
+  string sig = 11;                 // base64(HMAC-SHA256(canonical_bytes, key)) (Guard #1)
+  bytes payload = 12;              // canonical event / command payload
+}
+
+enum Kind {
+  KIND_UNSPECIFIED = 0;
+  EV = 1;      // canonical event (terminal -> core)
+  CTL = 2;     // control command (core -> terminal)
+  ACK = 3;     // sequence acknowledgement
+  SNAP = 4;    // snapshot chunk (resync, doc §5.2 / diagram 08)
+  HB = 5;      // heartbeat
+}
+
+// Message types (terminal -> core). Mirrors doc §5.3.
+// payload carries the corresponding *Event message below.
+
+// order_intent / order_allow|order_reject are the L1 pre-authorization round trip
+// (doc §6.5). allow_token expires in ~2 s; the terminal executes AT THE BROKER.
+message OrderIntent {
+  string client_order_id = 1;      // terminal-generated, dedup key for intents
+  string symbol = 2;
+  Side side = 3;
+  double volume = 4;               // in contracts; validated against pack volume_max
+  OrderType type = 5;
+  int64 limit_px = 6;              // minor units; 0 for market
+  int64 stop_px = 7;
+  int64 tp_px = 8;
+  int64 sl_px = 9;
+  int64 broker_ts = 10;
+}
+
+message OrderAllow {
+  string allow_token = 1;          // opaque; single use
+  int64 expires_at = 2;            // epoch ms (~now + 2000)
+}
+
+message OrderReject {
+  string code = 1;                 // e.g. HALTED, NEWS_WINDOW, SPREAD_TOO_WIDE, VOLUME_CAP
+  string reason = 2;               // human-readable, shown in terminal
+}
+
+message OrderFilled {
+  string order_id = 1;
+  string deal_id = 2;              // GLOBAL IDEMPOTENCY KEY
+  string symbol = 3;
+  Side side = 4;
+  OrderType type = 5;
+  double volume = 6;
+  int64 fill_px = 7;               // broker-attested fill, minor units
+  int64 commission = 8;            // minor units, negative = cost
+  int64 swap = 9;                  // minor units
+  int64 broker_ts = 10;            // broker-attested execution time
+  double slippage_bps = 11;        // vs intent/limit; anomaly detection input
+}
+
+message OrderModified {
+  string order_id = 1;
+  string deal_id = 2;              // idempotency key
+  int64 new_sl_px = 3;
+  int64 new_tp_px = 4;
+  int64 broker_ts = 5;
+}
+
+message TradeClosed {
+  string order_id = 1;
+  string deal_id = 2;              // GLOBAL IDEMPOTENCY KEY
+  string symbol = 3;
+  double volume = 4;
+  int64 entry_px = 5;              // as reported by terminal
+  int64 exit_px = 6;               // broker-attested
+  int64 pnl = 7;                   // as reported by terminal — RECOMPUTED by bridge/engine
+  int64 commission = 8;
+  int64 swap = 9;
+  int64 broker_ts = 10;
+}
+
+message BalanceAdjustment {
+  string deal_id = 1;              // or external reference
+  AdjustmentKind kind = 2;
+  int64 amount = 3;                // minor units, signed
+  string ref = 4;
+  int64 broker_ts = 5;
+}
+
+enum AdjustmentKind {
+  ADJUSTMENT_UNSPECIFIED = 0;
+  COMMISSION = 1;
+  SWAP = 2;
+  BONUS = 3;
+  REFUND = 4;
+  CORRECTION = 5;
+}
+
+message AccountState {
+  // Broker-attested snapshot; platform ledger is cross-checked against this (doc §5.4).
+  int64 balance = 1;
+  int64 equity = 2;
+  int64 margin = 3;
+  int64 free_margin = 4;
+  string currency = 5;
+  double leverage = 6;
+  int64 broker_ts = 7;
+}
+
+message Quote {
+  string symbol = 1;
+  int64 bid = 2;
+  int64 ask = 3;
+  int64 broker_ts = 4;
+}
+
+// Snapshot chunk — terminal-collected full state during RESYNC (doc §5.2, diagram 08).
+message SnapshotChunk {
+  uint32 chunk_no = 1;             // 0-based
+  bool final = 2;
+  AccountState account = 3;        // present on first chunk
+  repeated Position positions = 4; // open positions
+  repeated ClosedDeal deals = 5;   // closed deals since last server-acked deal_id
+  string checksum = 6;             // hex SHA-256 of canonical chunk bytes
+}
+
+message Position {
+  string order_id = 1;
+  string symbol = 2;
+  Side side = 3;
+  double volume = 4;
+  int64 entry_px = 5;
+  int64 sl_px = 6;
+  int64 tp_px = 7;
+  int64 last_px = 8;               // last broker mark known to the terminal
+  int64 broker_ts = 9;
+}
+
+message ClosedDeal {
+  string deal_id = 1;
+  string order_id = 2;
+  string symbol = 3;
+  int64 pnl = 4;
+  int64 commission = 5;
+  int64 swap = 6;
+  int64 broker_ts = 7;
+}
+
+message DataIntegrityAlert {
+  string deal_id = 1;
+  string kind = 2;                 // PNL_MISMATCH, BROKER_TS_REGRESSION, IMPOSSIBLE_VALUE, ...
+  string detail = 3;
+  int64 broker_ts = 4;
+}
+
+message ClientDiagnostics {
+  string app_ver = 1;
+  string ea_build = 2;
+  string platform = 3;             // mt4 | mt5 | ctrader | dxtrade | tv
+  uint32 spool_depth = 4;          // unsent events in terminal ring buffer
+  string decode_errors = 5;
+  int64 broker_ts = 6;
+}
+
+message SnapshotApplied {
+  uint64 seq_range_from = 1;
+  uint64 seq_range_to = 2;
+  string checksum = 3;
+  int64 collected_at = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Control commands (core -> terminal). Durable: also in PG + control topic.
+// ---------------------------------------------------------------------------
+
+message ControlCommand {
+  string ctl_seq = 1;              // ULID, monotonic per account
+  ControlKind kind = 2;
+  int64 ttl = 3;                   // epoch ms; 0 = until revoked
+  string reason = 4;               // shown to trader
+  string symbol = 5;               // for close_symbol
+  string pack_version = 6;         // for set_param (rules pack bump, doc §5.3)
+  string notice = 7;               // for account_notice
+  int64 broker_ts = 8;
+}
+
+enum ControlKind {
+  CONTROL_UNSPECIFIED = 0;
+  TRADING_HALT = 1;
+  RESUME_TRADING = 2;
+  CLOSE_ALL = 3;
+  CLOSE_SYMBOL = 4;
+  SET_PARAM = 5;
+  SNAPSHOT_REQUEST = 6;
+  FORCE_RESCAN_HISTORY = 7;
+  PAIR_ROTATE = 8;
+  ACCOUNT_NOTICE = 9;
+}
+
+// ---------------------------------------------------------------------------
+// Session / auth frames (doc §5.5)
+// ---------------------------------------------------------------------------
+
+message Hello {
+  string tenant = 1;
+  string account = 2;
+  string client_id = 3;            // device fingerprint id (doc §8.5)
+  string app_ver = 4;
+  string platform = 5;
+  string ip_asn = 6;
+  string nonce = 7;
+  int64 ts = 8;
+  string sig = 9;                  // HMAC with PAIRING key (not session key)
+}
+
+message AuthOk {
+  string session_token = 1;        // JWT, 24 h
+  string session_key = 2;          // 32-byte hex — scaffold transport; v2: authenticated key exchange
+  string pack_version = 3;
+  uint64 last_confirmed_seq = 4;
+  uint32 hb_interval_ms = 5;
+}
+
+// ---------------------------------------------------------------------------
+// Guard service — the Rust per-message pipeline behind a gRPC seam (doc §5.4, §10.1)
+// Go bridge: one guard call per message, in-process today, gRPC tomorrow.
+// ---------------------------------------------------------------------------
+
+service Guard {
+  // Verify one envelope. Budget: p99 < 10 µs (amortized, per doc §9.2).
+  rpc Verify(VerifyRequest) returns (VerifyResponse);
+}
+
+message VerifyRequest {
+  Envelope env = 1;
+  bytes session_key = 2;           // never leave the bridge process in production
+  uint64 last_seq = 3;
+  string tenant = 4;               // binding context
+  string account = 5;
+  int64 now_ms = 6;                // bridge NTP clock
+}
+
+message VerifyResponse {
+  GuardVerdict verdict = 1;
+  string detail = 2;               // human-readable reason for REJECTED
+  uint64 new_seq = 3;              // seq to persist on OK
+}
+
+enum GuardVerdict {
+  GUARD_UNSPECIFIED = 0;
+  GUARD_OK = 1;
+  GUARD_BAD_SIG = 2;
+  GUARD_REPLAY = 3;
+  GUARD_GAP = 4;
+  GUARD_BINDING = 5;
+  GUARD_SKEW = 6;
+  GUARD_MALFORMED = 7;
+}
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  BUY = 1;
+  SELL = 2;
+}
+
+enum OrderType {
+  ORDER_UNSPECIFIED = 0;
+  MARKET = 1;
+  LIMIT = 2;
+  STOP = 3;
+}

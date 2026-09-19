@@ -1,0 +1,10 @@
+{
+  "event": "TODO",
+  "version": "v1",
+  "producer": "TODO",
+  "occurred_at": "TODO",
+  "tenant_id": "TODO",
+  "payload": {
+    "TODO": "TODO"
+  }
+}

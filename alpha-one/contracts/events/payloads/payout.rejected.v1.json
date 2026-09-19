@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "payout.rejected.v1.json",
+  "title": "Alpha One \u2014 event payout.rejected v1",
+  "description": "V1 catalog event `payout.rejected` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: payout rejected), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "payout.rejected"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "payout_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "amount": {
+              "$ref": "envelope.schema.json#/$defs/Money"
+            },
+            "rejected_by": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "rejected_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "payout_id",
+            "account_id",
+            "amount",
+            "rejected_by",
+            "reason",
+            "rejected_at"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

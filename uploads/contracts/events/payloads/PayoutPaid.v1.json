@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "PAY-12 (execution recording, via outbox per EVT-01) — resolved 2026-09-16 (Decision 6)",
+    "consumers": ["LED-08", "DOC-04", "ANA-01"]
+  },
+  "id": "TODO",
+  "type": "PayoutPaid",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "payout_id": "TODO",
+    "account_id": "TODO",
+    "amount": "TODO"
+  }
+}

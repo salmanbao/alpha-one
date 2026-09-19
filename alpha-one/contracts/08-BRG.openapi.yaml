@@ -1,0 +1,223 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — BRG (Trading Bridge)
+  version: 1.0.0
+  description: 'Broker connectors (MT5 via MetaApi), sync, provisioning, enforcement commands.
+
+
+    Module doc: [docs/08-trading-bridge.md](../docs/08-trading-bridge.md). V1 baseline: operations with
+    `x-phase: V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/brg.md);
+    `x-phase: extended` operations are the post-V1 design surface (provisional URL plan). Error codes:
+    [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md) (BRG namespace; the V1 set in contracts/errors/taxonomy.md).
+    Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md). Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: admin
+  description: Tenant admin (ADM) surface
+- name: internal
+  description: Service-to-service / worker / provider-webhook
+paths:
+  /internal/v1/bridge/commands/{id}/retry:
+    post:
+      tags:
+      - internal
+      summary: (CON
+      operationId: post_internal_v1_bridge_commands_id_retry
+      x-phase: extended
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - internalService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '503':
+          $ref: shared/openapi.yaml#/components/responses/ServiceUnavailable
+  /internal/v1/bridge/accounts/{login}/state:
+    get:
+      tags:
+      - internal
+      summary: (debug)
+      operationId: get_internal_v1_bridge_accounts_login_state
+      x-phase: extended
+      parameters:
+      - name: login
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - internalService: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '503':
+          $ref: shared/openapi.yaml#/components/responses/ServiceUnavailable
+  /internal/v1/bridge/reconcile:
+    post:
+      tags:
+      - internal
+      summary: (manual run)
+      operationId: post_internal_v1_bridge_reconcile
+      x-phase: extended
+      security:
+      - internalService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '503':
+          $ref: shared/openapi.yaml#/components/responses/ServiceUnavailable
+  /v1/admin/broker/groups:
+    get:
+      tags:
+      - admin
+      summary: Trading Bridge GET /v1/admin/broker/groups
+      operationId: get_v1_admin_broker_groups
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/broker/accounts:
+    get:
+      tags:
+      - admin
+      summary: GET
+      operationId: get_v1_admin_broker_accounts
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/broker/accounts/{login}/positions:
+    get:
+      tags:
+      - admin
+      summary: Trading Bridge GET /v1/admin/broker/accounts/{login}/positions
+      operationId: get_v1_admin_broker_accounts_login_positions
+      x-phase: extended
+      parameters:
+      - name: login
+        in: path
+        required: true
+        schema:
+          type: string
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/admin/broker/health:
+    get:
+      tags:
+      - admin
+      summary: Trading Bridge GET /v1/admin/broker/health
+      operationId: get_v1_admin_broker_health
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

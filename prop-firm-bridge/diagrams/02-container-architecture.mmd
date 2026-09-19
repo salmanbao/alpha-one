@@ -1,0 +1,109 @@
+flowchart TB
+    subgraph CL ["Trader Devices & Platforms"]
+        MT["MT4/MT5 Expert Advisor (MQL)<br/>trader machine or VPS"]
+        CT["cTrader cBot (C#)<br/>terminal-side"]
+        DX["DXtrade client / REST client"]
+        TV["TradingView strategy webhooks"]
+        WEB["Trader Web Portal (TypeScript)"]
+        ADM["Tenant Admin & Back Office (TypeScript)"]
+    end
+
+    subgraph EDGE ["Edge Layer (stateless, autoscaled)"]
+        LB["Ingress / L7 LB, TLS 1.3, WAF"]
+        WSB["WebSocket Frontend (Go)<br/>sessions, backpressure, sticky-by-account"]
+        GW["API Gateway (Go)<br/>authN/Z, rate limits, routing"]
+    end
+
+    subgraph BF ["Bridge Fleet (stateless workers)"]
+        A1["MT Adapter"]
+        A2["cTrader Adapter"]
+        A3["DXtrade Adapter"]
+        A4["TradingView Adapter"]
+        NORM["Normalizer -> canonical<br/>TradeEvent / AccountState"]
+        GUARD["Sequence, idempotency,<br/>replay & clock-skew guard"]
+        SNAP["Snapshot Manager<br/>(resync, gap recovery)"]
+    end
+
+    subgraph BUS ["Event Backbone (Kafka / Redpanda)"]
+        T1["topic bridge.events<br/>partition key = account_id"]
+        T2["topic ticks"]
+        T3["topic rule.verdicts"]
+        T4["topic audit (hash-chained)"]
+    end
+
+    subgraph SVC ["Domain Services"]
+        CH["Challenge Service (Go)"]
+        ACC["Account & Balance Service (Go)"]
+        ORD["Order & Position Service (Go)"]
+        RE["Rules Engine (Rust)"]
+        RISK["Fraud & Risk Detection (Go + Rust libs)"]
+        REC["Reconciliation Service (Go)"]
+        PAY["Payout Service (Go)"]
+        BILL["Billing Service (Go)"]
+        NOTI["Notification Service (Go)"]
+        POS["Position/Hedge Sync (Go)"]
+    end
+
+    subgraph STORE ["Stores"]
+        PG[("PostgreSQL 16<br/>system of record, RLS multi-tenant")]
+        RD[("Redis 7<br/>sessions, hot state, rate limits")]
+        CHDB[("ClickHouse<br/>ticks, trades, audit, analytics")]
+        OB[("Object storage<br/>audit archive, exports")]
+        VAULT[("Vault / KMS<br/>keys, broker credentials")]
+    end
+
+    OBS["Observability: OpenTelemetry,<br/>Prometheus, Grafana, Loki"]
+
+    MT --> WSB
+    CT --> WSB
+    DX --> GW
+    TV --> GW
+    WEB --> GW
+    ADM --> GW
+    LB --> WSB
+    LB --> GW
+    WSB --> A1
+    WSB --> A2
+    GW --> A3
+    GW --> A4
+    A1 --> NORM
+    A2 --> NORM
+    A3 --> NORM
+    A4 --> NORM
+    NORM --> GUARD
+    GUARD --> T1
+    NORM --> T2
+    GUARD --> T4
+    SNAP --> WSB
+
+    T1 --> RE
+    T1 --> ORD
+    T1 --> REC
+    T1 --> CHDB
+    T2 --> CHDB
+    T2 --> RE
+    RE --> T3
+    T3 --> CH
+    T3 --> NOTI
+    T3 --> RISK
+    T3 --> POS
+
+    CH --> PG
+    ACC --> PG
+    ORD --> PG
+    PAY --> PG
+    BILL --> PG
+    REC --> PG
+    CH --> RD
+    ACC --> RD
+    WSB --> RD
+    GW --> RD
+    RE --> RD
+    POS --> PG
+    T4 --> OB
+    CHDB --> OB
+    A1 --> VAULT
+    PAY --> VAULT
+    BF -.-> OBS
+    SVC -.-> OBS
+    EDGE -.-> OBS

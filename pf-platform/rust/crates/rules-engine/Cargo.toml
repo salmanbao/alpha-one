@@ -1,0 +1,17 @@
+[package]
+name = "rules-engine"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic, replayable prop-firm rules engine (doc §6). Pure (state, event, pack) -> (state, verdicts)."
+license = "MIT"
+
+[lib]
+name = "rules_engine"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rust_decimal = { version = "1", features = ["serde"] }
+
+[dev-dependencies]
+proptest = "1"

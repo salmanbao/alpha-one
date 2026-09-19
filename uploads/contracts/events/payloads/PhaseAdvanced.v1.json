@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "LCC-23",
+    "consumers": ["ANA-01"]
+  },
+  "id": "TODO",
+  "type": "PhaseAdvanced",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "account_id": "TODO",
+    "from_phase": "TODO",
+    "to_phase": "TODO"
+  }
+}

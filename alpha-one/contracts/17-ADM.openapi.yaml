@@ -1,0 +1,59 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — ADM (Admin Panel)
+  version: 1.0.0
+  description: 'Tenant admin panel: traders, accounts, payouts, KYC, exports.
+
+
+    Module doc: [docs/17-admin-panel.md](../docs/17-admin-panel.md). V1 baseline: operations with `x-phase:
+    V1` are the V1 execution-sheet contract (see the doc''s §7.1 and contracts/api/adm.md); `x-phase:
+    extended` operations are the post-V1 design surface (provisional URL plan). Error codes: [docs/30-error-taxonomy.md](../docs/30-error-taxonomy.md)
+    (ADM namespace; the V1 set in contracts/errors/taxonomy.md). Events: [docs/31-event-catalog.md](../docs/31-event-catalog.md).
+    Schema: [docs/32-database-design.md](../docs/32-database-design.md).'
+servers:
+- url: https://api.staging.alphaone.example
+  description: Staging (synthetic data only)
+tags:
+- name: admin
+  description: Tenant admin (ADM) surface
+paths:
+  /v1/admin/accounts:
+    get:
+      tags:
+      - admin
+      summary: '|'
+      operationId: get_v1_admin_accounts
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+components:
+  schemas:
+    JsonObject:
+      description: Module-specific object. The canonical shape is defined in the module doc's §8 (Schema);
+        this generic reference is a contract-pack placeholder until the module's schema is inlined.
+      type: object
+      additionalProperties: true
+  securitySchemes:
+    sessionAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/sessionAuth
+    apiKeyAuth:
+      $ref: shared/openapi.yaml#/components/securitySchemes/apiKeyAuth
+    internalService:
+      $ref: shared/openapi.yaml#/components/securitySchemes/internalService
+    webhookSignature:
+      $ref: shared/openapi.yaml#/components/securitySchemes/webhookSignature

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "FundedCreated.v1.json",
+  "title": "Alpha One \u2014 event FundedCreated v1",
+  "description": "V1 catalog event `FundedCreated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = DOC-04 (certificate), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "FundedCreated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "trader_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "parent_account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "profit_split": {
+              "type": "number"
+            },
+            "payout_frequency": {
+              "type": "string"
+            },
+            "first_withdrawal_delay_days": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "trader_id",
+            "parent_account_id"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

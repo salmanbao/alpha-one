@@ -1,0 +1,17 @@
+{
+  "_citations": {
+    "producer": "KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 — in V1 scope, resolved 2026-09-16 (Decision 5)",
+    "consumers": ["NOT-01", "ANA-01"],
+    "note": "EXPIRED state trigger remains TODO — needs owner decision (KYC-06 names the state, not what causes it)"
+  },
+  "id": "TODO",
+  "type": "kyc.expired",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "trader_id": "TODO",
+    "provider": "TODO",
+    "provider_reference": "TODO"
+  }
+}

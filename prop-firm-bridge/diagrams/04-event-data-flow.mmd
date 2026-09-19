@@ -1,0 +1,49 @@
+flowchart LR
+    subgraph IN ["Ingest (Bridge Fleet)"]
+        RAW["Raw platform messages<br/>(MT, cTrader, DXtrade, TV)"]
+        CANON["Canonicalize<br/>TradeEvent, AccountState,<br/>OrderIntent, ControlCmd"]
+        DEDUP["Idempotency (deal_id)<br/>+ sequence gap detection"]
+    end
+
+    subgraph K ["Kafka (ordering by account_id)"]
+        EVT["bridge.events"]
+        TICK["ticks"]
+        VERD["rule.verdicts"]
+        AUD["audit"]
+    end
+
+    subgraph CONS ["Consumers (idempotent, offset-tracked)"]
+        RE["Rules Engine (Rust)<br/>stateless per-account evaluator"]
+        OS["Order Service<br/>outbox -> PostgreSQL"]
+        CHS["Challenge Service<br/>state machine"]
+        RISK["Risk & Fraud features"]
+        CHSINK["ClickHouse sink<br/>(ticks + trades + verdicts)"]
+        AUDSINK["Audit sink<br/>hash-chained blocks"]
+    end
+
+    subgraph OUT ["Outputs"]
+        PG2[("PostgreSQL")]
+        CH2[("ClickHouse")]
+        S3[("Object storage archive")]
+        PUSH["Realtime push fan-out<br/>websockets to portals"]
+    end
+
+    RAW --> CANON --> DEDUP --> EVT
+    DEDUP --> TICK
+    DEDUP --> AUD
+    EVT --> RE
+    EVT --> OS
+    EVT --> CHS
+    EVT --> RISK
+    EVT --> CHSINK
+    TICK --> CHSINK
+    RE --> VERD
+    VERD --> CHS
+    VERD --> RISK
+    VERD --> PUSH
+    OS --> PG2
+    CHS --> PG2
+    CHSINK --> CH2
+    AUD --> AUDSINK --> S3
+    CH2 --> S3
+    RE -.->|"verdicts also ack back to bridge"| EVT

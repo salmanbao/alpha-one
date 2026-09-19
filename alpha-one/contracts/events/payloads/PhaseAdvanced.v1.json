@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "PhaseAdvanced.v1.json",
+  "title": "Alpha One \u2014 event PhaseAdvanced v1",
+  "description": "V1 catalog event `PhaseAdvanced` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "PhaseAdvanced"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "from_phase": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "to_phase": {
+              "type": "integer",
+              "minimum": 2
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "from_phase",
+            "to_phase"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

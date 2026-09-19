@@ -1,0 +1,237 @@
+openapi: 3.1.0
+info:
+  title: Alpha One — Shared Contract Components
+  version: 1.0.0
+  description: 'Shared OpenAPI components referenced by every module spec via `shared/openapi.yaml#/components/...`.
+    Global conventions: docs/30 (error taxonomy), docs/31 (events), docs/04 §6 (the error contract).'
+paths: {}
+components:
+  securitySchemes:
+    sessionAuth:
+      type: http
+      scheme: bearer
+      description: 'Better Auth (BVR-14) session token (short-lived access + rotating refresh, server-side
+        revocation, AUTH-07). V1: the tenant is resolved from the request domain/subdomain only (GW-02,
+        TEN-02); extended (V2+): header for internal calls, API-key binding.'
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: 'Public API key (sk_live_t_… / sk_test_…). Scopes + rate tiers per key. Two secrets:
+        the API key auths calls, the webhook secret signs deliveries.'
+    internalService:
+      type: apiKey
+      in: header
+      name: X-Internal-Token
+      description: Service-to-service token (internal Compose network only). Never exposed past the perimeter.
+    webhookSignature:
+      type: apiKey
+      in: header
+      name: X-AlphaOne-Signature
+      description: Outbound webhook HMAC-SHA256 over ts + '.' + raw body (the 04 §5.6 / 27 §3.2 contract).
+        Timestamp tolerance ±5 min.
+  parameters:
+    XIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Client idempotency key (04 §3.3). Duplicate key returns the original result.
+      schema:
+        type: string
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      description: Correlation id, echoed in the response + audit.
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque pagination cursor.
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    AsOf:
+      name: as_of
+      in: query
+      required: false
+      description: Point-in-time read (epoch ms). Read models are as_of-labeled (ANA-14).
+      schema:
+        type: integer
+        format: int64
+  schemas:
+    ULID:
+      type: string
+      description: 26-char Crockford base32 ULID.
+      pattern: ^[0-9A-HJKMNP-TV-Z]{26}$
+    Money:
+      type: object
+      description: 'Money in integer minor units (cents); never float. V1 is USD-only (Out Of Scope: no
+        multi-currency).'
+      required:
+      - amount
+      - currency
+      properties:
+        amount:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: USD
+    TimestampMs:
+      type: integer
+      format: int64
+      description: Epoch milliseconds. Broker-attested time is authoritative for trading data.
+    JsonObject:
+      type: object
+      additionalProperties: true
+    ErrorDetail:
+      type: object
+      additionalProperties: true
+      description: 'Extended (post-V1): module-specific, safe-to-expose details (V2 addition to the GW-18
+        envelope).'
+    Error:
+      type: object
+      description: 'The single error contract — GW-18 (docs/04 §3.1, docs/30). V1: every error response
+        carries EXACTLY code, message, correlation_id. Extended (post-V1): a details object and docs_url
+        are the V2 addition.'
+      required:
+      - code
+      - message
+      - correlation_id
+      properties:
+        code:
+          type: string
+          description: 'Stable machine code, dotted domain.action convention (e.g. payout.ineligible).
+            V1 baseline: contracts/errors/taxonomy.md; full registry: docs/30.'
+        message:
+          type: string
+          description: The user-facing message pattern per the taxonomy (user-safe; no internals).
+        correlation_id:
+          type: string
+          description: Request correlation id; also recorded in audit entries (AUD-01).
+        details:
+          $ref: '#/components/schemas/ErrorDetail'
+    PageMeta:
+      type: object
+      properties:
+        next_cursor:
+          type:
+          - string
+          - 'null'
+        has_more:
+          type: boolean
+    Paged:
+      type: object
+      description: Cursor-paginated list envelope.
+      required:
+      - data
+      - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JsonObject'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+    EventEnvelope:
+      type: object
+      description: The canonical domain-event envelope — EVT-03 (docs/04 §5, docs/31, contracts/events/payloads/envelope.schema.json).
+        Every event carries EXACTLY these fields; `payload` is per-event. Broker commands are NOT events
+        (EVT-20).
+      required:
+      - id
+      - type
+      - version
+      - tenant_id
+      - occurred_at
+      - payload
+      properties:
+        id:
+          $ref: '#/components/schemas/ULID'
+        type:
+          type: string
+          description: The event name (e.g. order.paid, AccountCreated).
+        version:
+          type: integer
+          minimum: 1
+          description: Bumped on any payload change (additive-only between freezes).
+        tenant_id:
+          $ref: '#/components/schemas/ULID'
+        occurred_at:
+          $ref: '#/components/schemas/TimestampMs'
+        payload:
+          type: object
+          additionalProperties: true
+          description: Per-event payload (contracts/events/payloads/ for V1; contracts/events/extended/
+            for the post-V1 set).
+  responses:
+    Error:
+      description: Domain error (see docs/30 for the code + status)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: 401 — missing/invalid auth (no detail leak)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: 403 — scope/ABAC/state-forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 404 — not found OR not yours (the no-oracle rule, 04 §6)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: 409 — state-machine conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unprocessable:
+      description: 422 — domain validation
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    RateLimited:
+      description: 429 — rate/quota (carries Retry-After + X-RateLimit-*)
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServiceUnavailable:
+      description: 503 — dependency down (carries Retry-After)
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

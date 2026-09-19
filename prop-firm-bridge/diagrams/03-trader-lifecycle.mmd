@@ -1,0 +1,20 @@
+stateDiagram-v2
+    [*] --> Prospect
+    Prospect --> Registered: tenant KYC, terms accepted
+    Registered --> ChallengePurchased: checkout paid (fee)
+    ChallengePurchased --> InEvaluation: challenge account provisioned
+    InEvaluation --> Failed: rule breach, expiry, or violation
+    InEvaluation --> VerificationReady: profit target + min days met
+    VerificationReady --> InVerification: verification account provisioned
+    InVerification --> Failed: rule breach or expiry
+    InVerification --> FundedPending: target met, review passed
+    FundedPending --> Funded: funded account + hedge pair created
+    FundedPending --> Failed: review rejected
+    Funded --> Suspended: risk flag, outage window, manual hold
+    Suspended --> Funded: reconciliation clean / cleared
+    Suspended --> Terminated: confirmed breach or fraud
+    Funded --> Terminated: breach or firm policy
+    Failed --> Registered: may repurchase (cooldown)
+    Funded --> PayoutRequested: withdrawal request
+    PayoutRequested --> Funded: approved, payout sent
+    Terminated --> [*]

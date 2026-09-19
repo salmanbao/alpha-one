@@ -1,0 +1,35 @@
+flowchart TB
+    subgraph INPUTS ["Inputs (Kafka, partition-ordered per account)"]
+        TICKS["ticks / marks"]
+        ORDS["OrderFilled / PositionClosed"]
+        BAL["AccountState / balance adjustments"]
+        TRIG["Triggers: rollover, news flag, manual audit"]
+    end
+
+    subgraph ENGINE ["Rules Engine (Rust, one logical evaluator per account)"]
+        LOAD["Load account state (Redis hot / PG cold start)<br/>state = {balance, equity, hwm, day snapshot, counters}"]
+        APPLY["Apply event (pure fn, versioned rule pack vN)<br/>new_state, verdicts = evaluate(state, event)"]
+        RULES["Rule pack DSL (JSON, tenant-scoped):<br/>daily_max_loss(equity|balance, intraday|eod),<br/>max_dd(static|trailing), profit_target,<br/>min_days, news_block, weekend_hold, overnight_rule,<br/>spread_max, volume_max, allowed_symbols, min_lot"]
+        EMIT["Emit: Verdicts + StateDelta + metrics (zero alloc hot path)"]
+    end
+
+    subgraph EFFECTS ["Effects (consumers, idempotent)"]
+        FSM["Challenge FSM transitions"]
+        CTRL["Control commands -> bridge -> terminal (halt, close_all)"]
+        NOTI2["Notifications"]
+        AUD2["Audit (hash-chained)"]
+        REPLAY["Replay mode: same code re-evaluates historical<br/>events for disputes / backfill / rule-pack migration"]
+    end
+
+    TICKS --> LOAD
+    ORDS --> LOAD
+    BAL --> LOAD
+    TRIG --> LOAD
+    LOAD --> APPLY
+    RULES --> APPLY
+    APPLY --> EMIT
+    EMIT --> FSM
+    EMIT --> CTRL
+    EMIT --> NOTI2
+    EMIT --> AUD2
+    EMIT --> REPLAY

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "AccountCreated.v1.json",
+  "title": "Alpha One \u2014 event AccountCreated v1",
+  "description": "V1 catalog event `AccountCreated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: account created), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "AccountCreated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "challenge_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "phase": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "broker": {
+              "type": "string"
+            },
+            "initial_balance": {
+              "$ref": "envelope.schema.json#/$defs/Money"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "challenge_id",
+            "phase",
+            "broker"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

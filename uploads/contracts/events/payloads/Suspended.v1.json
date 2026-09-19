@@ -1,0 +1,16 @@
+{
+  "_citations": {
+    "producer": "LCC-23 (via LCC-11 suspension)",
+    "consumers": ["ANA-01"],
+    "note": "PAY-04 payout hold on active suspension is a V1 row, but the hold mechanism (event consumption vs synchronous status check) is not specified — TODO — needs owner decision (citation not directly supported by sheet)"
+  },
+  "id": "TODO",
+  "type": "Suspended",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "account_id": "TODO",
+    "reason": "TODO"
+  }
+}

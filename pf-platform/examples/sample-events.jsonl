@@ -1,0 +1,12 @@
+{"type":"order_filled","event_id":"ev-0001","seq":1,"broker_ts":1767600000000,"order_id":"o-1001","deal_id":"deal-90001","symbol":"EURUSD","side":"buy","volume":2.0,"fill_px":"10000","commission":"0"}
+{"type":"mark","event_id":"ev-0002","seq":2,"broker_ts":1767600030000,"symbol":"EURUSD","px":"10150"}
+{"type":"trade_closed","event_id":"ev-0003","seq":3,"broker_ts":1767600120000,"order_id":"o-1001","deal_id":"deal-90002","symbol":"EURUSD","volume":2.0,"entry_px":"10000","exit_px":"10150","pnl_reported":"300","commission":"-5","swap":"0"}
+{"type":"order_filled","event_id":"ev-0004","seq":4,"broker_ts":1767600180000,"order_id":"o-1002","deal_id":"deal-90003","symbol":"EURUSD","side":"sell","volume":5.0,"fill_px":"10100","commission":"0"}
+{"type":"mark","event_id":"ev-0005","seq":5,"broker_ts":1767600240000,"symbol":"EURUSD","px":"10260"}
+{"type":"trade_closed","event_id":"ev-0006","seq":6,"broker_ts":1767600300000,"order_id":"o-1002","deal_id":"deal-90004","symbol":"EURUSD","volume":5.0,"entry_px":"10100","exit_px":"10260","pnl_reported":"-800","commission":"-5","swap":"0"}
+{"type":"balance_adjustment","event_id":"ev-0007","seq":7,"broker_ts":1767600360000,"kind":"correction","amount":"10"}
+{"type":"rollover","event_id":"ev-0008","seq":8,"broker_ts":1767686400000,"date":"2026-01-06"}
+{"type":"order_filled","event_id":"ev-0009","seq":9,"broker_ts":1767690000000,"order_id":"o-1003","deal_id":"deal-90005","symbol":"EURUSD","side":"buy","volume":5.0,"fill_px":"10200","commission":"0"}
+{"type":"mark","event_id":"ev-0010","seq":10,"broker_ts":1767690060000,"symbol":"EURUSD","px":"9150"}
+{"type":"trade_closed","event_id":"ev-0011","seq":11,"broker_ts":1767690120000,"order_id":"o-1003","deal_id":"deal-90006","symbol":"EURUSD","volume":5.0,"entry_px":"10200","exit_px":"9150","pnl_reported":"5000","commission":"-5","swap":"0"}
+{"type":"account_state_report","event_id":"ev-0012","seq":12,"broker_ts":1767690180000,"balance_reported":"94960"}

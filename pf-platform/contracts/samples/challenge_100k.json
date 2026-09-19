@@ -1,0 +1,28 @@
+{
+  "pack_id": "acme:challenge:100k:v12",
+  "currency": "USD",
+  "start_balance": 100000,
+  "day": { "timezone": "Europe/London", "basis": "equity", "breach": "intraday" },
+  "rules": {
+    "max_daily_loss_pct": 4.0,
+    "max_overall_loss_pct": { "mode": "static", "value": 8.0 },
+    "profit_target_pct": 10.0,
+    "min_trading_days": 4,
+    "time_limit_days": null,
+    "news": {
+      "enabled": true,
+      "tiers": ["high"],
+      "instruments": "EURUSD,USDJPY,GBPUSD,DXY",
+      "source": "economic-calendar:v3",
+      "pre_positioned": "flag"
+    },
+    "weekend": { "mode": "no_hold", "cutoff": "Fri 21:00 Europe/London", "action": "close_all" },
+    "overnight": { "enabled": false },
+    "spread_max_pips": { "EURUSD": 2.5, "default": 6.0 },
+    "volume_max": 10.0,
+    "open_positions_max": 20,
+    "allowed_symbols": ["*"],
+    "denied_symbols": [],
+    "pnl_tolerance": 0.01
+  }
+}

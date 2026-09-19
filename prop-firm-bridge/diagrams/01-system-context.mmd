@@ -1,0 +1,37 @@
+flowchart TB
+    Trader(["Trader on a trading platform<br/>MT4 / MT5 / cTrader / DXtrade / TradingView"])
+
+    subgraph P ["Prop Firm-as-a-Service Platform"]
+        direction TB
+        Storefront["Trader Storefront & Portal<br/>(Next.js / TypeScript)"]
+        Admin["Tenant Admin & Back Office<br/>(React / TypeScript)"]
+        GW["API Gateway<br/>(Go)"]
+        Bridge["Platform Bridge Fleet<br/>(Go core, Rust hot path)"]
+        Core["Core Services<br/>Identity, Challenges, Accounts,<br/>Orders, Payouts, Billing (Go)"]
+        Rules["Rules Engine<br/>(Rust, deterministic)"]
+        Data["Data Layer<br/>PostgreSQL, Redis, Kafka, ClickHouse"]
+    end
+
+    Broker["Broker / Trading Server Infrastructure<br/>(MetaQuotes, cTrader, DXtrade servers)"]
+    Pay["Payment & Payout Providers<br/>(Stripe, Payoneer, bank rails, FX)"]
+    News["Economic Calendar / News API"]
+    Kyc["KYC / AML Providers"]
+
+    Trader -->|"WebSocket + HTTPS: telemetry, control"| Bridge
+    Bridge -->|"orders, fills, account state"| Trader
+    Trader -->|"executes orders, reports fills"| Broker
+    Broker -->|"deals, balances, history"| Trader
+
+    Storefront --> GW
+    Admin --> GW
+    GW --> Core
+    GW --> Bridge
+    Core --> Rules
+    Rules --> Data
+    Core --> Data
+    Bridge --> Data
+    Core --> Pay
+    Pay --> Core
+    News --> Rules
+    Kyc --> Core
+    Core --> Kyc

@@ -1,0 +1,26 @@
+sequenceDiagram
+    autonumber
+    participant RE as Rules Engine
+    participant CH as Challenge Service
+    participant PV as Payout/Funding Service
+    participant BRK as Broker API (MT5/cTrader)
+    participant POS as Position/Hedge Sync
+    participant B as Bridge
+    participant T as Trader
+
+    RE->>CH: Verdict TARGET_REACHED (verification)
+    CH->>CH: state -> FundedPending, freeze further attempts
+    CH->>PV: create FundingApplication {tenant, trader, size,<br/>split, instruments scope, rule_pack_funded}
+    PV->>BRK: open funded account (real money account, deposit of firm capital)
+    BRK-->>PV: account_id, credentials (into Vault, never to trader)
+    PV->>BRK: open hedge account (mirror account, same broker cluster)
+    alt hedge account creation FAILS
+        PV->>BRK: close funded account (compensation)
+        PV->>CH: FundingApplication FAILED -> retry/backoff or manual
+    else SUCCESS
+        PV->>POS: register mirror pair {funded_acc, hedge_acc, ratio=1.0,<br/>symbol_map, tolerance}
+        PV->>CH: state -> Funded, notify trader (credentials only via bridge pairing)
+        POS->>B: account_provisioned {account, pairing payload}
+        B-->>T: new account available in terminal (EA pairing flow)
+        Note over POS: steady state: hedge mirror of every trade with<br/>latency+fill checks, drift alerts, auto-rebalance on divergence
+    end

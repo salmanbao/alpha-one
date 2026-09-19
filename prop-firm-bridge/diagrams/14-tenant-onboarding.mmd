@@ -1,0 +1,10 @@
+flowchart LR
+    A["Tenant signs up (KYB done)"] --> B["Admin creates tenant:<br/>slug, plan, limits, timezones"]
+    B --> C["Configure rule packs (DSL):<br/>challenge, verification, funded,<br/>payout split, fees"]
+    C --> D["Branding: theme, domain, copy,<br/>pricing, support email"]
+    D --> E["Broker connections:<br/>demo + real credentials into Vault,<br/>hedging policy, symbol mapping"]
+    E --> F["Issue bridge keys:<br/>API keys per platform+purpose,<br/>HMAC pairing flow per account"]
+    F --> G["Platform enablement:<br/>MT4/MT5, cTrader, DXtrade, TradingView"]
+    G --> H["Dry run: simulated traders,<br/>reconciliation baseline, load test"]
+    H --> I["Go-live checklist: SLO dashboards,<br/>on-call, runbooks, audit retention"]
+    I --> J["Production: tenant-isolated data (RLS),<br/>isolated queues, noisy-neighbor guards"]

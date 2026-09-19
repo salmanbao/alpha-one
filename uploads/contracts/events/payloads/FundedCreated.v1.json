@@ -1,0 +1,15 @@
+{
+  "_citations": {
+    "producer": "LCC-23",
+    "consumers": ["DOC-04", "ANA-01"],
+    "note": "NOT-01 consumption is TODO — needs owner decision (citation not directly supported by sheet: no funded-account template in NOT-05)"
+  },
+  "id": "TODO",
+  "type": "FundedCreated",
+  "version": "v1",
+  "tenant_id": "TODO",
+  "occurred_at": "TODO",
+  "payload": {
+    "account_id": "TODO"
+  }
+}

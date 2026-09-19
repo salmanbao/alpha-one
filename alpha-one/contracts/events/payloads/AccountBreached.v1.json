@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "AccountBreached.v1.json",
+  "title": "Alpha One \u2014 event AccountBreached v1",
+  "description": "V1 catalog event `AccountBreached` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: breach), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "AccountBreached"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "phase": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rule": {
+              "type": "string",
+              "description": "the breached rule (e.g. daily drawdown, max drawdown, profit target breach path)"
+            },
+            "observed": {
+              "type": "number"
+            },
+            "limit": {
+              "type": "number"
+            },
+            "breached_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "phase",
+            "rule",
+            "breached_at"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "pack_id": "acme:funded:100k:v3",
+  "currency": "USD",
+  "start_balance": 100000,
+  "day": { "timezone": "Europe/London", "basis": "equity", "breach": "intraday" },
+  "rules": {
+    "max_daily_loss_pct": 5.0,
+    "max_overall_loss_pct": { "mode": "trailing", "value": 10.0 },
+    "profit_target_pct": 5.0,
+    "min_trading_days": 0,
+    "time_limit_days": null,
+    "news": { "enabled": true, "tiers": ["high"], "instruments": "*", "source": "economic-calendar:v3", "pre_positioned": "flag" },
+    "weekend": { "mode": "off" },
+    "overnight": { "enabled": false },
+    "spread_max_pips": { "default": 8.0 },
+    "volume_max": 50.0,
+    "open_positions_max": 50,
+    "allowed_symbols": ["*"],
+    "denied_symbols": [],
+    "pnl_tolerance": 0.01
+  },
+  "funded": {
+    "split_pct": 80.0,
+    "payout": { "first_payout_day": 14, "every_days": 14, "min_withdrawal": 200 },
+    "hedge_drift": { "max_ticks": 1, "max_latency_ms": 100, "on_breach": "suspend" }
+  }
+}

@@ -1,0 +1,25 @@
+sequenceDiagram
+    autonumber
+    participant T as Trader (portal)
+    participant G as API Gateway
+    participant PV as Payout Service (Go)
+    participant ACC as Account/Balance Service
+    participant A as Approval Workflow
+    participant P as Payment Provider (Payoneer/bank/Stripe)
+    participant AUD as Audit (hash-chained)
+
+    T->>G: POST /funded/payouts {amount, method}
+    G->>PV: auth (JWT) + tenant scoping + RBAC
+    PV->>ACC: compute available PnL = (funded_equity - deposit -<br/>locked) * trader_split - fees, no unmet drawdown, no open-positions lockout
+    ACC-->>PV: available = $8,420, FX conversion if needed
+    alt amount > policy auto-approve threshold
+        PV->>A: request 4-eyes approval (two officers)
+        A-->>PV: approved (or rejected w/ reason)
+    else auto-approve
+        PV->>PV: approve
+    end
+    PV->>P: initiate payout {amount, currency, ref=application_id}
+    P-->>PV: webhook payout_settled / failed
+    PV->>ACC: ledger entry (double-entry), reduce available PnL
+    PV->>AUD: append signed audit record (who, what, why, inputs)
+    PV-->>T: payout status (portal WS push + email)

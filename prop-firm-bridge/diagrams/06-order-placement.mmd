@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant TR as Trader
+    participant EA as Terminal + EA (MQL/c#)
+    participant B as Bridge (adapter + edge rules)
+    participant BRK as Broker Trading Server
+    participant K as Kafka (bridge.events)
+    participant OS as Order Service (Go)
+    participant RE as Rules Engine (Rust)
+
+    TR->>EA: click Buy 0.50 EURUSD (TP/SL set)
+    EA->>EA: client fast-fail checks (cached rule pack:<br/>halt flag, weekend rule, spread cap, volume caps)
+    EA->>B: order_intent {seq, nonce, sig, symbol, side,<br/>volume, type, tp, sl, client_order_id}
+    B->>B: auth, replay, seq continuity, tenant binding
+    alt edge rule REJECT (e.g. trading halted, news window, spread too wide)
+        B-->>EA: order_reject {code, reason, ts}
+        EA-->>TR: blocked in terminal UI (order never leaves)
+    else edge rule APPROVE
+        B-->>EA: order_allow {allow_token, expires 2s}
+        EA->>BRK: OrderSend()  (execution NEVER routed through bridge)
+        BRK-->>EA: deal executed (ticket, fill price, slippage)
+        EA->>B: order_filled {deal_id, order_id, fill_px,<br/>volume, commission, swap, broker_ts, sig}
+        B->>B: idempotency by deal_id, recompute expected PnL fields,<br/>broker_ts vs NTP skew check
+        B->>K: OrderFilled (canonical event, partition=account)
+        K->>OS: consume
+        OS->>OS: persist order/position (outbox), update margin
+        K->>RE: consume
+        RE->>RE: live equity mark, intraday drawdown check
+        B-->>EA: ack {seq, deal_id, account_state_delta}
+    end
+    Note over EA,B: if WS is down: EA spools order_filled locally (ring buffer,<br/>min 72h), executes, and delivers on reconnect (gap recovery)
