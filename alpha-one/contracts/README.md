@@ -7,7 +7,7 @@ source of truth; the code is generated/checked against it).
 
 This pack is **generated**, not hand-edited. It is produced by
 two generators from the canonical module docs (`docs/02`–`docs/27`)
-plus the parsed PRD backlog (`scripts/prd-backlog.json`, 1012 rows).
+plus the parsed PRD backlog (`scripts/prd-backlog.json`, 1020 rows).
 If a doc changes, re-run the generators — never edit a generated
 file in place.
 

@@ -1,8 +1,10 @@
 # 34 — Tooling Registry (binding build/buy decisions)
 
-> Extracted 2026-09-19 from the PRD **Tooling Register** (BVR-01..28),
-> **Integration Map** (~55 tools), and **Out Of Scope** sheet. This document
-> is binding: §2 rules constrain every module doc and every PR (a violation
+> Extracted 2026-09-19 from the PRD **Tooling Register** (74 tools,
+> machine-readable in `scripts/prd-workbook.json`), the **Integration Map**
+> (59 tools), the **28 BVR rules**, and the **Out Of Scope** sheet
+> (266 items — the product-scope mirror is `docs/38-prd-out-of-scope.md`).
+> This document is binding: §2 rules constrain every module doc and every PR (a violation
 > fails review per the rule's enforcement column). §3 is the signup +
 > adoption checklist. Tool *usage* details live in the owning module doc;
 > this doc owns the *decisions*.
@@ -150,6 +152,10 @@ needed — §9), **REJECTED** (never adopt).
 | Auth0 / AWS Cognito | BVR-14 | per-MAU cost + tenant-RBAC mismatch | Better Auth (self-hosted) |
 | Datadog / New Relic | BVR-11 | commercial APM cost | Prometheus + Grafana + Loki + Sentry |
 | Kong / Traefik (V1) / AWS API GW | BVR-12 | extra service; Cloudflare covers edge | in-app middleware |
+| Terraform | register | full IaC is out of scope in V1 — Compose + the runbook is the source of truth | Docker Compose + documented Hetzner provisioning (docs/06) |
+| WooCommerce | register | V1 owns the checkout flow; a plugin storefront is out of scope | native checkout (CHK) |
+| Intercom / Zendesk | register | a third-party helpdesk is out of scope in V1 | in-house Support Inbox (SUP) |
+| WordPress | register | external CMS out of scope; the hosted CMS is a V3 module (CMS) | in-house CMS (V3, docs/24) |
 | Metabase / Looker (V1) | BVR-13 | embedded-BI weight | read models + fixed reports + CSV |
 | S3 (as primary store) | register | egress cost | Cloudflare R2 |
 | DocRaptor / PDFMonkey | BVR-07 | paid PDF SaaS | Puppeteer |

@@ -143,7 +143,7 @@
 |---|---|---|
 | ADR | Architecture Decision Record: the 12 binding stack/shape decisions (docs/01 §3) | 01 |
 | non-negotiables | the 8 product invariants (docs/00 §8) re-verified at every gate | 00 |
-| train (V1.0/V1.1/V2.0/V3.0) | the PRD release grouping: 154 / 21 / 631 / 206 rows | 00/99 |
+| train (V1.0/V1.1/V2.0/V3.0) | the PRD release grouping: 154 / 21 / 630 / 214 rows (+1 unassigned) | 00/99 |
 | phase (0–5) | the build grouping in docs/99 (phases ≠ trains: MIG ships early, V1.1 splits) | 99 |
 | wave | a parallelizable sub-group inside Phase 4/5 (waves overlap by ≤1 week) | 99 |
 | milestone (M0–M5) | the phase-end go/no-go gate with a staging demo + checklist | 99 |

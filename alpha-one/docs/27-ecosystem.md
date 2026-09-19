@@ -1,8 +1,8 @@
 # 27 — Ecosystem: SDK · DVP · TRD · PLT · CS
 
 > Covers PRD modules **SDK** (18 reqs, V3), **DVP** (18 reqs,
-> V3), **TRD** (8 reqs, V3), **PLT** (6 doc-defined capabilities,
-> V3 — no PRD rows; governance over docs/06 + docs/29),
+> V3), **TRD** (8 reqs, V3), **PLT** (8 reqs, `PLT-01..08`, V3 —
+> the platform-governance rows over docs/06 + docs/29),
 > and **CS** (7 reqs, V3 — NPS surveys, health scoring, churn
 > prediction, onboarding workflows, playbooks, renewal tracking,
 > QBRs). All five are V3
@@ -2069,21 +2069,31 @@ class))).
 
 ---
 
-# Part C — PLT: Platform Operations (6 reqs) + CS:
+# Part C — PLT: Platform Operations (8 reqs) + CS:
 Customer Success (7 reqs)
 
-## Part C.1 — PLT (6 doc-defined capabilities, V3 — no PRD rows)
+## Part C.1 — PLT (PLT-01..08, V3)
+
+> Requirement coverage: `PLT-01..08` (all V3.0: multi-region deployment,
+> capacity planning, cost allocation, performance benchmarking, incident
+> management and on-call runbooks, capacity & cost governance dashboard,
+> multi-region failover runbook and drills, security operations and
+> vulnerability management). The 2026-09-19 workbook re-parse recovered
+> these eight rows from the master backlog; earlier revisions of this doc
+> called PLT “doc-defined” because the legacy extraction had lost them.
 
 ### 1. Purpose & scope
 
 The cross-tenant platform governance: multi-region
 deployment (PLT-01), capacity planning (PLT-02), cost
-allocation (PLT-03), incident management (PLT-05),
-capacity & cost governance (PLT-06). (PLT-04, platform SLO
-ownership — the 06 §3.4 SLOs' platform-level owner —
-completes the set. PLT has no PRD backlog rows; the six
-capabilities are defined by this document as the governance
-layer over docs/06 + docs/29.)
+allocation (PLT-03), performance benchmarking (PLT-04),
+incident management and on-call runbooks (PLT-05),
+capacity & cost governance dashboard (PLT-06), multi-region
+failover runbook and drills (PLT-07), and security operations
+& vulnerability management (PLT-08). The eight rows are PRD
+backlog rows (V3.0); this document adds the design the rows
+imply — the governance layer over docs/06 + docs/29 — plus
+the platform SLO ownership the 06 §3.4 leaves implicit.
 
 **The boundary:** PLT is the *governance layer* over the
 06 (DevOps) + the 29 (Scalability) — the 06 is the

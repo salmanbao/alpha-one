@@ -25,8 +25,9 @@
 > parallel where the dependency graph allows.
 >
 > **Scope authority:** all Req-ID counts below are verified against
-> `scripts/prd-backlog.json` (1012 PRD rows: 154 V1.0 + 21 V1.1 +
-> 631 V2.0 + 206 V3.0, 2026-09-19). Where a task needs a capability
+> `scripts/prd-backlog.json` (1020 PRD rows: 154 V1.0 + 21 V1.1 +
+> 630 V2.0 + 214 V3.0 + 1 unassigned — BRG-28, the workbook's open
+> placeholder; 2026-09-19). Where a task needs a capability
 > the PRD schedules later, the task says so explicitly
 > ("doc-defined" or "pulled forward") — scope is never silently
 > borrowed from a later train.
@@ -75,7 +76,7 @@
    a silent borrow). `scripts/prd-backlog.json` + the
    `--check-only` cross-check are the enforcement.
 8. **The V2 owner imbalance is rebalanced at M3, not before.**
-   The PRD assigns BE-2 51% of V2.0 (321/631 rows, §9) — that
+   The PRD assigns BE-2 51% of V2.0 (321/630 rows, §9) — that
    does not fit one developer in 12 weeks. The Tech Lead moves
    whole modules (never half a module) at the M3 gate; the
    rebalancing decision is recorded in §9.
@@ -88,8 +89,8 @@
 | **1** | The core money loop (V1.0) | wks 5–16 | **V1.0: all 154 rows** (146 P0 + 8 P1; App. A) | LCC → BRG → EVL → RSK(V1: model+opening) → KYC(L1+L2) → CHK → PAY → NOT → DOC → TD(v1) → ADM(v1) → CON → ANA(v1 foundation) | **M1 — a trader buys a challenge, funds it, trades on MT5, gets evaluated, breaches or passes, gets paid out — end to end, on synthetic data, manual payout approval** |
 | **2** | FunderBlu cutover | wks 17–24 | **V1.1 safety slice (8 rows)** + **MIG-01/02/04–08 (7 V2.0 rows pulled forward)** | V1.1 safety slice (RSK-11, PAY-04/45, LCC-11, EVL-20, KYC-09/14) → MIG pipeline (dry run → 14-day parallel → TTS read-only) → cutover → 30-day rollback watch → SUP (concierge: SUP-13/15 are V1.1) | **M2 — FunderBlu's traders are on Alpha One; TTS is read-only; the rollback window is armed** |
 | **3** | V1.1 hardening | wks 25–28 | **V1.1: remaining 13 rows** (App. A) + CON-13/15 pulled forward | audit review rhythm (CON-13/15, 2-op) → the 13 V1.1 rows (CHK/KYC/PAY/EVL/ANA/AUD/TD) → load test at 2× V1 (docs/29 §6) → restore drill + table-top | **M3 — the platform is operable unattended for a week (on-call, runbooks, dashboards green)** |
-| **4** | V2.0 (breadth) | wks 29–40 | **V2.0: 624 rows** (631 − 7 MIG built in Ph 2; App. A) | wave 1: tenant-ops depth (SUP+CHT, CRM, ANA, ADM, CON, NOT, DOC) → wave 2: platform depth (TEN, AUTH, GW, EVT, LED, AUD, OPS) → wave 3: trading depth (LCC, BRG, EVL, RSK, KYC, CHK, PAY, TD) + MOB + JRN + EDU | **M4 — a tenant runs its business on the platform (support, CRM, analytics, mobile app, journal, academy, community chat, full admin + console)** |
-| **5** | V3.0 (ecosystem) | wks 41–52+ | **V3.0: all 206 rows** (App. A) + PLT (doc-defined) | wave 1: SDK + DVP (public API, sandbox, portal) + SSO → wave 2: CMS + CMP (sites, competitions) + TRD (copy, backtest, paper) → wave 3: AFF + BIL + CRM depth (money ecosystem) → wave 4: CS + PLT + RSK/ops stragglers | **M5 — a third party builds on the platform (the FunderBlu agency's integration is certified); the platform's own governance runs quarterly** |
+| **4** | V2.0 (breadth) | wks 29–40 | **V2.0: 623 rows** (630 − 7 MIG built in Ph 2; App. A) | wave 1: tenant-ops depth (SUP+CHT, CRM, ANA, ADM, CON, NOT, DOC) → wave 2: platform depth (TEN, AUTH, GW, EVT, LED, AUD, OPS) → wave 3: trading depth (LCC, BRG, EVL, RSK, KYC, CHK, PAY, TD) + MOB + JRN + EDU | **M4 — a tenant runs its business on the platform (support, CRM, analytics, mobile app, journal, academy, community chat, full admin + console)** |
+| **5** | V3.0 (ecosystem) | wks 41–52+ | **V3.0: all 214 rows** (App. A, incl. PLT-01..08) | wave 1: SDK + DVP (public API, sandbox, portal) + SSO → wave 2: CMS + CMP (sites, competitions) + TRD (copy, backtest, paper) → wave 3: AFF + BIL + CRM depth (money ecosystem) → wave 4: CS + PLT + RSK/ops stragglers | **M5 — a third party builds on the platform (the FunderBlu agency's integration is certified); the platform's own governance runs quarterly** |
 
 **The dependency spine** (the critical path, everything else
 attaches to it):
@@ -276,19 +277,21 @@ blameless).
 V1.1 — it is "LATER" per the 00 §6 default (append-only is the
 V1 control, the 28 §3.4); it lands in V3 (the §8 wave 4) with
 the 05's roadmap. **BRG-28** (broker server time-drift
-detection) is a scoped V2.0 row — it builds in Phase 4 wave 3,
-not here.
+detection) carries *no release* in the workbook — it is the backlog
+audit's open ERROR finding (`docs/39-prd-change-log.md` §2): either
+it is defined into a train (then Phase 4 wave 3) or deleted before
+the Phase-1 contract freeze. It is unassigned, not V2.
 
 ## 7. Phase 4 — V2.0 breadth (weeks 29–40)
 
 **Goal:** a tenant can run its whole business on the platform.
-The V2 train is **631 reqs** (PRD-verified: 175 P0 + 349 P1 +
-107 P2), of which 7 MIG rows already shipped in Phase 2 — **624
+The V2 train is **630 reqs** (PRD-verified: 175 P0 + 348 P1 +
+107 P2), of which 7 MIG rows already shipped in Phase 2 — **623
 rows build here**, split into **3 waves** by the dependency spine
 (each wave independent of the next; the waves can overlap by 1
 week). Per-module V2 counts (PRD-verified): TEN 35, PAY 35, NOT
 34, CHK 30, LCC 30, TD 30, ANA 29, EVT 29, SUP 29, CON 28, GW
-28, OPS 28, EVL 27, AUTH 26, BRG 24, KYC 24, AUD 19, LED 17,
+28, OPS 28, EVL 27, AUTH 26, BRG 23, KYC 24, AUD 19, LED 17,
 CRM 8, EDU 8, DOC 11, MOB 7, JRN 6, CHT 5 (+ MIG 7, done).
 **Not V2:** CMS, CMP, AFF, BIL, SDK, DVP, TRD, CS are 100% V3.0
 (§8) — nothing from those modules builds here. The full ID
@@ -314,11 +317,11 @@ per task.
 | 4.7 | **LED v2 (17) + AUD v2 (19)**: refund/chargeback posting (LED-05), the ledger depth + account replay chain (AUD-05), gateway-flag coverage (AUD-02), compliance-evidence pre-cursor (Comp AI/Openlane spike, docs/34 §7), the audit depth | 05 §16 | BE-1/BE-2 | 3 wks | 0.8 | A refund posts balanced with reason (LED-05); an account replays from the chain (AUD-05); every gateway-mutating route carries its audit flag (AUD-02, the CI check) |
 | 4.8 | **OPS v2 (28)**: the observability stack (Prometheus/Grafana/Loki/OTel, OPS-10) + business dashboards (OPS-12) + alerting (OPS-11) + job scheduling + single-execution locks (OPS-17/27, BullMQ Dashboard embedded, docs/34 §7) + external uptime monitoring (OPS-31, Uptime Kuma) + Flipt flags (TEN-10/CON-31, docs/34 §7) + migration tooling depth (OPS-21) | 06 §16 | DevOps | 4 wks | 0.9 | The Grafana stack shows golden signals per service (OPS-10/12); an alert routes to the on-call (OPS-11); the BullMQ dashboard embeds in the CON (OPS-17); Kuma probes from off-platform (OPS-31); a flag rolls out per tenant (Flipt) |
 
-### 7.3 Wave 3 (weeks 37–40) — the trading depth (258 rows)
+### 7.3 Wave 3 (weeks 37–40) — the trading depth (257 rows)
 
 | # | Task (PRD scope) | Doc | Owner | Est | Depends | Exit criterion |
 |---|---|---|---|---|---|---|
-| 4.9 | **LCC v2 (30) + BRG v2 (24)**: equity snapshots (LCC-18), staleness detection (LCC-28), the lifecycle depth + the reconciliation job (BRG-15), broker time-drift detection (**BRG-28**), audit export (BRG-46), the bridge depth | 07 §16, 08 §16 | BE-1 (BRG) + BE-2 (LCC) | 4 wks | 1.1, 1.2 | Nightly BRG↔broker reconciliation matches or pages (BRG-15); a drifting broker clock is detected (BRG-28); equity snapshots feed the TD charts (LCC-18) |
+| 4.9 | **LCC v2 (30) + BRG v2 (23)**: equity snapshots (LCC-18), staleness detection (LCC-28), the lifecycle depth + the reconciliation job (BRG-15), audit export (BRG-46), the bridge depth (**BRG-28** joins this task only once the placeholder is defined into V2.0) | 07 §16, 08 §16 | BE-1 (BRG) + BE-2 (LCC) | 4 wks | 1.1, 1.2 | Nightly BRG↔broker reconciliation matches or pages (BRG-15); a drifting broker clock is detected (BRG-28); equity snapshots feed the TD charts (LCC-18) |
 | 4.10 | **EVL v2 (27) + RSK v2 (37)**: the rule-simulation tool (EVL-22), the evaluation depth + the full detector set (RSK-04/05/06, RSK-50 hours-anomaly, …) + review queue + case SLAs (RSK-12/29) + ipinfo enrichment (RSK-02, docs/34 §7) | 09 §16, 10 §16 | BE-2 | 4 wks | 1.3, 1.4 | A staff member simulates a rulepack change before deploying (EVL-22); a synthetic copy-pattern opens a case via the detector (RSK-05) → lands in the review queue (RSK-12) → SLA-escalates on age (RSK-29); the hold blocks the payout (RSK-11, live since 2.1) |
 | 4.11 | **KYC v2 (24) + CHK v2 (30) + PAY v2 (35)**: re-verification triggers (KYC-21), doc-expiry lifecycle (KYC-25), provider failover + SLA tracking (KYC-30/34), cost tracking (KYC-26) + the refund machine (CHK-15/35) + the payment state machine (CHK-20) + admin order UI (CHK-29) + provisioning reconciliation (CHK-31) + the eligibility snapshot freeze (PAY-27) + method-change cooldown (PAY-06) + the reconciliation job (PAY-34) + the payout depth | 13/12/11 §16 | BE-2 (PAY/CHK) + BE-1 (KYC) | 4 wks | 1.5, 1.6, 1.7 | A re-verification triggers on expiry (KYC-21); a refund walks the machine and posts balanced (CHK-15 + LED-05, the 1.6 follow-through); nightly payout↔rail reconciliation matches or pages (PAY-34); a method change inside the window 422s (PAY-06) |
 | 4.12 | **TD v2 (30) + MOB (7) + JRN (6) + EDU (8)**: equity curve + daily P&L charts (TD-06, TradingView Lightweight Charts, docs/34 §7), theming (TD-01), the trader-portal depth + the RN app consuming the TD's GW API (the 26 Part A §1, no new backend) + the private journal (frozen `deal_snapshot`, the no-cross-trader property test, the 26 Part C §1) + the academy (CMS-03 block pattern, R2 signed-URL video, completion honesty, the 26 Part D) | 16 §16, 26 §16 | FE-1 (TD/MOB) + FE-2 (JRN/EDU) | 4 wks | 1.10 | The equity curve renders from LCC-18 snapshots (TD-06); the RN app logs in via biometrics and mirrors the portal (MOB); a journal entry links its frozen deal snapshot and no staff read path exists (the 26 Part C test); a course completes honestly (the 26 Part D) |
@@ -332,13 +335,14 @@ the 29 §6); the contracts pack v2 frozen.
 ## 8. Phase 5 — V3.0 ecosystem (weeks 41–52+)
 
 **Goal:** third parties build on the platform; the platform's
-own governance runs. The V3 train is **206 reqs** (PRD-verified:
-26 P0 + 72 P1 + 108 P2). Per-module V3 counts: AFF 30, BIL 21,
+own governance runs. The V3 train is **214 reqs** (PRD-verified:
+26 P0 + 76 P1 + 112 P2). Per-module V3 counts: AFF 30, BIL 21,
 SDK 18, DVP 18, CMP 17, CMS 15, RSK 13, BRG 10, CRM 8, TRD 8,
-CS 7, ANA 5, SUP 4, AUTH 3, CHK 3, CHT 3, +2s (AUD, CON, EVL,
-GW, JRN, LED), +1s (EDU, EVT, KYC, LCC, MIG-03, MOB, NOT, TD,
-TEN). PLT has zero PRD rows (doc-defined governance, the 27
-Part C.1). All V3 modules get their design now (the docs/00
+CS 7, PLT 8, ANA 5, SUP 4, AUTH 3, CHK 3, CHT 3, +2s (AUD,
+CON, EVL, GW, JRN, LED), +1s (EDU, EVT, KYC, LCC, MIG-03, MOB,
+NOT, TD, TEN). PLT-01..08 are the platform-governance rows
+(the 27 Part C.1) — they entered the backlog with the 2026-09-19
+workbook re-parse. All V3 modules get their design now (the docs/00
 commitment) but **build** in V3. The waves:
 
 ### 8.1 Wave 1 (weeks 41–45) — the public surface (SDK + DVP + SSO)
@@ -371,9 +375,9 @@ commitment) but **build** in V3. The waves:
 
 | # | Task (PRD scope) | Doc | Owner | Est | Depends | Exit criterion |
 |---|---|---|---|---|---|---|
-| 5.12 | **PLT (doc-defined, zero PRD rows)**: the cost model (per-tenant, the 22 §3.4, the 27 Part C.1 §2) + the quarterly capacity review (PLT-02, the 00 §5 numbers) + the multi-region framework decision (the 27 Part C.1, the RTO-trigger) + the 2-box production shape (the 29 §3.2) | 27-C1 §16 | DevOps + Tech Lead | 2 wks | 4.8 (dashboards) | The first PLT quarterly runs on the cost model (the 27 Part C.1 §2); the 2-box is production (the 29 §3.2); the multi-region decision is recorded (go/no-go + trigger) |
+| 5.12 | **PLT (PLT-01..08)**: the cost model the cost model (per-tenant, the 22 §3.4, the 27 Part C.1 §2) + the quarterly capacity review (PLT-02, the 00 §5 numbers) + the multi-region framework decision (the 27 Part C.1, the RTO-trigger) + the 2-box production shape (the 29 §3.2) | 27-C1 §16 | DevOps + Tech Lead | 2 wks | 4.8 (dashboards) | The first PLT quarterly runs on the cost model (the 27 Part C.1 §2); the 2-box is production (the 29 §3.2); the multi-region decision is recorded (go/no-go + trigger) |
 | 5.13 | **CS (7)**: the health score (weekly, the 19's rebuild) + NPS (quarterly survey) + churn signals + onboarding playbooks + renewal + the QBR (the 27 Part C.2 §2) | 27-C2 §16 | BE-2 + FE-2 (UI) | 2 wks | 4.2 (ANA depth) | The first CS QBR runs on the health score + NPS (the 27 Part C.2 §2) |
-| 5.14 | **V3 stragglers (RSK 13 + BRG 10 + ANA 5 + SUP 4 + AUTH/CHK/CHT/AUD/CON/EVL/GW/JRN/LED/EDU/EVT/KYC/LCC/MOB/NOT/TD/TEN smalls)**: ML anomaly detection (RSK-25), optional broker streaming (BRG-21), the audit hash chain (LATER per 00 §6 — now, with the 05's roadmap), BigQuery ETL (ANA-18, deferred, docs/34 §7), n8n/Zapier connectors (DVP-09, pick one), Nango packs (SDK-04, deferred) | 10/08/05/19/27 §16 | BE-2 + BE-1 + DevOps | 3 wks | 5.1–5.13 (as needed) | The hash chain verifies back to genesis on demand (the 05's); every V3 row checks off in its module doc's §16 (App. A: V3 206/206) |
+| 5.14 | **V3 stragglers (RSK 13 + BRG 10 + ANA 5 + SUP 4 + AUTH/CHK/CHT/AUD/CON/EVL/GW/JRN/LED/EDU/EVT/KYC/LCC/MOB/NOT/TD/TEN smalls)**: ML anomaly detection (RSK-25), optional broker streaming (BRG-21), the audit hash chain (LATER per 00 §6 — now, with the 05's roadmap), BigQuery ETL (ANA-18, deferred, docs/34 §7), n8n/Zapier connectors (DVP-09, pick one), Nango packs (SDK-04, deferred) | 10/08/05/19/27 §16 | BE-2 + BE-1 + DevOps | 3 wks | 5.1–5.13 (as needed) | The hash chain verifies back to genesis on demand (the 05's); every V3 row checks off in its module doc's §16 (App. A: V3 214/214) |
 
 **Phase 5 exit (M5):** the M5 demo (§10) — a third party
 (the FunderBlu agency) is certified and running on the public
@@ -416,9 +420,9 @@ phases):
 
 **The M3 rebalancing (binding, §1 rule 8).** PRD owner load per
 train — V1.0: BE-1 82 / BE-2 52 / FE-1 7 / FE-2 1 / DevOps 12;
-V1.1: BE-1 3 / BE-2 16 / FE-1 2; **V2.0: BE-1 155 / BE-2 321 /
-FE-1 103 / FE-2 18 / DevOps 34**; V3.0: BE-1 38 / BE-2 139 /
-FE-1 22 / FE-2 3 / DevOps 4. BE-2's V2 share (51%) does not fit
+V1.1: BE-1 3 / BE-2 16 / FE-1 2; **V2.0: BE-1 160 / BE-2 321 /
+FE-1 103 / FE-2 18 / DevOps 28**; V3.0: BE-1 38 / BE-2 140 /
+FE-1 22 / FE-2 3 / DevOps 10 / Product 1. BE-2's V2 share (51%) does not fit
 one developer in 12 weeks. At M3 the Tech Lead moves **whole
 modules** (never half a module — the module doc's §16 is the
 unit of ownership) from BE-2 to BE-1/FE-2; the standing
@@ -451,12 +455,12 @@ owner — updated at each gate)
 | R3 | **The payout fraud / the insider** (the T2/T3, the 28 §2.2) | 1+ | Low | **Critical** (the money) | The manual approval + the 2FA + the two-op (the 00 §6, the 02 §3.4, the 17 §3.3); the available-profit calc (the 11 §3.2, the property test); the method-cooldown (PAY-06, V2, the 11 §3.3); the RSK hold (RSK-11, live since 2.1, the 10 §3.2); the audit fail-closed (the 05 §3.3); the CON-13/15 review (the 21 §3.3) | BE-1 + DevOps |
 | R4 | **The cross-tenant leak** (the A5, the 28 §2.1) | 0+ | Low | **Critical** (the existential) | The structural `tenant_id` (the 01 ADR-1); the sqlc typed (the 01 §2); the 404-not-403 (the 04 §6); the `isolation.test` in CI (the 04 §11, the 28 §3.3); the CON-22 recon alert (the 21 §3.4); the monthly drill verifies (the 28 §11) | BE-1 + DevOps |
 | R5 | **The box is a single point of failure** (the A7, the 28 §2.1) | 0+ | Med | **High** (the availability) | The 06 §1's sizing (the 29 §1.2's 2×); the WAL + daily (the 06 §3.2); the monthly restore drill (the RPO/RTO, the 06 §3.2); the 2-box in V3 (the 29 §3.2); the multi-region framework (the 27 Part C.1, the RTO-trigger) | DevOps |
-| R6 | **The scope creep into V1** (the 631 V2 reqs pulling early) | 1 | High | Med (the schedule) | The phase gates (the §10); the PRD triage (the 00 §6, the 3.2); the V1 defaults held (the 00 §6); the Appendix-A train check (§1 rule 7); a V2 req in V1 = the Tech Lead's explicit decision (the 99 §1.1) | Tech Lead |
+| R6 | **The scope creep into V1** (the 630 V2 reqs pulling early) | 1 | High | Med (the schedule) | The phase gates (the §10); the PRD triage (the 00 §6, the 3.2); the V1 defaults held (the 00 §6); the Appendix-A train check (§1 rule 7); a V2 req in V1 = the Tech Lead's explicit decision (the 99 §1.1) | Tech Lead |
 | R7 | **The team is small (4–5) for the breadth** | all | Med | Med (the velocity) | The phase waves (the §7); the parallelization (the §9); the V2 split into 3 waves (the §7); the V3 is the ecosystem (the design-now-build-later, the docs/00); the FunderBlu concierge (the 25 §3.6) absorbs the ops load early | Tech Lead |
 | R8 | **The contract rot** (the code drifts from the `contracts/`) | 0+ | Med | Med (the integration) | The CI gates (the 04 §6, the 30/31/32, the 28 §11); the contracts frozen per phase (the §12); the 12-month deprecation (the 27 Part A §3.5) for the public | Tech Lead |
 | R9 | **The provider dependency** (the Veriff/NOWPayments/Match2Pay/Postmark outage) | 1+ | Med | Med (the degraded) | The per-provider queue (the 11/12/13/14 §11); the manual fallback (the 11 §3.5, the 12 §1's wire); the in-app fallback (the 14 §3.1); the `*_PROVIDER_UNAVAILABLE` (the 04 §6); the 29 §4 failure map | BE-2 + DevOps |
 | R10 | **The V2→V3 compute cost** (the backtest/paper/ML, the 27 Part B) | 5 | Med | Low (the cost) | The off-peak (the 06 §3.3); the 29 §5 cost model (the tenant's vs the platform's); the PLT-02 review (the 27 Part C.1); the 2-box (the 29 §3.2) | DevOps + Tech Lead |
-| R11 | **BE-2 owns 51% of V2.0 (321/631 rows)** — the V2 wave plan does not fit one developer | 4 | High | Med (the schedule) | The M3 rebalancing (§9: whole modules move to BE-1/FE-2); waves overlap by 1 week; the DOC v2 + CHT + CRM standing candidates (§9) | Tech Lead |
+| R11 | **BE-2 owns 51% of V2.0 (321/630 rows)** — the V2 wave plan does not fit one developer | 4 | High | Med (the schedule) | The M3 rebalancing (§9: whole modules move to BE-1/FE-2); waves overlap by 1 week; the DOC v2 + CHT + CRM standing candidates (§9) | Tech Lead |
 
 ## 12. The definition of done & the contract-freeze rules
 
@@ -555,7 +559,7 @@ counts + wave assignment.
 
 Count check: 7 (2.1) + 2 (2.5) + 12 (3.2) = 21. ✓
 
-### A.3 V2.0 — 631 rows (Phases 2 + 4)
+### A.3 V2.0 — 630 rows (Phases 2 + 4)
 
 | Module | Rows | Builds in |
 |---|---|---|
@@ -576,7 +580,7 @@ Count check: 7 (2.1) + 2 (2.5) + 12 (3.2) = 21. ✓
 | AUD | 19 | Phase 4 wave 2, task 4.7 |
 | OPS | 28 | Phase 4 wave 2, task 4.8 |
 | LCC | 30 | Phase 4 wave 3, task 4.9 |
-| BRG | 24 | Phase 4 wave 3, task 4.9 |
+| BRG | 23 | Phase 4 wave 3, task 4.9 |
 | EVL | 27 | Phase 4 wave 3, task 4.10 |
 | RSK | 37 | Phase 4 wave 3, task 4.10 |
 | KYC | 24 | Phase 4 wave 3, task 4.11 |
@@ -587,10 +591,10 @@ Count check: 7 (2.1) + 2 (2.5) + 12 (3.2) = 21. ✓
 | JRN | 6 | Phase 4 wave 3, task 4.12 |
 | EDU | 8 | Phase 4 wave 3, task 4.12 |
 
-Count check: 7 + 184 (wave 1) + 182 (wave 2) + 258 (wave 3) = 631. ✓
+Count check: 7 + 184 (wave 1) + 182 (wave 2) + 257 (wave 3) = 630. ✓
 Full ID lists: module docs' §1 + `contracts/api/*.md` + `scripts/prd-backlog.json`.
 
-### A.4 V3.0 — 206 rows (Phase 5)
+### A.4 V3.0 — 214 rows (Phase 5)
 
 | Module | Rows | Builds in |
 |---|---|---|
@@ -605,14 +609,14 @@ Full ID lists: module docs' §1 + `contracts/api/*.md` + `scripts/prd-backlog.js
 | CRM | 8 | Phase 5 wave 3, task 5.11 |
 | MIG | 1 | Phase 5 wave 3, task 5.11 (MIG-03) |
 | CS | 7 | Phase 5 wave 4, task 5.13 |
-| PLT | 0 (doc-defined) | Phase 5 wave 4, task 5.12 |
+| PLT | 8 | Phase 5 wave 4, task 5.12 (PLT-01..08, in the backlog since the 2026-09-19 re-parse) |
 | RSK | 13 | Phase 5 wave 4, task 5.14 |
 | BRG | 10 | Phase 5 wave 4, task 5.14 |
 | ANA | 5 | Phase 5 wave 4, task 5.14 |
 | SUP | 4 | Phase 5 wave 4, task 5.14 |
 | CHK/CHT (+3 each), AUD/CON/EVL/GW/JRN/LED (+2 each), EDU/EVT/KYC/LCC/MOB/NOT/TD/TEN (+1 each) | 28 | Phase 5 wave 4, task 5.14 |
 
-Count check: 36 + 3 + 15 + 17 + 8 + 30 + 21 + 8 + 1 + 7 + 13 + 10 + 5 + 4 + 28 = 206. ✓
+Count check: 36 + 3 + 15 + 17 + 8 + 30 + 21 + 8 + 1 + 7 + 13 + 10 + 5 + 4 + 28 + 8 (PLT) = 214. ✓
 
 ---
 
@@ -650,11 +654,11 @@ at its **exit gate**. Owners: Appendix A + §9.
 | B-25 | V1.1 rest (13 rows) | B-24 | 3.2: V1.1 21/21 on staging |
 | B-26 | V2 wave 1 (184) | M3 (B-25 + review rhythm + 2× load + drill) | 4.1–4.4: SUP/CHT + CRM/ANA + ADM/CON + NOT/DOC depth live |
 | B-27 | V2 wave 2 (182) | B-26 started (overlap 1 wk) | 4.5–4.8: TEN/AUTH + GW/EVT + LED/AUD + OPS depth live |
-| B-28 | V2 wave 3 (258) | B-27 started (overlap 1 wk) | 4.9–4.12: trading depth + MOB + JRN + EDU live |
+| B-28 | V2 wave 3 (257) | B-27 started (overlap 1 wk) | 4.9–4.12: trading depth + MOB + JRN + EDU live |
 | B-29 | V3 wave 1 (39) | M4 (B-26…B-28 + V2 load) | 5.1–5.4: public API + sandbox + portal + certified agency |
 | B-30 | V3 wave 2 (40) | B-29 | 5.5–5.8: site + competition + copy/backtest/paper live |
 | B-31 | V3 wave 3 (60) | B-30 started | 5.9–5.11: affiliate + billing + CRM depth live |
-| B-32 | V3 wave 4 (67) | B-31 started | 5.12–5.14: PLT quarterly + CS QBR + stragglers; V3 206/206 |
+| B-32 | V3 wave 4 (75) | B-31 started | 5.12–5.14: PLT quarterly + CS QBR + stragglers; V3 214/214 |
 
 **How to use this checklist:** before starting any task, verify its
 row's entry criteria. If one fails, the task is blocked — work the

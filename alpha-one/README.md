@@ -104,6 +104,19 @@ constantly).
 | [34-tooling-registry](docs/34-tooling-registry.md) | **Binding** build/buy decisions: the 28 BVR rules, the integration map, license policy, adapter registry |
 | [35-testing-strategy](docs/35-testing-strategy.md) | Test pyramid, the 16-invariant suite, contract gates, load/security/migration assurance per milestone |
 
+### 3x — PRD registers (generated from the workbook)
+| Doc | Contents |
+|---|---|
+| [36-prd-feature-proposals](docs/36-prd-feature-proposals.md) | The 14 `PROP-*` proposals (all unreviewed) + the release roadmap with its gates and counts |
+| [37-prd-open-questions](docs/37-prd-open-questions.md) | All 205 workbook questions by module — 8 answered (binding), 197 open, each with owner + deadline |
+| [38-prd-out-of-scope](docs/38-prd-out-of-scope.md) | The 266 deliberate exclusions by module — the "do not build this" register |
+| [39-prd-change-log](docs/39-prd-change-log.md) | The workbook's 67-row change log, the 7 backlog-audit findings, and the 13 controlled vocabularies |
+| [40-uploads-coverage](docs/40-uploads-coverage.md) | Source traceability: every `uploads/` file, where it landed, and what stayed open |
+
+> Regenerate with `python3 scripts/parse_prd_workbook.py` →
+> `python3 scripts/build_prd_registers.py` (both have `--check` modes). The
+> machine-readable mirror of every PRD sheet is `scripts/prd-workbook.json`.
+
 ### Contracts
 | Path | Contents |
 |---|---|
@@ -139,8 +152,9 @@ constantly).
 - **API versioning**: URL-based (`/v1/`), additive changes only inside a version.
 - **Docs cite requirements** as `MODULE-NN` (e.g. `BRG-07`) referring to the PRD master
   backlog; module docs list which requirements they cover.
-- **The PRD backlog is the scope authority**: 1012 rows (154 V1.0 + 21 V1.1 + 631 V2.0
-  + 206 V3.0), machine-readable in `scripts/prd-backlog.json`. Every module doc's §1
+- **The PRD backlog is the scope authority**: 1020 rows (154 V1.0 + 21 V1.1 + 630 V2.0
+  + 214 V3.0 + 1 unassigned — BRG-28, the workbook's open placeholder),
+  machine-readable in `scripts/prd-backlog.json`. Every module doc's §1
   coverage claim is cross-checked against it (`complete_contracts_pack.py --check-only`),
   and docs/99 Appendix A maps every row to exactly one phase.
 

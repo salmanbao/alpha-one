@@ -5,14 +5,22 @@ Owner: TBD
 Version: v1
 Last updated: 2026-09-19
 
-No §7 in the module doc (console-only module); scope from PRD PLT-NN (TBD). Nothing here is final until that phase's contract freeze (docs/99 §12).
+No §7 in the module doc (console-only module); scope from PRD PLT-NN (V3.0). Nothing here is final until that phase's contract freeze (docs/99 §12).
 
 ## Scope
 
-PRD module **PLT** (0 requirements). Abridged backlog:
+PRD module **PLT** (8 requirements). Abridged backlog:
 
 | Req | Feature | Release | Pri | Owner | User story (abridged) |
 |---|---|---|---|---|---|
+| `PLT-01` | Multi-region deployment | V3.0 | P2 | DevOps | As ops, I deploy to multiple regions for disaster recovery so that regional outages don't stop the platform. |
+| `PLT-02` | Capacity planning | V3.0 | P2 | DevOps | As ops, I forecast resource needs based on growth so that infrastructure scales ahead of demand. |
+| `PLT-03` | Cost allocation | V3.0 | P2 | BE-2 | As the business, I see infrastructure cost per tenant so that profitability is measurable. |
+| `PLT-04` | Performance benchmarking | V3.0 | P1 | DevOps | As ops, I track p50/p95/p99 latencies per endpoint so that performance regressions are caught. |
+| `PLT-05` | Incident management and on-call runbooks | V3.0 | P1 | DevOps | As platform ops, I follow documented incident runbooks and on-call escalation, so that incidents are handled consistently. |
+| `PLT-06` | Capacity and cost governance dashboard | V3.0 | P2 | DevOps | As platform ops, I see capacity and cost trends per tenant and service, so that scaling and spend are governed. |
+| `PLT-07` | Multi-region failover runbook and drills | V3.0 | P1 | DevOps | As platform ops, I rehearse multi-region failover, so that regional outages are recoverable. |
+| `PLT-08` | Security operations and vulnerability management | V3.0 | P1 | DevOps | As platform ops, I run ongoing vulnerability management and security operations, so that platform security is proactive. |
 
 ## Auth
 

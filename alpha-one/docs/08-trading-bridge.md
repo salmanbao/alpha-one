@@ -20,8 +20,13 @@ is the fallback only if no suitable MT5 route is found). MT4/cTrader/DXtrade
 adapters are V3 (BRG-24/25) behind the same interface.
 
 Requirement coverage: `BRG-01,02,05,06,07,08,09,10,11,12,14,43,44` (V1.0) +
-`03,04,13,15,16,17,18,19,20,22,23,27,28,29,30,31,32,33,34,35,37,42,45,46` (V2.0) +
-`21,24,25,26,36,38,39,40,41,47` (V3.0).
+`03,04,13,15,16,17,18,19,20,22,23,27,29,30,31,32,33,34,35,37,42,45,46` (V2.0) +
+`21,24,25,26,36,38,39,40,41,47` (V3.0) + `28` **unassigned** —
+`BRG-28` (broker server time-drift detection) carries no release in the
+workbook: it is the PRD backlog audit's one ERROR finding (placeholder
+requirement, `docs/39-prd-change-log.md` §2) and must be defined into a
+train or deleted before the Phase-1 contract freeze. It is therefore
+*not* counted in any release above.
 
 ## 2. Architecture
 

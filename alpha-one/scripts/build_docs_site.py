@@ -90,17 +90,39 @@ def _api_label(src: Path, heading: str) -> str:
     return _prettify(src.name)
 
 
+# Which PRD domain each module doc belongs to (docs/00 §3; the PRD's own
+# Domains & Modules sheet). Keeps the sidebar in product order rather than
+# file order, so a reader follows D1 → D5 like the PRD does.
+MODULE_DOC_DOMAIN = {
+    "02": "D4", "03": "D4", "04": "D4", "05": "D4", "06": "D4", "21": "D4",
+    "07": "D1", "08": "D1", "09": "D1", "10": "D1", "11": "D1",
+    "12": "D2", "13": "D2", "14": "D2", "15": "D2", "16": "D2", "26": "D2",
+    "17": "D3", "18": "D3", "19": "D3", "20": "D3", "25": "D3",
+    "22": "D5", "23": "D5", "24": "D5", "27": "D5",
+}
+DOMAIN_TITLES = {
+    "D1": "D1 · Core Trading Engine (BRG · EVL · LCC · PAY · RSK)",
+    "D2": "D2 · Trader Experience (TD · CHK · KYC · NOT · DOC · EDU · JRN · MOB · CHT)",
+    "D3": "D3 · Tenant Operations (ADM · SUP · ANA · CRM · MIG)",
+    "D4": "D4 · Platform Infrastructure (AUTH · TEN · EVT · GW · LED · AUD · OPS · CON)",
+    "D5": "D5 · Ecosystem & Growth (AFF · CMS · CMP · BIL · SDK · DVP · PLT · CS · TRD)",
+}
+
+
 def _doc_group(name: str) -> str:
     m = re.match(r"^(\d{2})-", name)
     if not m:
         return "Documentation"
-    num = int(m.group(1))
-    if num <= 1:
-        return "Foundation"
-    if num <= 27:
-        return "Modules (02–27)"
-    if num <= 35:
+    num = m.group(1)
+    if num in ("00", "01"):
+        return "Start here"
+    if num in MODULE_DOC_DOMAIN:
+        return DOMAIN_TITLES[MODULE_DOC_DOMAIN[num]]
+    n = int(num)
+    if n <= 35:
         return "Cross-cutting (28–35)"
+    if n <= 45:
+        return "PRD registers (36–40)"
     return "Development plan"
 
 
@@ -568,6 +590,41 @@ a:hover { text-decoration: underline; }
   color: var(--fg); font-size: 14px; line-height: 1.45;
 }
 .nav-group a:hover { background: var(--code-bg); text-decoration: none; }
+.nav-search { margin: 0 8px 14px; }
+.nav-search input {
+  width: 100%; padding: 6px 9px; font: inherit; font-size: 13px; color: var(--fg);
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;
+}
+.nav-group-title .count { color: var(--muted); font-weight: 400; }
+#toc {
+  background: var(--stripe); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; margin: 0 0 26px; font-size: 14px;
+}
+#toc summary { cursor: pointer; font-weight: 600; }
+#toc ul { margin: 8px 0 2px; padding-left: 18px; }
+#toc li { margin: 2px 0; }
+#toc li.toc-h3 { margin-left: 14px; list-style: circle; }
+.hub { margin: 0 0 34px; }
+.hub h2 { margin-top: 30px; }
+.hub-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.hub-card {
+  display: block; padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--stripe); color: var(--fg);
+}
+.hub-card:hover { border-color: var(--accent); text-decoration: none; }
+.hub-card b { color: var(--accent); display: block; margin-bottom: 4px; }
+.hub-card span { color: var(--muted); font-size: 13px; }
+.hub-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0 4px; padding: 0; list-style: none; }
+.hub-stats li {
+  border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px;
+  font-size: 13px; color: var(--muted);
+}
+.hub-stats b { color: var(--fg); }
+.hub-domains { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.hub-domain { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.hub-domain h3 { margin: 0 0 8px; font-size: 15px; }
+.hub-domain ul { margin: 0; padding-left: 18px; }
+.hub-divider { margin: 40px 0 26px; border: 0; border-top: 1px solid var(--border); }
 .nav-group a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 #scrim { display: none; }
 
@@ -648,15 +705,41 @@ JS = """
   document.querySelectorAll('#sidebar a').forEach(function (a) {
     a.addEventListener('click', close);
   });
+  var filter = document.getElementById('nav-filter');
+  if (filter) filter.addEventListener('input', function () {
+    var q = filter.value.trim().toLowerCase();
+    document.querySelectorAll('#sidebar .nav-group').forEach(function (group) {
+      var shown = 0;
+      group.querySelectorAll('a').forEach(function (a) {
+        var hit = !q || a.textContent.toLowerCase().indexOf(q) !== -1;
+        a.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      });
+      group.style.display = shown ? '' : 'none';
+    });
+  });
 })();
 """
 
 
+GROUP_ORDER = ("Overview", "Start here", "D1 ", "D2 ", "D3 ", "D4 ", "D5 ",
+               "Cross-cutting", "PRD registers", "Development plan", "Contracts", "Contracts · API")
+
+
+def _group_rank(name: str) -> tuple[int, str]:
+    for i, prefix in enumerate(GROUP_ORDER):
+        if name.startswith(prefix.strip()) or name == prefix:
+            return (i, name)
+    return (len(GROUP_ORDER), name)
+
+
 def _sidebar(doc: DocSpec, docs: list[DocSpec]) -> str:
     groups: "OrderedDict[str, list[DocSpec]]" = OrderedDict()
-    for d in docs:
+    for d in sorted(docs, key=lambda x: x.group):
         groups.setdefault(d.group, []).append(d)
-    parts = []
+    groups = OrderedDict(sorted(groups.items(), key=lambda kv: _group_rank(kv[0])))
+    parts = ['<div class="nav-search"><input id="nav-filter" type="search" '
+             'placeholder="Filter docs…" aria-label="Filter documentation"></div>']
     for group, items in groups.items():
         links = []
         for d in items:
@@ -665,9 +748,27 @@ def _sidebar(doc: DocSpec, docs: list[DocSpec]) -> str:
             links.append(f'<a href="{href}"{cls}>{html.escape(d.title, quote=True)}</a>')
         parts.append(
             f'<div class="nav-group"><div class="nav-group-title">'
-            f"{html.escape(group, quote=True)}</div>{''.join(links)}</div>"
+            f"{html.escape(group, quote=True)} <span class=\"count\">{len(items)}</span></div>"
+            f"{''.join(links)}</div>"
         )
     return "".join(parts)
+
+
+def _toc(body: str) -> str:
+    """'On this page' list from the rendered body's h2/h3 headings."""
+    items = []
+    for m in re.finditer(r"<h([23]) id=\"([^\"]+)\"[^>]*>(.*?)</h\1>", body, re.S):
+        level, anchor, text = m.group(1), m.group(2), re.sub(r"<[^>]+>", "", m.group(3))
+        text = html.unescape(text).strip()
+        if not text:
+            continue
+        cls = "toc-h3" if level == "3" else "toc-h2"
+        items.append(f'<li class="{cls}"><a href="#{html.escape(anchor, quote=True)}">'
+                     f"{html.escape(text, quote=True)}</a></li>")
+    if len(items) < 3:
+        return ""
+    return ('<details id="toc" open><summary>On this page</summary>'
+            f'<ul>{"".join(items)}</ul></details>')
 
 
 def _pager(doc: DocSpec, docs: list[DocSpec]) -> str:
@@ -721,12 +822,13 @@ def page_html(doc: DocSpec, body: str, docs: list[DocSpec], site: Site,
 <header class="topbar">
   <button id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
   <a class="brand" href="{root_href}">Alpha One <span>Docs</span></a>
-  <span class="crumb">{html.escape(doc.group, quote=True)}</span>
+  <span class="crumb">{html.escape(doc.group, quote=True)} &rsaquo; {title}</span>
 </header>
 <div id="scrim" aria-hidden="true"></div>
 <nav id="sidebar" aria-label="Documentation">{_sidebar(doc, docs)}</nav>
 <main id="content">
 <article>
+{_toc(body)}
 {body}
 </article>
 {_pager(doc, docs)}
@@ -738,6 +840,139 @@ def page_html(doc: DocSpec, body: str, docs: list[DocSpec], site: Site,
 </body>
 </html>
 """
+
+
+
+
+# ---------------------------------------------------------------------------
+# Landing hub (structured entry page)
+# ---------------------------------------------------------------------------
+
+
+def _readme_notes(root: Path) -> dict[str, str]:
+    """Descriptions from the README doc-map table: link target -> note."""
+    notes: dict[str, str] = {}
+    readme = root / "README.md"
+    if not readme.is_file():
+        return notes
+    for line in readme.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*(.+?)\s*\|\s*$", line)
+        if not m:
+            continue
+        target = m.group(2).split("#")[0].strip()
+        note = re.sub(r"\s+", " ", m.group(3))
+        notes[target] = note
+    return notes
+
+
+def _registry_stats(root: Path) -> list[tuple[str, str]]:
+    """Headline numbers for the hub, from the parsed PRD workbook."""
+    path = root / "scripts" / "prd-workbook.json"
+    if not path.is_file():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    backlog = data.get("master_backlog", [])
+    releases: dict[str, int] = {}
+    for row in backlog:
+        rel = row.get("release") or "unassigned"
+        releases[rel] = releases.get(rel, 0) + 1
+    out = [("requirements", f"{len(backlog)}")]
+    for rel in ("V1.0", "V1.1", "V2.0", "V3.0"):
+        if rel in releases:
+            out.append((rel, str(releases[rel])))
+    if "unassigned" in releases:
+        out.append(("unassigned", str(releases["unassigned"])))
+    for key, label in (("feature_proposals", "proposals"), ("open_questions", "open questions"),
+                       ("out_of_scope", "out-of-scope items"), ("integration_map", "integrations"),
+                       ("tooling_register", "tools"), ("build_vs_buy_rules", "BVR rules")):
+        if isinstance(data.get(key), list):
+            out.append((label, str(len(data[key]))))
+    return out
+
+
+def build_hub(root: Path, docs: list[DocSpec], doc: DocSpec) -> str:
+    """Structured landing content placed above the README on index.html."""
+    notes = _readme_notes(root)
+    by_group: "OrderedDict[str, list[DocSpec]]" = OrderedDict()
+    for d in sorted(docs, key=lambda x: x.site_path):
+        if d.group in ("Start here",) or d.group.startswith(("D1", "D2", "D3", "D4", "D5")):
+            by_group.setdefault(d.group, []).append(d)
+    by_group = OrderedDict(sorted(by_group.items(),
+                                  key=lambda kv: _group_rank(kv[0]) if kv[0] != "Start here" else (0, kv[0])))
+
+    def link(d: DocSpec) -> str:
+        href = rel_url(Path(doc.site_path).parent, d.site_path)
+        note = notes.get(d.src.relative_to(root).as_posix(), "")
+        note_html = f"<span>{html.escape(note, quote=True)}</span>" if note else ""
+        return (f'<li><a href="{href}">{html.escape(d.title, quote=True)}</a> '
+                f"{note_html}</li>")
+
+    parts = ['<section class="hub">']
+    parts.append("<h1>Alpha One — documentation</h1>")
+    parts.append("<p>Three entry points: <b>module docs</b> (how each module is designed), "
+                 "<b>PRD registers</b> (what the workbook says), and the <b>contracts pack</b> "
+                 "(what the code must implement). Everything below is generated from this "
+                 "repository.</p>")
+    stats = _registry_stats(root)
+    if stats:
+        parts.append('<ul class="hub-stats">' + "".join(
+            f"<li><b>{html.escape(value, quote=True)}</b> {html.escape(label, quote=True)}</li>"
+            for label, value in stats) + "</ul>")
+
+    regs = [d for d in docs if d.group.startswith("PRD registers")]
+    if regs:
+        parts.append("<h2>PRD registers</h2>")
+        parts.append('<div class="hub-cards">')
+        for d in regs:
+            href = rel_url(Path(doc.site_path).parent, d.site_path)
+            note = notes.get(d.src.relative_to(root).as_posix(), "")
+            parts.append(f'<a class="hub-card" href="{href}"><b>{html.escape(d.title, quote=True)}</b>'
+                         f"<span>{html.escape(note, quote=True)}</span></a>")
+        parts.append("</div>")
+
+    if by_group:
+        parts.append("<h2>Modules by domain</h2>")
+        parts.append('<div class="hub-domains">')
+        for group, items in by_group.items():
+            if group == "Start here":
+                continue
+            parts.append(f'<div class="hub-domain"><h3>{html.escape(group, quote=True)}</h3><ul>')
+            parts.extend(link(d) for d in items)
+            parts.append("</ul></div>")
+        parts.append("</div>")
+
+    cross = [d for d in docs if d.group.startswith("Cross-cutting")]
+    if cross:
+        parts.append("<h2>Cross-cutting</h2>")
+        parts.append('<div class="hub-cards">')
+        for d in cross:
+            href = rel_url(Path(doc.site_path).parent, d.site_path)
+            note = notes.get(d.src.relative_to(root).as_posix(), "")
+            parts.append(f'<a class="hub-card" href="{href}"><b>{html.escape(d.title, quote=True)}</b>'
+                         f"<span>{html.escape(note, quote=True)}</span></a>")
+        parts.append("</div>")
+
+    parts.append("<h2>Contracts &amp; API</h2>")
+    parts.append('<div class="hub-cards">')
+    for label, rel, note in (
+        ("Contracts pack", "contracts/index.html", "OpenAPI specs, data dictionary, schemas, events, errors, permissions"),
+        ("API contracts (36 modules)", "contracts/api/", "Per-module HTTP contracts with scope tables"),
+        ("OpenAPI specs (26 modules)", "contracts/", "Machine-readable specs and shared components"),
+    ):
+        href = rel_url(Path(doc.site_path).parent, rel)
+        parts.append(f'<a class="hub-card" href="{href}"><b>{html.escape(label, quote=True)}</b>'
+                     f"<span>{html.escape(note, quote=True)}</span></a>")
+    parts.append("</div>")
+    parts.append('<hr class="hub-divider">')
+    parts.append("</section>")
+    return "".join(parts)
+
+
+def _strip_first_h1(body: str) -> str:
+    return re.sub(r"^\s*<h1[^>]*>.*?</h1>\s*", "", body, count=1, flags=re.S)
 
 
 # ---------------------------------------------------------------------------
@@ -859,7 +1094,11 @@ def build(root: Path, out: Path, clean: bool) -> int:
         ctx = RenderCtx(site=site, src_file=d.src, page_site_dir=Path(d.site_path).parent)
         rendered.append((d, render_markdown(text, ctx), ctx))
 
+    readme_src = (root / "README.md").resolve()
     for d, body, ctx in rendered:
+        if d.src.resolve() == readme_src:
+            hub = build_hub(root, docs, d)
+            body = hub + _strip_first_h1(body)
         page = page_html(d, body, docs, site)
         dest = out / d.site_path
         dest.parent.mkdir(parents=True, exist_ok=True)
