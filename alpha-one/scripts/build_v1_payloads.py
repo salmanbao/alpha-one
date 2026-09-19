@@ -49,8 +49,10 @@ EVENTS = {
     "payload": obj({
       "account_id": ULID, "phase": {"type": "integer", "minimum": 1},
       "rule": {"type": "string", "description": "the breached rule (e.g. daily drawdown, max drawdown, profit target breach path)"},
+      "verdict_id": ULID,
+      "evidence_ref": {"type": "string", "description": "pointer to the EVL evidence snapshot (verdict input: tick data, rule state)"},
       "observed": {"type": "number"}, "limit": {"type": "number"}, "breached_at": TS,
-    }, ["account_id", "phase", "rule", "breached_at"]),
+    }, ["account_id", "phase", "rule", "verdict_id", "breached_at"]),
   },
   "AccountFailed": {
     "consumers": ["NOT-01 (template: phase failed)", "ANA-01"],
@@ -72,6 +74,58 @@ EVENTS = {
     "payload": obj({
       "account_id": ULID, "actor_id": ULID, "reason": {"type": "string"}, "suspended_at": TS,
     }, ["account_id", "actor_id", "reason", "suspended_at"]),
+  },
+  # --- tenth pass (docs/50 D28): the Phase-1 core-loop wiring events ---
+  "account.activated": {
+    "consumers": ["BRG (start sync)", "EVL (start evaluation + create evaluation_state)", "NOT-01", "AUD"],
+    "payload": obj({
+      "account_id": ULID, "broker_account_id": ULID,
+      "server": {"type": "string", "description": "broker server id (ADR-12 day-boundary authority)"},
+      "phase": {"type": "integer", "minimum": 1},
+    }, ["account_id", "broker_account_id", "server", "phase"]),
+  },
+  "account.day_rolled": {
+    "consumers": ["EVL (daily reset)", "ANA"],
+    "payload": obj({
+      "account_id": ULID,
+      "broker_date": {"type": "string", "description": "the new broker-server date (YYYY-MM-DD, per server group timezone)"},
+      "server": {"type": "string"},
+      "trading_days": {"type": "integer", "minimum": 0},
+      "calendar_days": {"type": "integer", "minimum": 0},
+    }, ["account_id", "broker_date", "server", "trading_days", "calendar_days"]),
+  },
+  "evaluation.verdict": {
+    "consumers": ["LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43)", "NOT-01", "DOC-04 (TD-25 breach report)", "AUD (critical on breach)", "RSK (V2 case open)"],
+    "payload": obj({
+      "account_id": ULID, "verdict_id": ULID,
+      "status": {"type": "string", "enum": ["breach", "target_hit", "gap_flagged"],
+                 "description": "target_hit_pending is recorded in evaluations.status only — it is never emitted (docs/09 §3.4)"},
+      "rule_id": {"type": "string", "description": "required when status=breach (e.g. max_daily_loss, max_total_loss, time_limit — D30)"},
+      "input_hash": {"type": "string", "description": "sha256(state||rules||tick) — the EVL-49 re-run proof"},
+      "broker_time": TS,
+      "limit_cents": {"type": "integer"}, "observed_cents": {"type": "integer"},
+      "tolerance_cents": {"type": "integer"},
+    }, ["account_id", "verdict_id", "status", "input_hash", "broker_time"]),
+  },
+  "evaluation.daily_reset": {
+    "consumers": ["ANA (daily P&L points)", "AUD (standard)"],
+    "payload": obj({
+      "account_id": ULID,
+      "broker_date": {"type": "string", "description": "the closed broker-server date (YYYY-MM-DD)"},
+      "day_pnl_cents": {"type": "integer"},
+      "equity_end_cents": {"type": "integer"},
+      "trading_days": {"type": "integer", "minimum": 0},
+    }, ["account_id", "broker_date", "day_pnl_cents", "equity_end_cents", "trading_days"]),
+  },
+  "bridge.tick": {
+    "consumers": ["EVL (evaluate)", "ANA (equity points) — observed record per EVL-49; no audit mirror (docs/05 §14)"],
+    "payload": obj({
+      "account_id": ULID,
+      "equity_cents": {"type": "integer", "description": "broker-reported equity in cents — never recomputed, broker is truth (docs/09 §3.3)"},
+      "balance_cents": {"type": "integer"},
+      "open_positions": {"type": "integer", "minimum": 0},
+      "broker_time": TS,
+    }, ["account_id", "equity_cents", "balance_cents", "open_positions", "broker_time"]),
   },
   "Resumed": {
     "consumers": ["ANA-01"],

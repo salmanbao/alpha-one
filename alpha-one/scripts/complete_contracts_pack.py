@@ -210,6 +210,8 @@ def gen_examples():
                 "payload": {},
             }
             dest = out_root / topic / f"{ev_name}.v1.example.json"
+            if (CON / "events" / "payloads" / f"{ev_name}.v1.json").exists():
+                continue  # promoted to the V1 catalog (docs/50 D28) — example is maintained with the payload schema
             if not CHECK_ONLY:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 json.dump(ex, open(dest, "w"), indent=2)

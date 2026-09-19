@@ -149,12 +149,18 @@ When one tick can fire multiple rules, the matrix resolves **deterministically**
 
 | Priority | Verdict | Action | Notes |
 |---|---|---|---|
-| 1 | `breach` (any loss rule) | fail account; `breach_rule_id` = **highest-priority rule fired**: max_total_loss > max_daily_loss > (V2 conduct rules) | one breach, ever (LCC-43); evidence = full tick + state snapshot |
-| 2 | `target_hit` | phase pass gate: requires `trading_days ≥ min_trading_days` (EVL-19): met → `target_hit`; not met → **`target_hit_pending`** (state flag; pass fires on the first tick after the Nth trading day with profit still ≥ target) | if a loss rule also fires same tick → priority 1 wins (breach beats pass) |
+| 1 | `breach` (any loss or expiry rule) | fail account; `breach_rule_id` = **highest-priority rule fired**: max_total_loss > max_daily_loss > time_limit > (V2 conduct rules) | one breach, ever (LCC-43); evidence = full tick + state snapshot |
+| 2 | `target_hit` | phase pass gate: requires `trading_days ≥ min_trading_days` (EVL-19): met → `target_hit`; not met → **`target_hit_pending`** (state flag; pass fires on the first tick after the Nth trading day with profit still ≥ target) | if a loss rule also fires same tick → priority 1 wins (breach beats pass); `target_hit_pending` may be recorded in `evaluations.status` for observability but is never emitted as `evaluation.verdict` — the emitted pass event is `target_hit` on the days-met tick |
 | 3 | `ok` | update counters | — |
 
 Edge semantics (pinned by the test-vector suite, EVL-54):
 - equity exactly at the limit → fires (with tolerance).
+- **Time-limit expiry (D30):** `time_limit` (max_calendar_days) is a breach
+  rule — when the rollover tick observes `calendar_days ≥ max_calendar_days`,
+  the verdict is `breach` with `rule_id=time_limit` (same evidence, LCC-43
+  idempotency and critical audit as any breach; `failed_reason=
+  'breach:time_limit'`). `account.expired` stays the NOT/ANA mirror event,
+  not a separate enforcement path.
 - target reached, then equity falls below target **before** min days → not
   pending (only a tick ≥ target sets the flag; once set it stays set).
 - rollover while `target_hit_pending` and days now met → pass on rollover tick.
@@ -185,30 +191,48 @@ contract test renders the matrix from code (same pattern as LCC transitions).
 
 | Trigger | Source | What runs |
 |---|---|---|
-| `tick` | `bridge.tick` (per account, 60 s cadence) | full evaluate |
-| `day_rolled` | LCC `account.day_rolled` (broker midnight per server) | daily reset: push `daily_pnls`, `day_start_equity = equity`, `trading_days++` (if any trade that day), `calendar_days++`; then re-evaluate on the post-rollover tick |
+| `tick` | `bridge.tick` (per account, 60 s cadence) | full evaluate (SUSPENDED/terminal accounts are skipped — WARN, no state change; D31) |
+| `day_rolled` | LCC `account.day_rolled` (broker midnight per server) | daily reset: push `daily_pnls`, `day_start_equity = equity`, `trading_days++` (if any trade that day), `calendar_days++`; then re-evaluate on the post-rollover tick (SUSPENDED accounts get no rollover event — clocks frozen, docs/07 §3.3; D31) |
 | `manual` | ADM "run evaluation now" (EVL-36: 2FA, audited; used after data repairs) | full evaluate on latest tick |
 | `backfill` (V2 EVL-33) | CON batch tool | re-evaluate a tick range (uses stored observed ticks; writes corrected verdicts only if the fix changes state — with full before/after audit) |
 
 ### 3.7 Overrides (EVL-20, V1-Plus)
 
-Tenant (firm:owner, 2FA, reason, critical audit) can **clear a false positive**:
+Tenant staff (registry roles firm:owner/admin/risk; step-up `mfa_verified_at`
+within 5 min; a risk override > $500k requires a firm:owner approval flag — the
+`account.manual_override` registry row; reason; critical audit) can **clear a false positive**:
 e.g. broker-reported glitch tick caused a breach. Mechanism: NOT deleting the
 verdict — writing `evaluation.override {clears: verdict_id, reason, by}` which
 transitions LCC back (`failed → active`, V1 supports breach-only reversals;
 trading re-enabled via BRG). The original verdict + evidence remain visible
-("one defensible answer" = the override is itself on the record).
+("one defensible answer" = the override is itself on the record). The LCC
+machine's two guarded reversal edges — `BREACH_DETECTED → ACTIVE` and
+`FAILED → ACTIVE` — exist **only** for this flow (tenth pass D29, docs/50): the
+transition validates the override record; closed positions stay closed; BRG
+re-enables trading.
 
 ## 4. Events (topic `evaluation`)
 
+### 4.1 V1 baseline events — authoritative (tenth pass D28)
+
+From `contracts/events/catalog.md`. Envelope EVT-03 (`id`, `type`, `version`,
+`tenant_id`, `occurred_at`, `correlation_id`, `payload`); schemas in
+`contracts/events/payloads/`. `bridge.tick` (the observed input, topic
+`bridge`) is cataloged from docs/08 §4.1 in the same decision.
+
+| Event | Producer (V1) | V1 consumers |
+|---|---|---|
+| `evaluation.verdict` | EVL (every non-ok verdict) | LCC (transitions; dedupe on `(account_id, verdict_id)`, LCC-43), NOT-01, DOC-04 (breach report TD-25), AUD (critical on breach), RSK (V2 case open) |
+| `evaluation.daily_reset` | EVL (rollover) | ANA (daily P&L points), AUD (standard) |
+
+### 4.2 Extended (post-V1) event model — design-level
+
 | Event | When | Consumers |
 |---|---|---|
-| `evaluation.verdict` | every non-ok verdict (and daily ok-summary at rollover) | LCC (transitions), NOT, DOC (breach report), AUD (critical on breach), RSK (V2 case open) |
 | `evaluation.risk_guard` (V1-Plus) | buffer breach | ADM (page), AUD |
 | `evaluation.override` (V1-Plus) | manual clear | LCC, NOT, AUD (critical) |
 | `evaluation.manual_run` (V1-Plus) | ADM trigger | AUD |
 | `evaluation.emergency` (V1-Plus) | CON stop | LCC, AUD (critical), NOT |
-| `evaluation.daily_reset` | rollover | ANA (daily P&L points), AUD (standard) |
 | `evaluation.recomputed` (V2) | backfill changed history | AUD (critical), CON |
 
 ## 5. Lifecycles
@@ -254,7 +278,7 @@ Namespace `EVL` (internal-facing; client errors surface via LCC/ADM codes):
 | `evl.rulepack_invalid` | Pack failed schema/validation on create (ADM, 422 to user) |
 | `evl.rulepack_conflict` | Pack contains conflicting rules (e.g. two `max_daily_loss`) — EVL-28 V2 validator; V1: builder prevents |
 | `evl.input_mismatch` | `input_hash` of stored re-run ≠ recomputed (data corruption — CRITICAL) |
-| `evl.tick_stale` | Tick older than 10 min (sync lag) — evaluation skipped + WARN (stale equity must not drive verdicts; EVL-52 snapshot ordering: verdicts only from ticks newer than the state's last evaluated tick) |
+| `evl.tick_stale` | Tick older than 10 min (sync lag) — evaluation skipped + WARN (stale equity must not drive verdicts; EVL-52 snapshot ordering: verdicts only from ticks newer than the state's last evaluated tick). No verdict row is written; the `gap_flagged` status is reserved for `bridge.sync_gap` verdicts (§3.5) |
 | `evl.unknown_rule_kind` | Engine newer/older than pack (versioning bug — deploy gate) |
 | `evl.override_invalid` | Override target not overridable (terminal/already overridden) |
 | `evl.metric_unavailable` | Required metric missing from tick (e.g. deal data gap) — verdict = `ok-with-gap-flag` + WARN; **never** assume (00 §8 #5) |
@@ -268,8 +292,8 @@ Namespace `EVL` (internal-facing; client errors surface via LCC/ADM codes):
 | `PATCH /v1/admin/challenges/{challenge_id}` | Tenant Admin — EVL-01 | `challenge.write` # EVL-01 | required | `challenge.not_found` |
 | `POST /v1/admin/rule-sets` | Tenant Admin — EVL-02 | `ruleset.write` # derived from EVL-02 versioning | required | `ruleset.invalid_rules` |
 | `POST /v1/admin/rule-sets/{rule_set_id}/versions` | Tenant Admin — EVL-02, EVL-34 | `ruleset.write` # EVL-02 | required | `ruleset.not_found` |
-| `POST /v1/admin/accounts/{account_id}/evaluate` | support staff (V1.1) — EVL-36 | `account.evaluate` # derived from EVL-36 "force re-evaluation" | required | `account.not_found`, `account.terminal_state` |
-| `POST /v1/admin/accounts/{account_id}/override` | Tenant Admin (V1.1) — EVL-20 | `account.manual_override` # EVL-20 | required | `account.not_found`, `override.action_unknown`, `override.reason_required` |
+| `POST /v1/admin/accounts/{account_id}/evaluate` | tenant staff — firm:owner/admin/risk, step-up (V1.1) — EVL-36 | `account.evaluate` # derived from EVL-36 "force re-evaluation" | required | `account.not_found`, `account.terminal_state` |
+| `POST /v1/admin/accounts/{account_id}/override` | tenant staff — firm:owner/admin/risk, step-up; >$500k needs firm:owner approval flag (V1.1) — EVL-20 | `account.manual_override` # EVL-20 | required | `account.not_found`, `override.action_unknown`, `override.reason_required` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/evl.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
 
@@ -460,7 +484,7 @@ calendar feed for news rules — the provider is a data import into
 | 4. Evaluation consumer (per-account lanes) + tick/rollover triggers + verdict → LCC wiring | BE-1 | 3 d | 2, 3, LCC, BRG-3 | sandbox: live sync → daily counter visible in TD; rollover resets correctly |
 | 5. ADM rule-pack builder (EVL-01) + versioning/activation + re-bind (EVL-34) | BE-2 + FE-1 | 4 d | 3 | tenant creates v2 pack; live account keeps v1; re-bind with reason works |
 | 6. Dispute tooling: verdict viewer + evidence + re-run proof + override flow (EVL-16/20/36) | BE-2 | 3 d | 4 | re-run of a stored verdict reproduces it (hash match shown in UI) |
-| 7. Risk guard + emergency stop + tick-staleness guard (EVL-51/52) | BE-1 | 2 d | 4 | injected 12-min-old tick → `gap_flagged`, no verdict; emergency stop fails account end-to-end |
+| 7. Risk guard + emergency stop + tick-staleness guard (EVL-51/52) | BE-1 | 2 d | 4 | injected 12-min-old tick → evaluation skipped + WARN, no verdict row; injected `bridge.sync_gap` → `gap_flagged` verdict; emergency stop fails account end-to-end |
 | 8. **Test-vector suite (EVL-54) + regression suite (EVL-35)** as CI gate (fixture packs × fixture tick histories) | BE-1 | 2 d | 2–4 | CI job `evl-vectors` green; a changed rounding constant fails it |
 | 9. MIG state seeding for FunderBlu cutover | BE-1 | 2 d | 4, MIG | 20 real in-flight accounts seeded; first live tick coherent (no false breaches) |
 | 10. V2: remaining rule kinds (trailing/EOD-trailing/balance-trailing, min days, consistency, weekend, news, lot/position caps, stop-required, trading hours), simulation tool (EVL-22), backfill (EVL-33), conflict validator (EVL-28) | BE-1 | 3 wks | 8–9 | each new kind = vectors + docs + matrix row updated |

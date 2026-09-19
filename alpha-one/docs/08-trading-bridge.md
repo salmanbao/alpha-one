@@ -161,6 +161,14 @@ commands queue (not dropped) + CON banner.
 
 ## 4. Events (topic `bridge`)
 
+### 4.1 V1 baseline events — authoritative (tenth pass D28)
+
+| Event | Producer (V1) | V1 consumers |
+|---|---|---|
+| `bridge.tick` | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) |
+
+### 4.2 Extended (post-V1) event model — design-level
+
 | Event | When | Key fields | Consumers |
 |---|---|---|---|
 | `bridge.tick` | every sync tx | account, equity, balance, margin, positions, deals_count, broker_time | EVL (trigger eval), ANA (equity points), web SSE fan-out (TD live) |

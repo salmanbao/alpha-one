@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "account.day_rolled.v1.json",
+  "title": "Alpha One \u2014 event account.day_rolled v1",
+  "description": "V1 catalog event `account.day_rolled` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = EVL (daily reset), ANA. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "account.day_rolled"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "broker_date": {
+              "type": "string",
+              "description": "the new broker-server date (YYYY-MM-DD, per server group timezone)"
+            },
+            "server": {
+              "type": "string"
+            },
+            "trading_days": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "calendar_days": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "broker_date",
+            "server",
+            "trading_days",
+            "calendar_days"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

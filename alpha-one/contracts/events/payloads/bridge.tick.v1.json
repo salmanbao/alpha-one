@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bridge.tick.v1.json",
+  "title": "Alpha One \u2014 event bridge.tick v1",
+  "description": "V1 catalog event `bridge.tick` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = EVL (evaluate), ANA (equity points) \u2014 observed record per EVL-49; no audit mirror (docs/05 \u00a714). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "bridge.tick"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "equity_cents": {
+              "type": "integer",
+              "description": "broker-reported equity in cents \u2014 never recomputed, broker is truth (docs/09 \u00a73.3)"
+            },
+            "balance_cents": {
+              "type": "integer"
+            },
+            "open_positions": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "broker_time": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "equity_cents",
+            "balance_cents",
+            "open_positions",
+            "broker_time"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

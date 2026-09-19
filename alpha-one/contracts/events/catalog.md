@@ -21,6 +21,22 @@ Delivery is at-least-once with idempotent consumers (EVT-05). Payload field valu
 | FundedCreated | v1 | LCC-23 | DOC-04 (certificate), ANA-01; NOT-01 — TODO — needs owner decision (citation not directly supported by sheet: no funded-account template in NOT-05) | `payloads/FundedCreated.v1.json` |
 | Suspended | v1 | LCC-23 | PAY-04 (holds payouts on active suspension — mechanism, event vs status check, TODO — needs owner decision), ANA-01 | `payloads/Suspended.v1.json` |
 | Resumed | v1 | LCC-23 | ANA-01 | `payloads/Resumed.v1.json` |
+| account.activated | v1 | LCC (CREATED → ACTIVE on broker.created) — tenth pass D28 (docs/50) | BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD | `payloads/account.activated.v1.json` |
+| account.day_rolled | v1 | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA | `payloads/account.day_rolled.v1.json` |
+
+## Evaluation & bridge events — producers: EVL / BRG (V1 — tenth pass, docs/50 D28)
+
+The V1.0 core loop (docs/99 Phase 1: LCC → BRG → EVL) could not be wired from
+the sheet without these: EVL-17's breach path consumes `evaluation.verdict`,
+EVL-05's trigger is `bridge.tick`, and the daily reset rides `account.day_rolled`.
+`bridge.tick` is the **observed** record (EVL-49) and does NOT mirror to
+`audit_events` (docs/05 §14); the evaluated/decision events do.
+
+| Event | Version | Producer | Consumers | Payload |
+|---|---|---|---|---|
+| evaluation.verdict | v1 | EVL (every non-ok verdict; EVL-17) | LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43), NOT-01, DOC-04 (TD-25 breach report), AUD (critical on breach), RSK (V2 case open) | `payloads/evaluation.verdict.v1.json` |
+| evaluation.daily_reset | v1 | EVL (rollover) | ANA (daily P&L points), AUD (standard) | `payloads/evaluation.daily_reset.v1.json` |
+| bridge.tick | v1 | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points); observed record per EVL-49 — no audit mirror (docs/05 §14) | `payloads/bridge.tick.v1.json` |
 
 ## Checkout events
 

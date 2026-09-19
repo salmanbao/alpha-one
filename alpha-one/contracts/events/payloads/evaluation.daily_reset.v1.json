@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation.daily_reset.v1.json",
+  "title": "Alpha One \u2014 event evaluation.daily_reset v1",
+  "description": "V1 catalog event `evaluation.daily_reset` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ANA (daily P&L points), AUD (standard). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "evaluation.daily_reset"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "broker_date": {
+              "type": "string",
+              "description": "the closed broker-server date (YYYY-MM-DD)"
+            },
+            "day_pnl_cents": {
+              "type": "integer"
+            },
+            "equity_end_cents": {
+              "type": "integer"
+            },
+            "trading_days": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "broker_date",
+            "day_pnl_cents",
+            "equity_end_cents",
+            "trading_days"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

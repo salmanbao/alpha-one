@@ -17,8 +17,8 @@ realm only); `·` = denied. A digit cites the constraint in §2. Tenant roles ca
 
 | Key | Scope | trader | sup | fin | comp | risk | admin | owner | ro | p:fin | p:sup | ops | sadmin |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `account.evaluate` | all | · | · | · | · | A | A | A | · | · | · | · | · |
-| `account.manual_override` | all | · | · | · | · | A1 | A1 | A1 | · | · | · | · | · |
+| `account.evaluate` | all | · | · | · | · | A1 | A1 | A1 | · | · | · | · | · |
+| `account.manual_override` | all | · | · | · | · | A2 | A2 | A2 | · | · | · | · | · |
 | `account.read` | all | · | A | A | · | A | A | A | · | · | · | · | · |
 | `account.suspend` | all | · | · | · | · | A | A | A | · | · | · | · | · |
 | `analytics.read` | all | · | · | · | · | A | A | A | · | · | · | · | · |
@@ -27,12 +27,12 @@ realm only); `·` = denied. A digit cites the constraint in §2. Tenant roles ca
 | `challenge.write` | all | · | · | · | · | · | A | A | · | · | · | · | · |
 | `console.session.revoke` | platform | · | · | · | · | · | · | · | · | · | · | P | P |
 | `document.read` | own | O | · | · | · | · | · | · | · | · | · | · | · |
-| `kyc.document.read` | all | · | · | · | A2 | · | A2 | A2 | · | · | · | · | · |
+| `kyc.document.read` | all | · | · | · | A3 | · | A3 | A3 | · | · | · | · | · |
 | `kyc.restrictions.write` | all | · | · | · | A | · | A | A | · | · | · | · | · |
 | `kyc.review` | all | · | · | · | A | · | A | A | · | · | · | · | · |
-| `payout.approve` | all | · | · | A3 | · | · | A3 | A3 | · | · | · | · | · |
+| `payout.approve` | all | · | · | A4 | · | · | A4 | A4 | · | · | · | · | · |
 | `payout.method.read` | own | O | · | · | · | · | · | · | · | · | · | · | · |
-| `payout.method.review` | all | · | · | A4 | A4 | · | A4 | A4 | · | · | · | · | · |
+| `payout.method.review` | all | · | · | A5 | A5 | · | A5 | A5 | · | · | · | · | · |
 | `payout.method.write` | own | O | · | · | · | · | · | · | · | · | · | · | · |
 | `payout.policy.write` | all | · | · | A | · | · | A | A | · | · | · | · | · |
 | `payout.read_queue` | all | · | · | A | · | A | A | A | · | · | · | · | · |
@@ -60,8 +60,8 @@ Role columns: `user:trader` = `trader`; `firm:support` = `sup`; `firm:finance` =
 
 | Key | Module | Scope | Holders (effective) | Constraint |
 |---|---|---|---|---|
-| `account.evaluate` | EVL | all | `risk`, `admin`, `owner` | — |
-| `account.manual_override` | EVL | all | `risk`, `admin`, `owner` | (1) risk override > $500k requires a firm:owner approval flag in context (docs/02 §3.1) |
+| `account.evaluate` | EVL | all | `risk`, `admin`, `owner` | (1) step-up: mfa_verified_at within 5 min (docs/02 §3.1; EVL-36 — tenth pass, docs/50) |
+| `account.manual_override` | EVL | all | `risk`, `admin`, `owner` | (2) step-up: mfa_verified_at within 5 min; risk override > $500k requires a firm:owner approval flag in context (docs/02 §3.1; EVL-20 — tenth pass, docs/50) |
 | `account.read` | LCC | all | `sup`, `fin`, `risk`, `admin`, `owner` | — |
 | `account.suspend` | LCC | all | `risk`, `admin`, `owner` | — |
 | `analytics.read` | ANA | all | `risk`, `admin`, `owner` | — |
@@ -70,12 +70,12 @@ Role columns: `user:trader` = `trader`; `firm:support` = `sup`; `firm:finance` =
 | `challenge.write` | EVL | all | `admin`, `owner` | — |
 | `console.session.revoke` | CON | platform | `ops`, `sadmin` | V1 surface exists: CON-30 console-session revocation (POST /v1/console/sessions/{id}/revoke, self-guard console.cannot_revoke_self); AUTH-27 cross-identity forced logout is the V2 extension (docs/02 §4.1) |
 | `document.read` | DOC | own | `trader` | — |
-| `kyc.document.read` | KYC | all | `comp`, `admin`, `owner` | (2) access is audited (AUD-23) |
+| `kyc.document.read` | KYC | all | `comp`, `admin`, `owner` | (3) access is audited (AUD-23) |
 | `kyc.restrictions.write` | KYC | all | `comp`, `admin`, `owner` | — |
 | `kyc.review` | KYC | all | `comp`, `admin`, `owner` | — |
-| `payout.approve` | PAY | all | `fin`, `admin`, `owner` | (3) step-up: mfa_verified_at within 5 min (docs/02 §3.1) |
+| `payout.approve` | PAY | all | `fin`, `admin`, `owner` | (4) step-up: mfa_verified_at within 5 min (docs/02 §3.1) |
 | `payout.method.read` | PAY | own | `trader` | — |
-| `payout.method.review` | PAY | all | `fin`, `comp`, `admin`, `owner` | (4) access is audited (AUD-23) |
+| `payout.method.review` | PAY | all | `fin`, `comp`, `admin`, `owner` | (5) access is audited (AUD-23) |
 | `payout.method.write` | PAY | own | `trader` | — |
 | `payout.policy.write` | PAY | all | `fin`, `admin`, `owner` | — |
 | `payout.read_queue` | PAY | all | `fin`, `risk`, `admin`, `owner` | — |

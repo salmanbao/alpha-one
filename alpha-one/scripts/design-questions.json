@@ -1,318 +1,368 @@
 {
- "raised": "2026-09-19",
- "note": "Questions raised by the team during design review, NOT PRD workbook rows. Rendered into docs/37-prd-open-questions.md by scripts/build_prd_registers.py so both kinds of question live in one register. Evidence for each: docs/41-auth-ten-open-source-evaluation.md. Closing a row here means editing this file, re-running the script, and applying the answer to the owning doc.",
- "questions": [
-  {
-   "id": "D1",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Identity component wiring: Better Auth has no Go SDK, so the V1 plan assumes a Node identity surface. Options — A: keep Better Auth, run it in the Node tier behind a documented JWT/JWKS contract for Go (one more deployable); B: Better Auth for flows, Go owns session/refresh-token tables and revocation; C: replace with a multi-tenant IdP (Zitadel AGPL-3.0, or Keycloak if deep SAML/LDAP is needed), everything OIDC; D: build the identity domain in Go (~3-4 dev-weeks, zero extra runtime, BVR-14 superseded). See docs/41 §7.",
-   "raised_by": "Design review (docs/41)",
-   "owner": "Tech Lead, BE-1",
-   "deadline": "Before Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — option C, product P1: ZITADEL** (self-hosted, AGPL-3.0, one instance, Organization per tenant). Better Auth (BVR-14) and Cerbos (BVR-23) are superseded by ADR-13/ADR-14. See docs/41 §10."
-  },
-  {
-   "id": "D2",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Does any tenant need SAML/OIDC SSO or SCIM at V1 cutover? Restates PRD row *Auth & Identity #6* as a build decision. The PRD schedules AUTH-24/25 at V3 and every OSS IdP that ships them at V1 (Zitadel, Keycloak, authentik) costs a second identity store plus, for Zitadel, an AGPL-3.0 review. Answering yes promotes AUTH-24/25 into V1 and changes D1.",
-   "raised_by": "Design review (docs/41 §4)",
-   "owner": "Sales owner, Tech Lead",
-   "deadline": "Before Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — yes:** one V1 tenant requires SSO at cutover. AUTH-24 (SAML/OIDC federation) is promoted into V1.0/V1.1 scope and AUTH-25 (SCIM) is promoted with it per P3. Recorded as a post-PRD design decision (docs/41 §10), not a PRD workbook row."
-  },
-  {
-   "id": "D3",
-   "source_doc": "41",
-   "section": "Tenant Management",
-   "question": "Isolation enforcement depth: keep ADR-1 app-level only (Go tenant guard + sqlc + CI guard test), or add Postgres RLS as a fail-closed second layer? RLS costs 2-4% on indexed queries and requires transaction-scoped `set_config('app.tenant_id', …, true)` under PgBouncer, `FORCE ROW LEVEL SECURITY` and a (tenant_id, …) index on every policy table; a missed guard currently leaks all tenants' rows, with RLS it returns zero rows. See docs/41 §5.",
-   "raised_by": "Design review (docs/41 §5)",
-   "owner": "Tech Lead, BE-1, DevOps",
-   "deadline": "Before tenant-scoped tables are frozen",
-   "answer": "**Answered 2026-09-19 — yes: Postgres RLS is adopted** as the fail-closed second enforcement layer on every tenant-owned table (docs/01 §7.8, docs/03 §10). App-level guard (ADR-1) stays."
-  },
-  {
-   "id": "D4",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Authorization engine and deployment mode: keep Cerbos (BVR-23) as sidecar/central service, embed the Cerbos Go engine in-process (no extra process, fail-closed hazard disappears), switch to Casbin embedded (Apache-2.0, RBAC-with-domains, fastest, weakest decision logs), or fall back to the in-house engine behind `authorizer.Check`. The docs/02 §11 rule 'PDP unreachable → deny' only applies to the sidecar mode.",
-   "raised_by": "Design review (docs/41 §3.2)",
-   "owner": "Tech Lead, BE-2",
-   "deadline": "Phase 1 start (before AUTH-13)",
-   "answer": "**Answered 2026-09-19 — Casbin, embedded** in the Go api, RBAC-with-domains model. Cerbos is superseded (ADR-14); the `authorizer.Check` interface is unchanged. See docs/41 §10."
-  },
-  {
-   "id": "D5",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Staff 2FA scope in V1: AUTH-09 as written (mandatory for every staff role) or finance + risk only? This is PRD open question 'Auth & Identity #1' restated as a build decision; it sizes the enrolment UX, recovery flow and support load for launch.",
-   "raised_by": "Design review (docs/41 §8)",
-   "owner": "Tech Lead, FunderBlu COO",
-   "deadline": "Kickoff +2 days",
-   "answer": "**Answered 2026-09-19 — all staff roles, enforced at first login, with backup codes in V1**: AUTH-11 (backup codes) is promoted with AUTH-09; AUTH-29 (email change) and AUTH-28 (admin-assisted 2FA reset) become explicit V1 dependencies of the forced-enrolment path."
-  },
-  {
-   "id": "P1",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Which identity provider do we adopt (D1 = option C)?",
-   "raised_by": "Design review (docs/41 §10)",
-   "owner": "Tech Lead",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — ZITADEL**, self-hosted single instance + Postgres (AGPL-3.0, unmodified). Keycloak rejected on ops weight (1-2 GB, Java) and organisation fit; authentik rejected on hardening track record for fund-holding accounts. Legal review of AGPL obligations is a Phase-0 gate; policy: never patch ZITADEL source, contribute upstream."
-  },
-  {
-   "id": "P2",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Where do the login page and session live (D1 = C)?",
-   "raised_by": "Design review (docs/41 §10)",
-   "owner": "Tech Lead, BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — IdP-hosted login + IdP tokens at the API.** Users log in on ZITADEL Hosted Login v2 (org-scoped via `urn:zitadel:iam:org:id:{id}`), the api accepts the ZITADEL access token and keeps a Redis deny-set + `auth_sessions` projection for immediate revocation (AUTH-07/20/27/39). Our `/v1/auth/login|refresh` contract is retired in favour of OIDC endpoints; `contracts/api/auth.md` and `contracts/shared/openapi.yaml` are updated accordingly."
-  },
-  {
-   "id": "P3",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "With SSO needed at cutover, how far does SSO/SCIM go in V1 (D2 = yes)?",
-   "raised_by": "Design review (docs/41 §10)",
-   "owner": "Tech Lead, Sales owner",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — SSO + SCIM for that tenant.** AUTH-24 and AUTH-25 both promoted into V1. ZITADEL limits SCIM to the User schema (no Groups, verified 2026-09-19), so deprovisioning is user-level; role assignment stays with us (P4) and group-to-role mapping is out of scope for the SCIM path."
-  },
-  {
-   "id": "P4",
-   "source_doc": "41",
-   "section": "Auth & Identity",
-   "question": "Roles and membership: which system owns them (AUTH-12/13/14, TEN-32)?",
-   "raised_by": "Design review (docs/41 §10)",
-   "owner": "Tech Lead, BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — our Postgres is authoritative** for tenant membership, roles, custom roles and the `resource.action` permission registry. ZITADEL organizations are used for login scoping, per-org policies and SSO routing; ZITADEL user grants mirror our roles only so tokens can carry them (Actions v2 `preAccessToken`), and a reconciliation job reports drift (TEN-32 access review)."
-  },
-  {
-   "id": "D6",
-   "source_doc": "42",
-   "section": "Auth & Identity",
-   "question": "Per-identity concurrent session limit (AUTH-07): the contracts/api/auth.md open item. How many active sessions may one identity hold at once, and what happens on overflow?",
-   "raised_by": "Design review (docs/42 §8)",
-   "owner": "BE-1, Tech Lead",
-   "deadline": "Before contract freeze",
-   "answer": "**Open — default recorded:** 10 concurrent sessions per identity, oldest evicted (the newest login wins and the evicted session gets `auth.session_revoked` plus a `user.session_revoked` event with reason `concurrency_limit`). Raise only if trader feedback demands it; the running count lives in `auth_sessions` and is checked at `/v1/auth/session` time."
-  },
-  {
-   "id": "D7",
-   "source_doc": "42",
-   "section": "Auth & Identity",
-   "question": "TTS cutover password posture (docs/25 §3.5, AUTH-01/05/17): import existing password hashes into ZITADEL (traders keep passwords) or force a reset at first login?",
-   "raised_by": "Design review (docs/42 §8)",
-   "owner": "FunderBlu COO, BE-1",
-   "deadline": "Cutover gate (M2)",
-   "answer": "**Open — default recorded:** force reset (`passwordChangeRequired=true`, the docs/25 §3.5 posture B). Import-and-keep is technically available since ZITADEL accepts hashed passwords when the source algorithm is enabled in the password-hasher verifier list (verified 2026-09-19, review G9); the COO can switch to posture A at the gate if TTS supplies verified per-user hashes with a supported KDF."
-  },
-  {
-   "id": "D8",
-   "source_doc": "42",
-   "section": "Auth & Identity",
-   "question": "Tenant login hostname (docs/03 §3.8, TEN-05): does the tenant's own domain ever serve the login page in V1?",
-   "raised_by": "Design review (docs/42 §8)",
-   "owner": "Tech Lead, Sales owner",
-   "deadline": "Before Phase 0 exit",
-   "answer": "**Open — default recorded:** no. V1 logins happen on `login.alpha1.io` scoped to the tenant organization (per-org branding, policies and MFA settings); tenant domains serve the app and the API only, with a silent OIDC redirect back to the tenant host after login. The vanity login host (`login.firm.com`, edge rewrite preserving the org scope) ships with TEN-05 in V2 if tenants ask."
-  },
-  {
-   "id": "D9",
-   "source_doc": "42",
-   "section": "Security & Compliance",
-   "question": "GDPR erasure across two stores (docs/02 §10.4, AUTH-35): ZITADEL is event-sourced and does not de-identify past events (upstream issue #7811, open). Is the residual PII (email + display name in the IdP event stream) acceptable, or do we need a compensating control?",
-   "raised_by": "Design review (docs/42 §8)",
-   "owner": "FunderBlu COO, Tech Lead",
-   "deadline": "Phase 0 exit (DPO review)",
-   "answer": "**Open — default recorded:** accept and document. We store no more PII in the IdP than email + display name (KYC profile and documents stay in our stores), the erasure procedure deletes the user and our rows, and the residual event entries are recorded as a known limitation with a DPO review at Phase 0 exit. Compensating control if the DPO refuses: pseudo-anonymous login names (`usr_{ulid}@login.alpha1.io`) with the notification email held only in our database."
-  },
-  {
-   "id": "D10",
-   "source_doc": "43",
-   "section": "Auth & Identity",
-   "question": "Access/refresh token lifetimes and rotation (restates the open PRD workbook question as a build decision): ZITADEL's instance default is 12 h access tokens, so the 15-min figure in docs/02 §3.2 is documented but not enforced — what do we set, and where?",
-   "raised_by": "Design review (docs/43 §6)",
-   "owner": "BE-1, Tech Lead",
-   "deadline": "Phase 0 exit (gate 6)",
-   "answer": "**Answered 2026-09-19 — access/ID 15 min, refresh idle 30 min, absolute 30 d, rotation on every use with reuse detection.** Written at provisioning through the instance OIDC-settings endpoint (`/admin/v1/settings/oidc`, update = method `PUT`, all four fields required, seconds precision) and read back at Phase 0 (docs/99 gate 6). This is the bound that holds when the deprovisioning pipeline *and* its alerting are both down (docs/43 §6)."
-  },
-  {
-   "id": "D11",
-   "source_doc": "43",
-   "section": "Auth & Identity",
-   "question": "How does an IdP-side deprovisioning (tenant SCIM deactivation, ZITADEL-console user removal, or user self-deletion) reach `tenant_memberships` before anyone notices — given that nightly reconciliation does not exist yet and Actions v2 event executions have no retry?",
-   "raised_by": "Design review (docs/43)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit (gate 7)",
-   "answer": "**Answered 2026-09-19 — a pull consumer (`idp-sync`), not a webhook.** The worker polls ZITADEL's event log (`admin/v1/events/_search`, sequence cursor, 10 s) through a durable inbox and applies the AUTH-20 suspension path; covered event types, retry/DLQ/alerting and the nightly direction-aware reconciliation (safety net, never the mechanism) are specified in docs/43 §3–§7. Actions v2 event executions are rejected as the transport: no retry (upstream #10268) and instance-breaking event conditions (upstream #12225)."
-  },
-  {
-   "id": "D12",
-   "source_doc": "43",
-   "section": "Security & Compliance",
-   "question": "Self-service account deletion: ZITADEL lets a user irreversibly delete their own account (`user.self.delete`, reached via `ORG_USER_SELF_MANAGER` / `SELF_MANAGEMENT_GLOBAL`, from the console or the API). Do we grant it in V1 and accept that nothing in our stack can intercept it?",
-   "raised_by": "Design review (docs/43 §8)",
-   "owner": "FunderBlu COO (DPO), Tech Lead",
-   "deadline": "Phase 0 exit (gate 8)",
-   "answer": "**Open — default recorded:** no self-delete-capable role grants in V1 and no self-service delete surface; closure runs through staff (V1 runbook → V2 `AUTH-35` flow) with business checks, a payout hold and the actor recorded as `system:account-closure`. Enforced by detection: an alert on `user.grant.added` containing `ORG_USER_SELF_MANAGER` and on `instance.member.added` containing `SELF_MANAGEMENT_GLOBAL`. The cost — no self-service erasure until V2 — is the DPO's call at gate 8 (docs/43 §8); the `defaults.yaml` role-permission override is a recorded Phase-0 option, not a default."
-  },
-  {
-   "id": "D13",
-   "source_doc": "44",
-   "section": "Auth & Identity",
-   "question": "One person can hold one ZITADEL user per organization, but `identities` carried a single `idp_user_id` — a trader registering at a second tenant overwrites the first org's pointer, and that org's deprovisioning events (`user.deactivated` / `user.removed`) then resolve to no identity and land in the DLQ. What is the identity↔IdP join model?",
-   "raised_by": "Fourth-pass review (docs/44 §3)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit (gate 10)",
-   "answer": "**Answered 2026-09-19 — `identity_idp_links` (one row per identity×org).** New table `identity_idp_links(idp_user_id PK, identity_id, idp_org_id, tenant_id NULL = platform, state active|retired, first/last_seen, retired_at)`, `UNIQUE(identity_id, idp_org_id)`; `identities.idp_user_id`/`idp_org_id` demoted to a \"last used\" pointer. Login resolves link → `identity_key` fallback; `idp-sync` maps `aggregate_id` through links and holds the cursor plus alerts on an unknown link (never guesses a tenant); a deleted user's link is retired and stays as the audit alias (docs/43 §9). Written into docs/02 §3.1/§3.2/§9 and docs/43 §3/§4."
-  },
-  {
-   "id": "D14",
-   "source_doc": "44",
-   "section": "Auth & Identity",
-   "question": "No role→permission-key binding existed for the 31-key registry and the tenant/platform role sets, so `authorizer.Check` had no policy to evaluate; the registry carried four decision-shaped TODOs (sensitive-data key per AUD-23, `audit.read`/`analytics.read` naming, trader self-actions, `payout.read_queue` masking). Derive and ratify now, or defer?",
-   "raised_by": "Fourth-pass review (docs/44 §4)",
-   "owner": "Tech Lead, BE-1",
-   "deadline": "Phase 0 exit (gate 9)",
-   "answer": "**Answered 2026-09-19 — derive and ratify now.** `contracts/permissions/roles.yaml` is the machine-readable source (12 roles in two realms, `scope` all/own/platform, effective holder sets closed under descendants, ABAC constraints recorded per key); it seeds the `casbin_rule` migration and `scripts/verify_roles.py` keeps YAML ⇄ seed ⇄ docs/02 §3.1 identical. TODOs closed: sensitive-data access = `kyc.document.read` + `payout.method.review` (audit-on-access, AUD-23); names ratified (`payout.read_queue` keeps its name); trader self-actions = declared keys with scope `own`; three platform keys promoted to V1 (`platform.identity.admin`, `platform.tenant.provision`, `platform.session.revoke`) and one reserved (`platform.analytics.read`). Platform role catalogs unified (`platform:super_admin` supersedes `platform:owner`/`admin`/`billing`). Registry now 36 V1 keys."
-  },
-  {
-   "id": "D15",
-   "source_doc": "44",
-   "section": "Auth & Identity",
-   "question": "Casbin storage, reload, change-audit and boot behaviour were unspecified (ADR-14 said \"rows in Postgres\"; no DDL existed anywhere): where do the policies live, how do the api instances learn about a change, and what happens if the policy set cannot be loaded?",
-   "raised_by": "Fourth-pass review (docs/44 §4)",
-   "owner": "BE-1, DevOps",
-   "deadline": "Phase 0 exit (gate 9)",
-   "answer": "**Answered 2026-09-19 — `casbin_rule` + versioning + Redis reload + fail closed.** The policy table is seeded **by migration** from `roles.yaml` (V1 has no policy-CRUD surface); every change bumps `authz_policy_versions`, writes an `audit_events` row, and publishes `casbin:reload` on Redis, with a ≤ 30 s version re-check so a missed message self-heals; an empty or unloadable policy set at boot denies everything and raises a SEV-1 alert — never allow. DDL and the change lifecycle are in docs/02 §9 (ADR-14 amended)."
-  },
-  {
-   "id": "D16",
-   "source_doc": "44",
-   "section": "Security & Compliance",
-   "question": "Fail-closed RLS (D3) has no exemption model: cross-tenant readers (relay, ledger/audit appliers, ANA, CON, `idp-sync`), the pre-tenant-context lookups (session by id, API key by hash) and console sessions (`auth_sessions.tenant_id IS NULL`) cannot work under the tenant policy as written, and migrations run under `FORCE ROW LEVEL SECURITY`. What is the exemption model?",
-   "raised_by": "Fourth-pass review (docs/44 §5)",
-   "owner": "DevOps, BE-1",
-   "deadline": "Phase 0 exit (gate 11)",
-   "answer": "**Answered 2026-09-19 — one named platform role, enumerated, with accessors for pre-auth reads.** `app_platform` holds `BYPASSRLS` and is used **only** by the enumerated cross-tenant services, whose queries must still carry explicit `tenant_id` predicates (CI grep-class check + review — RLS is their backstop, not their isolation); `app_rw` stays fail-closed; `migrator` is a discrete DDL job. The four context-free reads go through `SECURITY DEFINER` accessors in the `auth` schema (session by id, API key by hash, link by `idp_user_id`, console-session check); the platform-owned tables are listed explicitly so \"every policy table\" cannot be read as \"all tables\". docs/02 §9 + docs/28 §3.3."
-  },
-  {
-   "id": "D17",
-   "source_doc": "44",
-   "section": "Auth & Identity",
-   "question": "P2 chose \"IdP-issued tokens, no own rotating-refresh stack\", but docs/02 §3.2 implemented rotation/reuse detection ourselves and the schema carried `refresh_hash` / `prev_refresh_hash`. Who owns refresh rotation and reuse detection?",
-   "raised_by": "Fourth-pass review (docs/44 §6.2)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — ZITADEL owns rotation and reuse detection; we own the response.** The `refresh_hash` / `prev_refresh_hash` columns and our reuse-detection logic are removed; a reused token revokes its family in the IdP, and our side keeps the Redis deny-set, `auth_sessions` projection, `RevokeAllMyRefreshTokens` + `DeleteSession` kill and the CRITICAL audit. One owner per concern, no second refresh state to reconcile."
-  },
-  {
-   "id": "D18",
-   "source_doc": "44",
-   "section": "Auth & Identity",
-   "question": "V1 API-key surface was contradictory: docs/02 §3.5 and blueprint step 7 build the primitives, while the GW chain, `contracts/api/auth.md` and the endpoint table all say keys are V2 with no endpoint. Which is it?",
-   "raised_by": "Fourth-pass review (docs/44 §7)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — primitives only, internal consumers only.** V1 ships create/revoke/hash/scope helpers for service tokens and the future AUTH-21 surface; there is **no tenant-facing key endpoint** in V1, and the GW chain note now names the internal consumer instead of saying \"keys are V2\". Tenant machine integrations use TEN-11 integration secrets until AUTH-21 ships."
-  },
-  {
-   "id": "D19",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "The token did not prove which tenant it was for: `tenants` carried no OIDC client/application binding, docs/02 said \"one project + OIDC application\" instance-wide while docs/03's saga provisioned a project per org, and a token minted for tenant A was accepted on tenant B's host. Per-tenant audience + session binding, or one shared application with an org claim?",
-   "raised_by": "Fifth-pass review (docs/45 G34)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit (gate 12)",
-   "answer": "**Answered 2026-09-19 — per-tenant application + binding (option A).** One ZITADEL project + OIDC application **per tenant org**; `tenants.idp_client_id` is stored (client secret in the tenant secret store, referenced by `tenants.idp_client_secret_ref`). Every `/session` requires `aud` == that tenant's client id and checks the org claim when present; the `auth_sessions` row is bound to the tenant resolved from the request domain, so a token presented on another tenant's host is refused with the new `auth.tenant_mismatch` (403). Provisioning step 3 writes the binding."
-  },
-  {
-   "id": "D20",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "`identity_key` was the mutable join key: `AUTH-29` rewrote it on email change, which silently creates a second identity for one person, moves the `AUTH-36` merge anchor and stops the old address resolving. Make the join key immutable with an email table, or keep one mutable key?",
-   "raised_by": "Fifth-pass review (docs/45 G35)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — immutable key + email table (option A).** `identities.identity_key` = hash of the **first verified email** and never moves. New `identity_emails(identity_id, email_hash UNIQUE, email, is_primary, verified_at, retired_at)` is the match key for `/session`, `idp-sync` and `AUTH-36` merges; an email change adds a row and flips `is_primary`, and the old row is retained so a login on the old address still resolves to the same person (`identities.email` is only a cache)."
-  },
-  {
-   "id": "D21",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "Cross-org auto-link (an existing identity gaining a link in a new org) trusted an undefined \"verified email\" and had no abuse control — a matching address at a second org silently attached to the existing identity (identity poisoning). What gate applies?",
-   "raised_by": "Fifth-pass review (docs/45 G36)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — verified-email gate + audited link (option A).** Auto-link requires a verified email (token `email_verified` **and** ZITADEL's user email state = verified). An unverified address creates a **separate identity + merge task** for staff. Every cross-org link writes a **CRITICAL** audit event and notifies the identity's existing org admins; the first org's contact details are never revealed to the second."
-  },
-  {
-   "id": "D22",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "SSO group→role mapping was contradictory: decision P3 (AUTH-24/25 in V1) implied directory-driven roles, the provisioning saga said \"map directory groups → roles\", and the registry advertised a viewable map — while the ratified model assigns roles ourselves. And the `invited → active` membership transition was undocumented. Which V1 posture?",
-   "raised_by": "Fifth-pass review (docs/45 G37)",
-   "owner": "BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — no group→role mapping in V1 (option A).** SSO users are assigned roles by us at onboarding (later via platform/ADM actions); directory groups only drive sign-in/provisioning. docs/03 step 3a and the registry `tenant.sso.read` wording are corrected, and the membership lifecycle is documented: `user.human.added`/invite → `invited`, first successful `/v1/auth/session` → `active`."
-  },
-  {
-   "id": "D23",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "No V1 step-up existed although `payout.approve` requires a factor assertion < 5 min, the taxonomy already had `authz.step_up_required`, and the only planned step-up surface (AUTH-30) is V2. Where does V1 step-up live?",
-   "raised_by": "Fifth-pass review (docs/45 G38)",
-   "owner": "BE-1",
-   "deadline": "Phase 1 (payout approval)",
-   "answer": "**Answered 2026-09-19 — hosted re-auth, server-enforced (option A).** The web tier re-runs hosted login with `prompt=login&max_age=300`; the fresh token carries a new `auth_time` and the `api` enforces the ≤ 5 min freshness rule on the payout keys, returning `authz.step_up_required` (403, `details.max_age`) when stale. The API-owned step-up surface (challenge initiation, AUTH-30) remains V2; V1 has exactly one policy rule and it is enforced server-side, never in the UI."
-  },
-  {
-   "id": "D24",
-   "source_doc": "45",
-   "section": "Auth & Identity",
-   "question": "ZITADEL's own admin plane was ungoverned: who holds `IAM_OWNER`, whether the Console/Admin API is reachable from the edge, and what the IdP break-glass is were all unstated — while the authz model assumes the IdP is trusted. What governance applies?",
-   "raised_by": "Fifth-pass review (docs/45 G39)",
-   "owner": "DevOps + BE-1",
-   "deadline": "Phase 0 exit",
-   "answer": "**Answered 2026-09-19 — private plane, two owners, quarterly review (option A).** The admin plane (Console, `admin/v1`, `management/v1`) is not reachable from the edge: internal network only, operator access via Cloudflare Access. Exactly **two named `IAM_OWNER` holders** (or one owner plus a sealed emergency credential in the ops vault), both with mandatory MFA (the `alpha1-platform` org is `force_mfa=true`). Every IAM role grant is part of the quarterly access review and is mirrored into our audit stream by `idp-sync` (`instance.member.*`). Runbooks: docs/06 §3.6; first execution is a Phase-0 checklist item (docs/34 §9)."
-  },
-  {
-   "id": "D25",
-   "source_doc": "48",
-   "section": "Ledger & Audit",
-   "question": "Cross-tenant tenant-audit access from the platform realm: docs/05 named a `platform:compliance` role that does not exist in the ratified catalog (G30 closure), while docs/21 CON-01 assigns the console audit view to `platform:super_admin`. Who reads tenant audit cross-tenant (always critical-tier audited)? Options — A: platform:super_admin only (no new role/key); B: new key platform.audit.read bound to super_admin + platform:finance; C: add the platform:compliance role + key. See docs/48 §2.",
-   "raised_by": "Eighth-pass review (docs/48 F8)",
-   "owner": "Tech Lead",
-   "deadline": "Phase 1 (LED/AUD build)",
-   "answers_owner": "Owner (interactive)",
-   "deadline_note": "",
-   "answer": "**Answered 2026-09-19 — option A:** `platform:super_admin` only, no new role, no new key. docs/05 §10 corrected to the ratified catalog; a dedicated key can still be proposed at the CON V2 freeze if finance/compliance oversight demands it."
-  },
-  {
-   "id": "D26",
-   "source_doc": "48",
-   "section": "Ledger & Audit",
-   "question": "The tenant chart of accounts is 'seeded at provisioning' (docs/05 §3.1) but the provisioning saga has no CoA step — the first order.paid post would fail `led.account_not_found`. Options — A: saga step 6b (idempotent, compensated); B: lazy seed inside ledger.Post; C: seed at the go-live checklist. See docs/48 §2.",
-   "raised_by": "Eighth-pass review (docs/48 F9)",
-   "owner": "BE-2",
-   "deadline": "Phase 1 (saga + LED build)",
-   "answer": "**Answered 2026-09-19 — option A:** the saga gains an idempotent, compensated step 6b (CoA template + platform-account links), documented in docs/03 §3.5 and docs/05 §3.1; the docs/47 saga summary counts 9 steps + 3a + 6b."
-  },
-  {
-   "id": "D27",
-   "source_doc": "48",
-   "section": "Ledger & Audit",
-   "question": "audit_events.seq was 'app-assigned via Redis INCR' while audit.Write is fail-closed (audit failure = sensitive action denied) and seq has no V1 consumer (the hash chain is V2) — a Redis outage would deny every sensitive action platform-wide. Options — A: drop seq from V1 (V2 chain-init backfills in id order); B: keep seq sourced from Postgres; C: keep Redis INCR and accept the coupling. See docs/48 §2.",
-   "raised_by": "Eighth-pass review (docs/48 F10)",
-   "owner": "BE-1",
-   "deadline": "Phase 1 (AUD build)",
-   "answer": "**Answered 2026-09-19 — option A:** V1 carries no seq; the V2 hash chain (AUD-14) introduces it at chain init, backfilled in id order. The fail-closed audit write is one INSERT in the action's transaction with no Redis dependency."
-  }
- ]
+  "raised": "2026-09-19",
+  "note": "Questions raised by the team during design review, NOT PRD workbook rows. Rendered into docs/37-prd-open-questions.md by scripts/build_prd_registers.py so both kinds of question live in one register. Evidence for each: docs/41-auth-ten-open-source-evaluation.md. Closing a row here means editing this file, re-running the script, and applying the answer to the owning doc.",
+  "questions": [
+    {
+      "id": "D1",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Identity component wiring: Better Auth has no Go SDK, so the V1 plan assumes a Node identity surface. Options \u2014 A: keep Better Auth, run it in the Node tier behind a documented JWT/JWKS contract for Go (one more deployable); B: Better Auth for flows, Go owns session/refresh-token tables and revocation; C: replace with a multi-tenant IdP (Zitadel AGPL-3.0, or Keycloak if deep SAML/LDAP is needed), everything OIDC; D: build the identity domain in Go (~3-4 dev-weeks, zero extra runtime, BVR-14 superseded). See docs/41 \u00a77.",
+      "raised_by": "Design review (docs/41)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Before Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 option C, product P1: ZITADEL** (self-hosted, AGPL-3.0, one instance, Organization per tenant). Better Auth (BVR-14) and Cerbos (BVR-23) are superseded by ADR-13/ADR-14. See docs/41 \u00a710."
+    },
+    {
+      "id": "D2",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Does any tenant need SAML/OIDC SSO or SCIM at V1 cutover? Restates PRD row *Auth & Identity #6* as a build decision. The PRD schedules AUTH-24/25 at V3 and every OSS IdP that ships them at V1 (Zitadel, Keycloak, authentik) costs a second identity store plus, for Zitadel, an AGPL-3.0 review. Answering yes promotes AUTH-24/25 into V1 and changes D1.",
+      "raised_by": "Design review (docs/41 \u00a74)",
+      "owner": "Sales owner, Tech Lead",
+      "deadline": "Before Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 yes:** one V1 tenant requires SSO at cutover. AUTH-24 (SAML/OIDC federation) is promoted into V1.0/V1.1 scope and AUTH-25 (SCIM) is promoted with it per P3. Recorded as a post-PRD design decision (docs/41 \u00a710), not a PRD workbook row."
+    },
+    {
+      "id": "D3",
+      "source_doc": "41",
+      "section": "Tenant Management",
+      "question": "Isolation enforcement depth: keep ADR-1 app-level only (Go tenant guard + sqlc + CI guard test), or add Postgres RLS as a fail-closed second layer? RLS costs 2-4% on indexed queries and requires transaction-scoped `set_config('app.tenant_id', \u2026, true)` under PgBouncer, `FORCE ROW LEVEL SECURITY` and a (tenant_id, \u2026) index on every policy table; a missed guard currently leaks all tenants' rows, with RLS it returns zero rows. See docs/41 \u00a75.",
+      "raised_by": "Design review (docs/41 \u00a75)",
+      "owner": "Tech Lead, BE-1, DevOps",
+      "deadline": "Before tenant-scoped tables are frozen",
+      "answer": "**Answered 2026-09-19 \u2014 yes: Postgres RLS is adopted** as the fail-closed second enforcement layer on every tenant-owned table (docs/01 \u00a77.8, docs/03 \u00a710). App-level guard (ADR-1) stays."
+    },
+    {
+      "id": "D4",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Authorization engine and deployment mode: keep Cerbos (BVR-23) as sidecar/central service, embed the Cerbos Go engine in-process (no extra process, fail-closed hazard disappears), switch to Casbin embedded (Apache-2.0, RBAC-with-domains, fastest, weakest decision logs), or fall back to the in-house engine behind `authorizer.Check`. The docs/02 \u00a711 rule 'PDP unreachable \u2192 deny' only applies to the sidecar mode.",
+      "raised_by": "Design review (docs/41 \u00a73.2)",
+      "owner": "Tech Lead, BE-2",
+      "deadline": "Phase 1 start (before AUTH-13)",
+      "answer": "**Answered 2026-09-19 \u2014 Casbin, embedded** in the Go api, RBAC-with-domains model. Cerbos is superseded (ADR-14); the `authorizer.Check` interface is unchanged. See docs/41 \u00a710."
+    },
+    {
+      "id": "D5",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Staff 2FA scope in V1: AUTH-09 as written (mandatory for every staff role) or finance + risk only? This is PRD open question 'Auth & Identity #1' restated as a build decision; it sizes the enrolment UX, recovery flow and support load for launch.",
+      "raised_by": "Design review (docs/41 \u00a78)",
+      "owner": "Tech Lead, FunderBlu COO",
+      "deadline": "Kickoff +2 days",
+      "answer": "**Answered 2026-09-19 \u2014 all staff roles, enforced at first login, with backup codes in V1**: AUTH-11 (backup codes) is promoted with AUTH-09; AUTH-29 (email change) and AUTH-28 (admin-assisted 2FA reset) become explicit V1 dependencies of the forced-enrolment path."
+    },
+    {
+      "id": "P1",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Which identity provider do we adopt (D1 = option C)?",
+      "raised_by": "Design review (docs/41 \u00a710)",
+      "owner": "Tech Lead",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 ZITADEL**, self-hosted single instance + Postgres (AGPL-3.0, unmodified). Keycloak rejected on ops weight (1-2 GB, Java) and organisation fit; authentik rejected on hardening track record for fund-holding accounts. Legal review of AGPL obligations is a Phase-0 gate; policy: never patch ZITADEL source, contribute upstream."
+    },
+    {
+      "id": "P2",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Where do the login page and session live (D1 = C)?",
+      "raised_by": "Design review (docs/41 \u00a710)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 IdP-hosted login + IdP tokens at the API.** Users log in on ZITADEL Hosted Login v2 (org-scoped via `urn:zitadel:iam:org:id:{id}`), the api accepts the ZITADEL access token and keeps a Redis deny-set + `auth_sessions` projection for immediate revocation (AUTH-07/20/27/39). Our `/v1/auth/login|refresh` contract is retired in favour of OIDC endpoints; `contracts/api/auth.md` and `contracts/shared/openapi.yaml` are updated accordingly."
+    },
+    {
+      "id": "P3",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "With SSO needed at cutover, how far does SSO/SCIM go in V1 (D2 = yes)?",
+      "raised_by": "Design review (docs/41 \u00a710)",
+      "owner": "Tech Lead, Sales owner",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 SSO + SCIM for that tenant.** AUTH-24 and AUTH-25 both promoted into V1. ZITADEL limits SCIM to the User schema (no Groups, verified 2026-09-19), so deprovisioning is user-level; role assignment stays with us (P4) and group-to-role mapping is out of scope for the SCIM path."
+    },
+    {
+      "id": "P4",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Roles and membership: which system owns them (AUTH-12/13/14, TEN-32)?",
+      "raised_by": "Design review (docs/41 \u00a710)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 our Postgres is authoritative** for tenant membership, roles, custom roles and the `resource.action` permission registry. ZITADEL organizations are used for login scoping, per-org policies and SSO routing; ZITADEL user grants mirror our roles only so tokens can carry them (Actions v2 `preAccessToken`), and a reconciliation job reports drift (TEN-32 access review)."
+    },
+    {
+      "id": "D6",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "Per-identity concurrent session limit (AUTH-07): the contracts/api/auth.md open item. How many active sessions may one identity hold at once, and what happens on overflow?",
+      "raised_by": "Design review (docs/42 \u00a78)",
+      "owner": "BE-1, Tech Lead",
+      "deadline": "Before contract freeze",
+      "answer": "**Open \u2014 default recorded:** 10 concurrent sessions per identity, oldest evicted (the newest login wins and the evicted session gets `auth.session_revoked` plus a `user.session_revoked` event with reason `concurrency_limit`). Raise only if trader feedback demands it; the running count lives in `auth_sessions` and is checked at `/v1/auth/session` time."
+    },
+    {
+      "id": "D7",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "TTS cutover password posture (docs/25 \u00a73.5, AUTH-01/05/17): import existing password hashes into ZITADEL (traders keep passwords) or force a reset at first login?",
+      "raised_by": "Design review (docs/42 \u00a78)",
+      "owner": "FunderBlu COO, BE-1",
+      "deadline": "Cutover gate (M2)",
+      "answer": "**Open \u2014 default recorded:** force reset (`passwordChangeRequired=true`, the docs/25 \u00a73.5 posture B). Import-and-keep is technically available since ZITADEL accepts hashed passwords when the source algorithm is enabled in the password-hasher verifier list (verified 2026-09-19, review G9); the COO can switch to posture A at the gate if TTS supplies verified per-user hashes with a supported KDF."
+    },
+    {
+      "id": "D8",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "Tenant login hostname (docs/03 \u00a73.8, TEN-05): does the tenant's own domain ever serve the login page in V1?",
+      "raised_by": "Design review (docs/42 \u00a78)",
+      "owner": "Tech Lead, Sales owner",
+      "deadline": "Before Phase 0 exit",
+      "answer": "**Open \u2014 default recorded:** no. V1 logins happen on `login.alpha1.io` scoped to the tenant organization (per-org branding, policies and MFA settings); tenant domains serve the app and the API only, with a silent OIDC redirect back to the tenant host after login. The vanity login host (`login.firm.com`, edge rewrite preserving the org scope) ships with TEN-05 in V2 if tenants ask."
+    },
+    {
+      "id": "D9",
+      "source_doc": "42",
+      "section": "Security & Compliance",
+      "question": "GDPR erasure across two stores (docs/02 \u00a710.4, AUTH-35): ZITADEL is event-sourced and does not de-identify past events (upstream issue #7811, open). Is the residual PII (email + display name in the IdP event stream) acceptable, or do we need a compensating control?",
+      "raised_by": "Design review (docs/42 \u00a78)",
+      "owner": "FunderBlu COO, Tech Lead",
+      "deadline": "Phase 0 exit (DPO review)",
+      "answer": "**Open \u2014 default recorded:** accept and document. We store no more PII in the IdP than email + display name (KYC profile and documents stay in our stores), the erasure procedure deletes the user and our rows, and the residual event entries are recorded as a known limitation with a DPO review at Phase 0 exit. Compensating control if the DPO refuses: pseudo-anonymous login names (`usr_{ulid}@login.alpha1.io`) with the notification email held only in our database."
+    },
+    {
+      "id": "D10",
+      "source_doc": "43",
+      "section": "Auth & Identity",
+      "question": "Access/refresh token lifetimes and rotation (restates the open PRD workbook question as a build decision): ZITADEL's instance default is 12 h access tokens, so the 15-min figure in docs/02 \u00a73.2 is documented but not enforced \u2014 what do we set, and where?",
+      "raised_by": "Design review (docs/43 \u00a76)",
+      "owner": "BE-1, Tech Lead",
+      "deadline": "Phase 0 exit (gate 6)",
+      "answer": "**Answered 2026-09-19 \u2014 access/ID 15 min, refresh idle 30 min, absolute 30 d, rotation on every use with reuse detection.** Written at provisioning through the instance OIDC-settings endpoint (`/admin/v1/settings/oidc`, update = method `PUT`, all four fields required, seconds precision) and read back at Phase 0 (docs/99 gate 6). This is the bound that holds when the deprovisioning pipeline *and* its alerting are both down (docs/43 \u00a76)."
+    },
+    {
+      "id": "D11",
+      "source_doc": "43",
+      "section": "Auth & Identity",
+      "question": "How does an IdP-side deprovisioning (tenant SCIM deactivation, ZITADEL-console user removal, or user self-deletion) reach `tenant_memberships` before anyone notices \u2014 given that nightly reconciliation does not exist yet and Actions v2 event executions have no retry?",
+      "raised_by": "Design review (docs/43)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit (gate 7)",
+      "answer": "**Answered 2026-09-19 \u2014 a pull consumer (`idp-sync`), not a webhook.** The worker polls ZITADEL's event log (`admin/v1/events/_search`, sequence cursor, 10 s) through a durable inbox and applies the AUTH-20 suspension path; covered event types, retry/DLQ/alerting and the nightly direction-aware reconciliation (safety net, never the mechanism) are specified in docs/43 \u00a73\u2013\u00a77. Actions v2 event executions are rejected as the transport: no retry (upstream #10268) and instance-breaking event conditions (upstream #12225)."
+    },
+    {
+      "id": "D12",
+      "source_doc": "43",
+      "section": "Security & Compliance",
+      "question": "Self-service account deletion: ZITADEL lets a user irreversibly delete their own account (`user.self.delete`, reached via `ORG_USER_SELF_MANAGER` / `SELF_MANAGEMENT_GLOBAL`, from the console or the API). Do we grant it in V1 and accept that nothing in our stack can intercept it?",
+      "raised_by": "Design review (docs/43 \u00a78)",
+      "owner": "FunderBlu COO (DPO), Tech Lead",
+      "deadline": "Phase 0 exit (gate 8)",
+      "answer": "**Open \u2014 default recorded:** no self-delete-capable role grants in V1 and no self-service delete surface; closure runs through staff (V1 runbook \u2192 V2 `AUTH-35` flow) with business checks, a payout hold and the actor recorded as `system:account-closure`. Enforced by detection: an alert on `user.grant.added` containing `ORG_USER_SELF_MANAGER` and on `instance.member.added` containing `SELF_MANAGEMENT_GLOBAL`. The cost \u2014 no self-service erasure until V2 \u2014 is the DPO's call at gate 8 (docs/43 \u00a78); the `defaults.yaml` role-permission override is a recorded Phase-0 option, not a default."
+    },
+    {
+      "id": "D13",
+      "source_doc": "44",
+      "section": "Auth & Identity",
+      "question": "One person can hold one ZITADEL user per organization, but `identities` carried a single `idp_user_id` \u2014 a trader registering at a second tenant overwrites the first org's pointer, and that org's deprovisioning events (`user.deactivated` / `user.removed`) then resolve to no identity and land in the DLQ. What is the identity\u2194IdP join model?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a73)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit (gate 10)",
+      "answer": "**Answered 2026-09-19 \u2014 `identity_idp_links` (one row per identity\u00d7org).** New table `identity_idp_links(idp_user_id PK, identity_id, idp_org_id, tenant_id NULL = platform, state active|retired, first/last_seen, retired_at)`, `UNIQUE(identity_id, idp_org_id)`; `identities.idp_user_id`/`idp_org_id` demoted to a \"last used\" pointer. Login resolves link \u2192 `identity_key` fallback; `idp-sync` maps `aggregate_id` through links and holds the cursor plus alerts on an unknown link (never guesses a tenant); a deleted user's link is retired and stays as the audit alias (docs/43 \u00a79). Written into docs/02 \u00a73.1/\u00a73.2/\u00a79 and docs/43 \u00a73/\u00a74."
+    },
+    {
+      "id": "D14",
+      "source_doc": "44",
+      "section": "Auth & Identity",
+      "question": "No role\u2192permission-key binding existed for the 31-key registry and the tenant/platform role sets, so `authorizer.Check` had no policy to evaluate; the registry carried four decision-shaped TODOs (sensitive-data key per AUD-23, `audit.read`/`analytics.read` naming, trader self-actions, `payout.read_queue` masking). Derive and ratify now, or defer?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a74)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Phase 0 exit (gate 9)",
+      "answer": "**Answered 2026-09-19 \u2014 derive and ratify now.** `contracts/permissions/roles.yaml` is the machine-readable source (12 roles in two realms, `scope` all/own/platform, effective holder sets closed under descendants, ABAC constraints recorded per key); it seeds the `casbin_rule` migration and `scripts/verify_roles.py` keeps YAML \u21c4 seed \u21c4 docs/02 \u00a73.1 identical. TODOs closed: sensitive-data access = `kyc.document.read` + `payout.method.review` (audit-on-access, AUD-23); names ratified (`payout.read_queue` keeps its name); trader self-actions = declared keys with scope `own`; three platform keys promoted to V1 (`platform.identity.admin`, `platform.tenant.provision`, `platform.session.revoke`) and one reserved (`platform.analytics.read`). Platform role catalogs unified (`platform:super_admin` supersedes `platform:owner`/`admin`/`billing`). Registry now 36 V1 keys."
+    },
+    {
+      "id": "D15",
+      "source_doc": "44",
+      "section": "Auth & Identity",
+      "question": "Casbin storage, reload, change-audit and boot behaviour were unspecified (ADR-14 said \"rows in Postgres\"; no DDL existed anywhere): where do the policies live, how do the api instances learn about a change, and what happens if the policy set cannot be loaded?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a74)",
+      "owner": "BE-1, DevOps",
+      "deadline": "Phase 0 exit (gate 9)",
+      "answer": "**Answered 2026-09-19 \u2014 `casbin_rule` + versioning + Redis reload + fail closed.** The policy table is seeded **by migration** from `roles.yaml` (V1 has no policy-CRUD surface); every change bumps `authz_policy_versions`, writes an `audit_events` row, and publishes `casbin:reload` on Redis, with a \u2264 30 s version re-check so a missed message self-heals; an empty or unloadable policy set at boot denies everything and raises a SEV-1 alert \u2014 never allow. DDL and the change lifecycle are in docs/02 \u00a79 (ADR-14 amended)."
+    },
+    {
+      "id": "D16",
+      "source_doc": "44",
+      "section": "Security & Compliance",
+      "question": "Fail-closed RLS (D3) has no exemption model: cross-tenant readers (relay, ledger/audit appliers, ANA, CON, `idp-sync`), the pre-tenant-context lookups (session by id, API key by hash) and console sessions (`auth_sessions.tenant_id IS NULL`) cannot work under the tenant policy as written, and migrations run under `FORCE ROW LEVEL SECURITY`. What is the exemption model?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a75)",
+      "owner": "DevOps, BE-1",
+      "deadline": "Phase 0 exit (gate 11)",
+      "answer": "**Answered 2026-09-19 \u2014 one named platform role, enumerated, with accessors for pre-auth reads.** `app_platform` holds `BYPASSRLS` and is used **only** by the enumerated cross-tenant services, whose queries must still carry explicit `tenant_id` predicates (CI grep-class check + review \u2014 RLS is their backstop, not their isolation); `app_rw` stays fail-closed; `migrator` is a discrete DDL job. The four context-free reads go through `SECURITY DEFINER` accessors in the `auth` schema (session by id, API key by hash, link by `idp_user_id`, console-session check); the platform-owned tables are listed explicitly so \"every policy table\" cannot be read as \"all tables\". docs/02 \u00a79 + docs/28 \u00a73.3."
+    },
+    {
+      "id": "D17",
+      "source_doc": "44",
+      "section": "Auth & Identity",
+      "question": "P2 chose \"IdP-issued tokens, no own rotating-refresh stack\", but docs/02 \u00a73.2 implemented rotation/reuse detection ourselves and the schema carried `refresh_hash` / `prev_refresh_hash`. Who owns refresh rotation and reuse detection?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a76.2)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 ZITADEL owns rotation and reuse detection; we own the response.** The `refresh_hash` / `prev_refresh_hash` columns and our reuse-detection logic are removed; a reused token revokes its family in the IdP, and our side keeps the Redis deny-set, `auth_sessions` projection, `RevokeAllMyRefreshTokens` + `DeleteSession` kill and the CRITICAL audit. One owner per concern, no second refresh state to reconcile."
+    },
+    {
+      "id": "D18",
+      "source_doc": "44",
+      "section": "Auth & Identity",
+      "question": "V1 API-key surface was contradictory: docs/02 \u00a73.5 and blueprint step 7 build the primitives, while the GW chain, `contracts/api/auth.md` and the endpoint table all say keys are V2 with no endpoint. Which is it?",
+      "raised_by": "Fourth-pass review (docs/44 \u00a77)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 primitives only, internal consumers only.** V1 ships create/revoke/hash/scope helpers for service tokens and the future AUTH-21 surface; there is **no tenant-facing key endpoint** in V1, and the GW chain note now names the internal consumer instead of saying \"keys are V2\". Tenant machine integrations use TEN-11 integration secrets until AUTH-21 ships."
+    },
+    {
+      "id": "D19",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "The token did not prove which tenant it was for: `tenants` carried no OIDC client/application binding, docs/02 said \"one project + OIDC application\" instance-wide while docs/03's saga provisioned a project per org, and a token minted for tenant A was accepted on tenant B's host. Per-tenant audience + session binding, or one shared application with an org claim?",
+      "raised_by": "Fifth-pass review (docs/45 G34)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit (gate 12)",
+      "answer": "**Answered 2026-09-19 \u2014 per-tenant application + binding (option A).** One ZITADEL project + OIDC application **per tenant org**; `tenants.idp_client_id` is stored (client secret in the tenant secret store, referenced by `tenants.idp_client_secret_ref`). Every `/session` requires `aud` == that tenant's client id and checks the org claim when present; the `auth_sessions` row is bound to the tenant resolved from the request domain, so a token presented on another tenant's host is refused with the new `auth.tenant_mismatch` (403). Provisioning step 3 writes the binding."
+    },
+    {
+      "id": "D20",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "`identity_key` was the mutable join key: `AUTH-29` rewrote it on email change, which silently creates a second identity for one person, moves the `AUTH-36` merge anchor and stops the old address resolving. Make the join key immutable with an email table, or keep one mutable key?",
+      "raised_by": "Fifth-pass review (docs/45 G35)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 immutable key + email table (option A).** `identities.identity_key` = hash of the **first verified email** and never moves. New `identity_emails(identity_id, email_hash UNIQUE, email, is_primary, verified_at, retired_at)` is the match key for `/session`, `idp-sync` and `AUTH-36` merges; an email change adds a row and flips `is_primary`, and the old row is retained so a login on the old address still resolves to the same person (`identities.email` is only a cache)."
+    },
+    {
+      "id": "D21",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "Cross-org auto-link (an existing identity gaining a link in a new org) trusted an undefined \"verified email\" and had no abuse control \u2014 a matching address at a second org silently attached to the existing identity (identity poisoning). What gate applies?",
+      "raised_by": "Fifth-pass review (docs/45 G36)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 verified-email gate + audited link (option A).** Auto-link requires a verified email (token `email_verified` **and** ZITADEL's user email state = verified). An unverified address creates a **separate identity + merge task** for staff. Every cross-org link writes a **CRITICAL** audit event and notifies the identity's existing org admins; the first org's contact details are never revealed to the second."
+    },
+    {
+      "id": "D22",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "SSO group\u2192role mapping was contradictory: decision P3 (AUTH-24/25 in V1) implied directory-driven roles, the provisioning saga said \"map directory groups \u2192 roles\", and the registry advertised a viewable map \u2014 while the ratified model assigns roles ourselves. And the `invited \u2192 active` membership transition was undocumented. Which V1 posture?",
+      "raised_by": "Fifth-pass review (docs/45 G37)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 no group\u2192role mapping in V1 (option A).** SSO users are assigned roles by us at onboarding (later via platform/ADM actions); directory groups only drive sign-in/provisioning. docs/03 step 3a and the registry `tenant.sso.read` wording are corrected, and the membership lifecycle is documented: `user.human.added`/invite \u2192 `invited`, first successful `/v1/auth/session` \u2192 `active`."
+    },
+    {
+      "id": "D23",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "No V1 step-up existed although `payout.approve` requires a factor assertion < 5 min, the taxonomy already had `authz.step_up_required`, and the only planned step-up surface (AUTH-30) is V2. Where does V1 step-up live?",
+      "raised_by": "Fifth-pass review (docs/45 G38)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (payout approval)",
+      "answer": "**Answered 2026-09-19 \u2014 hosted re-auth, server-enforced (option A).** The web tier re-runs hosted login with `prompt=login&max_age=300`; the fresh token carries a new `auth_time` and the `api` enforces the \u2264 5 min freshness rule on the payout keys, returning `authz.step_up_required` (403, `details.max_age`) when stale. The API-owned step-up surface (challenge initiation, AUTH-30) remains V2; V1 has exactly one policy rule and it is enforced server-side, never in the UI."
+    },
+    {
+      "id": "D24",
+      "source_doc": "45",
+      "section": "Auth & Identity",
+      "question": "ZITADEL's own admin plane was ungoverned: who holds `IAM_OWNER`, whether the Console/Admin API is reachable from the edge, and what the IdP break-glass is were all unstated \u2014 while the authz model assumes the IdP is trusted. What governance applies?",
+      "raised_by": "Fifth-pass review (docs/45 G39)",
+      "owner": "DevOps + BE-1",
+      "deadline": "Phase 0 exit",
+      "answer": "**Answered 2026-09-19 \u2014 private plane, two owners, quarterly review (option A).** The admin plane (Console, `admin/v1`, `management/v1`) is not reachable from the edge: internal network only, operator access via Cloudflare Access. Exactly **two named `IAM_OWNER` holders** (or one owner plus a sealed emergency credential in the ops vault), both with mandatory MFA (the `alpha1-platform` org is `force_mfa=true`). Every IAM role grant is part of the quarterly access review and is mirrored into our audit stream by `idp-sync` (`instance.member.*`). Runbooks: docs/06 \u00a73.6; first execution is a Phase-0 checklist item (docs/34 \u00a79)."
+    },
+    {
+      "id": "D25",
+      "source_doc": "48",
+      "section": "Ledger & Audit",
+      "question": "Cross-tenant tenant-audit access from the platform realm: docs/05 named a `platform:compliance` role that does not exist in the ratified catalog (G30 closure), while docs/21 CON-01 assigns the console audit view to `platform:super_admin`. Who reads tenant audit cross-tenant (always critical-tier audited)? Options \u2014 A: platform:super_admin only (no new role/key); B: new key platform.audit.read bound to super_admin + platform:finance; C: add the platform:compliance role + key. See docs/48 \u00a72.",
+      "raised_by": "Eighth-pass review (docs/48 F8)",
+      "owner": "Tech Lead",
+      "deadline": "Phase 1 (LED/AUD build)",
+      "answers_owner": "Owner (interactive)",
+      "deadline_note": "",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** `platform:super_admin` only, no new role, no new key. docs/05 \u00a710 corrected to the ratified catalog; a dedicated key can still be proposed at the CON V2 freeze if finance/compliance oversight demands it."
+    },
+    {
+      "id": "D26",
+      "source_doc": "48",
+      "section": "Ledger & Audit",
+      "question": "The tenant chart of accounts is 'seeded at provisioning' (docs/05 \u00a73.1) but the provisioning saga has no CoA step \u2014 the first order.paid post would fail `led.account_not_found`. Options \u2014 A: saga step 6b (idempotent, compensated); B: lazy seed inside ledger.Post; C: seed at the go-live checklist. See docs/48 \u00a72.",
+      "raised_by": "Eighth-pass review (docs/48 F9)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (saga + LED build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the saga gains an idempotent, compensated step 6b (CoA template + platform-account links), documented in docs/03 \u00a73.5 and docs/05 \u00a73.1; the docs/47 saga summary counts 9 steps + 3a + 6b."
+    },
+    {
+      "id": "D27",
+      "source_doc": "48",
+      "section": "Ledger & Audit",
+      "question": "audit_events.seq was 'app-assigned via Redis INCR' while audit.Write is fail-closed (audit failure = sensitive action denied) and seq has no V1 consumer (the hash chain is V2) \u2014 a Redis outage would deny every sensitive action platform-wide. Options \u2014 A: drop seq from V1 (V2 chain-init backfills in id order); B: keep seq sourced from Postgres; C: keep Redis INCR and accept the coupling. See docs/48 \u00a72.",
+      "raised_by": "Eighth-pass review (docs/48 F10)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (AUD build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** V1 carries no seq; the V2 hash chain (AUD-14) introduces it at chain init, backfilled in id order. The fail-closed audit write is one INSERT in the action's transaction with no Redis dependency."
+    },
+    {
+      "id": "D28",
+      "source_doc": "50",
+      "section": "Evaluation & Account Lifecycle",
+      "question": "The V1 event catalog has zero EVL/BRG events, yet EVL is Phase-1 V1.0 and the binding machine edge ACTIVE\u2192BREACH_DETECTED (EVL-17) consumes evaluation.verdict \u2014 the sheet cannot wire its own core loop. Which events enter the V1 catalog? Options \u2014 A: promote the Phase-1 five (evaluation.verdict, bridge.tick, account.day_rolled, account.activated, evaluation.daily_reset); B: promote only the breach-path three; C: keep them out as internal wiring (breaks the EVT-03/AUD-02 mirror + trace for the core loop). See docs/50 \u00a72 F1.",
+      "raised_by": "Tenth-pass review (docs/50 F1)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (EVL/BRG build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** all five promoted with payload schemas + examples; `bridge.tick` is the observed record (EVL-49) and does not mirror to audit (docs/05 \u00a714 exception)."
+    },
+    {
+      "id": "D29",
+      "source_doc": "50",
+      "section": "Evaluation & Account Lifecycle",
+      "question": "docs/09 \u00a73.7 says an EVL-20 override (V1.1) transitions LCC back 'failed \u2192 active', but the binding state machine has no reverse edge out of FAILED and LCC-12's manual override-transition is V2 \u2014 a false-positive breach cannot be undone. Options \u2014 A: add guarded reversal edges BREACH_DETECTED\u2192ACTIVE and FAILED\u2192ACTIVE (override record = guard); B: reversal only before FAILED commits, post-FAILED is V2; C: never reopen \u2014 spawn a replacement account. See docs/50 \u00a72 F2.",
+      "raised_by": "Tenth-pass review (docs/50 F2)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (EVL override build, V1.1)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the two edges exist, valid only with a referenced override record (evaluation_overrides.id, kind clear_breach) + step-up; closed positions stay closed; BRG re-enables trading. Machine, diagram source, API contract and docs updated in the same decision."
+    },
+    {
+      "id": "D30",
+      "source_doc": "50",
+      "section": "Evaluation & Account Lifecycle",
+      "question": "Rule packs include time_limit (max_calendar_days) but the EVL-44 priority matrix never classifies it and the machine has no expiry edge, while account.expired exists with failed_reason 'expired' \u2014 what IS a time-limit expiry? Options \u2014 A: expiry is a breach verdict (rule_id=time_limit) through the existing breach path; B: a dedicated 'expired' verdict + machine edge + AccountExpired promoted to V1. See docs/50 \u00a72 F3.",
+      "raised_by": "Tenth-pass review (docs/50 F3)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (EVL build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** expiry is a breach verdict (matrix priority 1, after max_daily_loss; failed_reason 'breach:time_limit'); account.expired remains the NOT/ANA mirror event. One enforcement path to build and test."
+    },
+    {
+      "id": "D31",
+      "source_doc": "50",
+      "section": "Evaluation & Account Lifecycle",
+      "question": "LCC freezes trading_time_left while SUSPENDED, but EVL's day_rolled trigger increments calendar_days unconditionally and nothing gates evaluation on account state \u2014 a suspended account burns its calendar limit and racks up verdicts while frozen. Options \u2014 A: suspension freezes everything (no rollover event, EVL skips suspended ticks, resume re-evaluates on the next fresh tick); B: only the trading clock freezes, evaluation continues. See docs/50 \u00a72 F4.",
+      "raised_by": "Tenth-pass review (docs/50 F4)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (LCC rollover build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the rollover job skips SUSPENDED (and terminal) accounts; EVL skips their ticks with WARN; clocks frozen; V1-Plus pause behaves the same (paused_at). docs/07 \u00a73.3 + docs/09 \u00a73.6/\u00a75 updated."
+    },
+    {
+      "id": "D32",
+      "source_doc": "50",
+      "section": "Evaluation & Account Lifecycle",
+      "question": "FUNDED accounts have no breach edge: the V1 machine routes FUNDED only to SUSPENDED/TERMINATED, so a breach verdict on a funded account has no automatic transition (docs/50 F13). Options to consider \u2014 A: FUNDED\u2192BREACH_DETECTED reusing the breach path (terminates via CLOSING); B: FUNDED\u2192SUSPENDED automatic + risk review decides; C: funded breach = force-terminate path with extra guard. Not decided in the tenth pass.",
+      "raised_by": "Tenth-pass review (docs/50 F13)",
+      "owner": "BE-1 + PAY owner",
+      "deadline": "Phase 4 wave 3 (trading depth) or first funded-account incident",
+      "answer": "(open \u2014 raised 2026-09-19; owner decision pending)"
+    }
+  ]
 }

@@ -18,6 +18,8 @@ States: CREATED, ACTIVE, BREACH_DETECTED, CLOSING, FAILED, PASS_PENDING, VERIFIC
 ```text
 CREATED             → ACTIVE                    broker account provisioned, credentials delivered (BRG-05, BRG-06)
 ACTIVE              → BREACH_DETECTED           hard breach (EVL-17)
+BREACH_DETECTED     → ACTIVE                    breach override (EVL-20, V1.1 — D29)
+FAILED              → ACTIVE                    breach override (EVL-20, V1.1 — D29)
 ACTIVE              → PASS_PENDING              objectives met (EVL-19)
 ACTIVE              → SUSPENDED                 admin suspend (LCC-11, V1.1)
 BREACH_DETECTED     → CLOSING                   disable-then-close enqueued (BRG-10, EVL-17)
