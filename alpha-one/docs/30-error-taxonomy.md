@@ -176,7 +176,7 @@
 | `brg.capacity` | 503 | Server group full / MetaApi quota — account cap guard | ext |
 | `brg.command_failed` | — | Execution failed after retries (reason in command result) | ext |
 | `brg.command_conflict` | — | Broker state contradicted preconditions (e.g. position already closed) → confirm path | ext |
-| `brg.sync_gap` | — | Deal discontinuity (event + ADM review) | ext |
+| `brg.sync_gap` | — | Deals-count mismatch in the sync window (event + ADM review) | ext |
 | `brg.credentials_missing` | — | Provisioned account missing creds (should never happen) | ext |
 | `brg.symbol_unknown` | — | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) | ext |
 

@@ -363,6 +363,46 @@
       "owner": "BE-1 + PAY owner",
       "deadline": "Phase 4 wave 3 (trading depth) or first funded-account incident",
       "answer": "(open \u2014 raised 2026-09-19; owner decision pending)"
+    },
+    {
+      "id": "D33",
+      "source_doc": "51",
+      "section": "Trading Bridge",
+      "question": "docs/08 \u00a73.3 bound V1 gap detection as per-login deal-ticket continuity (min(new) > last+1), but MT5 deal tickets are SERVER-GLOBAL counters \u2014 any other account on the server consumes tickets, so the check alarms on nearly every poll and EVL drowns in gap_flagged verdicts. Options \u2014 A: history-window count (deals in [last_synced_at\u2212overlap, now] via history API vs rows written); B: defer gap detection to V2, V1 uses tick-staleness + nightly reconciliation only; C: keep the heuristic with a tuned threshold. See docs/51 \u00a72 F1.",
+      "raised_by": "Eleventh-pass review (docs/51 F1)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (BRG sync build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the V1 check is the history-window deals-count reconciliation; last_deal_ticket is a fetch cursor only, never a continuity oracle. The pf-platform scaffold's bridge-assigned per-account seq is the same lesson (ordering cursors must be ours, not the broker's)."
+    },
+    {
+      "id": "D34",
+      "source_doc": "51",
+      "section": "Trading Bridge",
+      "question": "The D28 bridge.tick payload schema (5 fields) under-specified docs/08 \u00a78's canonical shape (positions array, margin/free_margin, leverage, deals_count, last_deal_ticket), and \u00a78 itself carried invalid JSON (leverage: 1:500). Which is canonical? Options \u2014 A: full \u00a78 shape as the schema (fixing the JSON); B: minimal schema, consumers read PG. See docs/51 \u00a72 F2.",
+      "raised_by": "Eleventh-pass review (docs/51 F2)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (BRG sync build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** the full \u00a78 shape is the canonical payload schema (positions array for TD live view + RSK V2; leverage as a string); schema + example regenerated and strictly validated."
+    },
+    {
+      "id": "D35",
+      "source_doc": "51",
+      "section": "Trading Bridge",
+      "question": "docs/08 \u00a73.3 binds 'every tick updates account_snapshots (1 row/account/min, 14-day rolling in PG)' but the table was defined nowhere (not \u00a79, not docs/32, not ANA). Where does it live? Options \u2014 A: BRG-owned partitioned table; B: ANA read model only; C: drop the concept, rely on the events log. See docs/51 \u00a72 F3.",
+      "raised_by": "Eleventh-pass review (docs/51 F3)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (BRG sync build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** account_snapshots is BRG-owned (docs/08 \u00a79): minute buckets, equity/balance/margin/free_margin cents + broker_time, daily partitions, 14-day rolling drop after the ANA daily rollup; PAY eligibility + TD intraday curves read here; BRG-09 refreshes the latest row on demand."
+    },
+    {
+      "id": "D36",
+      "source_doc": "51",
+      "section": "Trading Bridge",
+      "question": "The BRG contract's open question: an admin 'force sync' endpoint would be a scope addition (BRG-09 on-demand sync is worker-internal, called by PAY-02/03 per docs/11). Options \u2014 A: keep worker-internal only in V1; B: add a V1-Plus admin endpoint + permission key. See docs/51 \u00a72 F5.",
+      "raised_by": "Eleventh-pass review (docs/51 F5)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (BRG build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** sheet-faithful \u2014 no admin force-sync in V1; ADM observes freshness via the health surface (docs/08 \u00a77.2); revisit with the V2 broker-management surfaces (BRG-26/34)."
     }
   ]
 }

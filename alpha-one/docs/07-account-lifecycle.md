@@ -199,7 +199,7 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | `FundedCreated` | LCC-23 | DOC-04 (certificate), ANA-01 |
 | `Suspended` | LCC-23 | PAY-04 (payout hold while open), ANA-01 |
 | `Resumed` | LCC-23 | ANA-01 |
-| `account.activated` | LCC (CREATED → ACTIVE on `broker.created`) | BRG (start sync), EVL (start evaluation + create `evaluation_state`), NOT-01, AUD |
+| `account.activated` | LCC (CREATED → ACTIVE on the completed provisioning command; the V2 event form is `bridge.account_created`) | BRG (start sync), EVL (start evaluation + create `evaluation_state`), NOT-01, AUD |
 | `account.day_rolled` | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA |
 
 **Mapping to the extended model below:** V1 emits the single `AccountCreated` when the account exists in the lifecycle (the extended `account.purchased` stays internal V2 granularity (`account.activated` joined the V1 catalog in the tenth pass — D28, docs/50)); `AccountPassed` = the extended `account.phase_completed`; `AccountBreached` = `account.breached`; `AccountFailed` = `account.expired` / `account.closed`; `FundedCreated` = `account.funded`; `Suspended` / `Resumed` = `account.suspended` / `account.resumed`.
@@ -211,8 +211,8 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | Event | Produced on | Key fields | Consumers |
 |---|---|---|---|
 | `account.purchased` | order.paid | account_id, challenge, size, price | NOT, ANA, CON |
-| `account.provisioning_failed` | broker.failed | reason, attempts | NOT, CON (manual retry), AUD |
-| `account.activated` | broker.created | broker_account_id, server, phase | BRG (start sync), EVL (start eval), NOT, DOC, AUD |
+| `account.provisioning_failed` | provisioning-command failure (the V2 event form is `bridge.account_create_failed`) | reason, attempts | NOT, CON (manual retry), AUD |
+| `account.activated` | provisioning-command completion (V2 event: `bridge.account_created`) | broker_account_id, server, phase | BRG (start sync), EVL (start eval), NOT, DOC, AUD |
 | `account.day_rolled` | rollover job | broker_date, server | EVL (reset dailies) |
 | `account.breached` | verdict.breach | rule_id, verdict_id, evidence_ref, broker_time | NOT, AUD (critical), RSK (case open V2), BRG (enforce cmd), TD (breach report) |
 | `account.phase_completed` | target_hit | phase, metrics | NOT, DOC (cert), ANA |
@@ -298,7 +298,7 @@ Staff (ADM): `GET /v1/admin/accounts?state=&phase=&q=`,
 required, 2FA, critical audit — the escape hatch; transition table validates it).
 
 Internal: `POST /internal/v1/accounts/{id}/provision` (CHK → LCC on order.paid),
-command endpoints for BRG (LCC → BRG; BRG → LCC `broker.created/failed`).
+command endpoints for BRG (LCC → BRG; BRG reports back by completing the command row — `broker.created/failed` was the research-track name; the V2 event forms are `bridge.account_created`/`bridge.account_create_failed`).
 ## 8. Schema (key shapes)
 
 ```jsonc
@@ -435,8 +435,8 @@ NOT/DOC/EVT/BRG as described; Sentry on transition conflicts.
 | Module | How |
 |---|---|
 | **CHK** | `order.paid` → `account.purchased` → LCC creates row (LCC-05); `order.expired` → cancel; activation fee orders (V2 LCC-08) |
-| **BRG** | LCC issues commands (`account_commands`); BRG reports `broker.created/failed` + sync snapshots; LCC-33 broker reconciliation (V2) compares LCC state vs broker state nightly |
-| **EVL** | EVL consumes `account.activated/day_rolled/sync` → verdicts → LCC transitions; LCC never evaluates rules itself |
+| **BRG** | LCC issues commands (`account_commands`); BRG reports back by completing the command row (V2 events: `bridge.account_created`/`bridge.account_create_failed`) + sync snapshots; LCC-33 broker reconciliation (V2) compares LCC state vs broker state nightly |
+| **EVL** | EVL consumes `account.activated` / `account.day_rolled` / `bridge.tick` → verdicts → LCC transitions; LCC never evaluates rules itself |
 | **PAY** | eligibility reads `state == funded` + KYC gate + no open risk case (PRD default); `account.breached` blocks in-flight payouts |
 | **KYC** | `kyc.approved` unblocks `funding_pending → funded` (KYC-07 gate) |
 | **DOC** | phase certificates on `phase_completed`, funded cert on `account.funded`, breach report on `breached` (TD-25) |
@@ -457,7 +457,7 @@ R2 (certificate/statement PDFs via DOC), Sentry. No direct provider SDKs in LCC.
 |---|---|---|---|---|
 | 1. Schemas (accounts, history, commands) + transition table + versioned `Transition()` | BE-1 | 3 d | OPS, AUTH, TEN | unit: every illegal transition rejected; legal path green |
 | 2. Purchase path: CHK order.paid → account row → provisioning command | BE-1 | 2 d | 1, CHK-08 | staging purchase creates account in `provisioning` |
-| 3. Broker callback path: broker.created → active + terms freeze + events + creds | BE-1 | 2 d | 2, BRG-05 | end-to-end on staging broker sandbox: purchase → active with credentials |
+| 3. Broker completion path: provisioning command completes → active + terms freeze + events + creds | BE-1 | 2 d | 2, BRG-05 | end-to-end on staging broker sandbox: purchase → active with credentials |
 | 4. Verdict path: EVL breach → failed + enforcement command + evidence + NOT/DOC/AUD | BE-1 | 3 d | 3, EVL core | induced breach: account fails once (redelivered event = no-op), positions closed, email sent |
 | 5. Phase/funding path: target_hit → phase_complete → funding_pending → funded (KYC gate) | BE-1 | 3 d | 4, KYC-06/07 | full happy path on sandbox: pass phase 1 → funded |
 | 6. Pause/resume + clock (trading_time_left) + rollover job + day_rolled | BE-1 | 2.5 d | 5 | pause freezes clock across broker-midnight rollover |

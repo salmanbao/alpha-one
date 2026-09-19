@@ -8,9 +8,44 @@
   "correlation_id": "01J9ZACC0RRT00000000000000",
   "payload": {
     "account_id": "01J9ACC0000000000000000000",
+    "broker_login": "50001234",
     "equity_cents": 10412000,
     "balance_cents": 10412000,
-    "open_positions": 2,
+    "margin_cents": 212000,
+    "free_margin_cents": 10200000,
+    "leverage": "1:500",
+    "positions": [
+      {
+        "position_id": "50001234-1",
+        "symbol": "EURUSD",
+        "side": "buy",
+        "lots": 0.5,
+        "open_price": 1.0842,
+        "current_price": 1.0851,
+        "sl": 1.0812,
+        "tp": null,
+        "opened_at": 1758275000000,
+        "profit_cents": 45000,
+        "swap_cents": -1200,
+        "commission_cents": -300
+      },
+      {
+        "position_id": "50001234-2",
+        "symbol": "XAUUSD",
+        "side": "sell",
+        "lots": 0.1,
+        "open_price": 2412.5,
+        "current_price": 2410.1,
+        "sl": null,
+        "tp": 2405.0,
+        "opened_at": 1758276100000,
+        "profit_cents": 12000,
+        "swap_cents": 0,
+        "commission_cents": -150
+      }
+    ],
+    "deals_count": 2,
+    "last_deal_ticket": 88231,
     "broker_time": 1758278400000
   }
 }

@@ -116,10 +116,18 @@ tx:
   Decimal(10,2), broker `time` (ms) as the trading clock, platform-side
   `received_at`. Normalization is a pure function — property-tested against
   fixture feeds (BRG-43 contract suite runs the same fixtures per adapter).
-- **Gap detection (V1 basic, BRG-33 V2 full):** deal-ticket continuity: if
-  `min(new_tickets) > last_ticket + 1` → `bridge.sync_gap` event + WARN alert
-  (missing deals = potentially missing trades; EVL treats the gap as *evidence
-  unavailable* — it does not assume, and ADM is paged for manual review).
+- **Gap detection (V1, D33 — eleventh pass, docs/51):** MT5 deal tickets are
+  **server-global** counters, not per-login contiguous, so ticket arithmetic
+  (`min(new) > last + 1`) would alarm on nearly every poll. The V1 check is a
+  **history-window count**: per account, deals in `[last_synced_at − overlap, now]`
+  fetched from the history API vs rows written this window; count mismatch →
+  `bridge.sync_gap` event + WARN alert (missing deals = potentially missing
+  trades; EVL treats the gap as *evidence unavailable* — it does not assume,
+  and ADM is paged for manual review). `last_deal_ticket` stays the incremental
+  fetch **cursor** only — never a continuity oracle. (BRG-33 V2 adds per-deal
+  hash reconciliation on top. The bridge-assigned per-account `seq` in the
+  pf-platform scaffold is the same lesson: ordering cursors must be ours, not
+  the broker's.)
 - **Equity snapshots:** every tick updates `account_snapshots` (downsampled: 1
   row/account/min, 14-day rolling in PG, daily rollup to ANA read model;
   multi-resolution = LCC-42 V2).
@@ -166,16 +174,16 @@ commands queue (not dropped) + CON banner.
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
 | `bridge.tick` | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) |
+| `bridge.sync_gap` | BRG (history-window count mismatch — D33) | ADM (manual review), AUD, EVL (gap_flagged verdict) |
 
 ### 4.2 Extended (post-V1) event model — design-level
 
 | Event | When | Key fields | Consumers |
 |---|---|---|---|
-| `bridge.tick` | every sync tx | account, equity, balance, margin, positions, deals_count, broker_time | EVL (trigger eval), ANA (equity points), web SSE fan-out (TD live) |
 | `bridge.account_created` / `bridge.account_create_failed` | provisioning | login, server, reason | LCC, NOT, CON |
 | `bridge.trading_disabled` / `bridge.trading_enabled` | after confirmed command | account, by (command ref) | LCC (confirm transition), AUD |
 | `bridge.positions_closed` | after confirmed close-all | closed_count, total_pnl_cents, broker_time | LCC, AUD, NOT (breach evidence) |
-| `bridge.sync_gap` | ticket discontinuity | account, expected_from, got_from | ADM (manual review), AUD |
+| `bridge.sync_gap` | deals-count mismatch in the sync window (D33) | account, window_start, expected_count, got_count | ADM (manual review), AUD, EVL (gap_flagged verdicts) |
 | `bridge.reconciliation_exception` | nightly mismatch | account, kind, delta | ADM, AUD, CON |
 | `bridge.command_dead` | terminal command failure | command_id, reason | CON (CRITICAL), AUD |
 | `ops.provider_health` | 5 min | success_rate, p95_ms, state | CON, dashboards |
@@ -185,8 +193,9 @@ commands queue (not dropped) + CON banner.
 - **Broker account:** `created → active (syncing) → disabled (trading off) →
   archived (V2)`. Mirrors LCC account state but broker-side; `bridge_state`
   column on `broker_accounts` + nightly comparison with LCC state (LCC-33).
-- **Sync cycle:** `scheduled → polled → written → (gap? | clean)` — per account,
-  monotonic `last_deal_ticket`.
+- **Sync cycle:** `scheduled → polled → written → (gap? | clean)` — per account;
+  `last_deal_ticket` is the incremental cursor (monotonic); gap judgment is the
+  D33 history-window count.
 - **Command:** `pending → executing → confirmed | failed(retry) → dead` (attempts
   ≤ 3 for non-money, ≤ 1 for `credit`).
 - **Circuit breaker:** `closed → open (5 fails) → half-open (probe) → closed`.
@@ -206,7 +215,7 @@ Namespace `BRG` (provider-safe strings only — MetaApi error codes mapped to ou
 | `brg.capacity` | 503 (to LCC) | Server group full / MetaApi quota — account cap guard |
 | `brg.command_failed` | internal | Execution failed after retries (reason in command result) |
 | `brg.command_conflict` | internal | Broker state contradicted preconditions (e.g. position already closed) → confirm path |
-| `brg.sync_gap` | internal WARN | Deal discontinuity (event + ADM review) |
+| `brg.sync_gap` | internal WARN | Deals-count mismatch in the sync window (event + ADM review) |
 | `brg.credentials_missing` | internal CRITICAL | Provisioned account missing creds (should never happen) |
 | `brg.symbol_unknown` | internal | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) |
 
@@ -240,7 +249,7 @@ history = TD-08 reads ANA read model fed by `bridge.tick`/deals).
 // bridge.tick (event payload.data)
 { "account_id": "01J9ACC...", "broker_login": "50001234",
   "equity_cents": 10412000, "balance_cents": 10412000, "margin_cents": 212000,
-  "free_margin_cents": 10200000, "leverage": 1:500,
+  "free_margin_cents": 10200000, "leverage": "1:500",
   "positions": [ { "position_id": "50001234-1", "symbol": "EURUSD", "side": "buy",
                    "lots": 0.50, "open_price": 1.08420, "current_price": 1.08510,
                    "sl": 1.08120, "tp": null, "opened_at": 1758275000000,
@@ -281,7 +290,7 @@ CREATE TABLE broker_accounts (
   cred_key_version   INT NOT NULL DEFAULT 1,
   leverage           TEXT,
   last_equity_cents  BIGINT, last_balance_cents BIGINT,
-  last_margin_cents  BIGINT,
+  last_margin_cents  BIGINT, last_free_margin_cents BIGINT,
   last_deal_ticket   BIGINT NOT NULL DEFAULT 0,
   last_synced_at     TIMESTAMPTZ,
   server_time        TIMESTAMPTZ,          -- last broker-attested time
@@ -324,6 +333,23 @@ CREATE TABLE broker_deals (
   PRIMARY KEY (login, deal_id)
 ) PARTITION BY RANGE (received_at);
 -- monthly partitions (high-volume table; same pattern as events)
+
+CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-day rolling (D35)
+  account_id      ULID NOT NULL,
+  bucket_ts       TIMESTAMPTZ NOT NULL,       -- minute bucket (UTC)
+  tenant_id       ULID NOT NULL,
+  login           TEXT NOT NULL,
+  equity_cents    BIGINT NOT NULL,
+  balance_cents   BIGINT NOT NULL,
+  margin_cents    BIGINT,
+  free_margin_cents BIGINT,
+  broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
+  received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, bucket_ts)
+) PARTITION BY RANGE (bucket_ts);
+-- daily partitions; retention = 14-day rolling (partition DROP; BRG job) with the
+-- daily rollup exported to the ANA read model first (docs/19). PAY eligibility and
+-- TD intraday equity curves read here (BRG-09 refreshes the latest row on demand).
 
 CREATE TABLE broker_executions (
   id            ULID PRIMARY KEY,

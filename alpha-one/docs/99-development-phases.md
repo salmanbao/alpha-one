@@ -296,10 +296,13 @@ M1–M10, owner decisions W/U/D recorded in its §15) and the eighth-pass artifa
 `docs/48-ledger-audit-review.md` (the LED + AUD deep review, findings F1–F10, owner
 decisions D25–D27) the ninth-pass artifact is `docs/49-chain-review-ledger-audit-oss.md`
 (the four-domain chain review — findings C1/C2, the required event `correlation_id` — and
-the LED/AUD open-source evaluation with the V2 hash-chain design rules), and the tenth-pass
+the LED/AUD open-source evaluation with the V2 hash-chain design rules), the tenth-pass
 artifact is `docs/50-evl-lcc-review.md` (the trading-core review — decisions D28–D31: the
 Phase-1 five events in the V1 catalog, guarded breach-reversal edges, expiry-as-breach,
-suspension-freezes-everything — plus F13 surfaced for the next pass); like docs/42
+suspension-freezes-everything — plus F13 surfaced for the next pass), and the eleventh-pass
+artifact is `docs/51-brg-review.md` (the trading-bridge review — decisions D33–D36: history-window
+gap detection, the full bridge.tick shape, BRG-owned account_snapshots, worker-internal sync —
+and `bridge.sync_gap` joining the V1 catalog); like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.
 

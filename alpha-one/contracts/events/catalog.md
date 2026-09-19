@@ -37,6 +37,7 @@ EVL-05's trigger is `bridge.tick`, and the daily reset rides `account.day_rolled
 | evaluation.verdict | v1 | EVL (every non-ok verdict; EVL-17) | LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43), NOT-01, DOC-04 (TD-25 breach report), AUD (critical on breach), RSK (V2 case open) | `payloads/evaluation.verdict.v1.json` |
 | evaluation.daily_reset | v1 | EVL (rollover) | ANA (daily P&L points), AUD (standard) | `payloads/evaluation.daily_reset.v1.json` |
 | bridge.tick | v1 | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points); observed record per EVL-49 — no audit mirror (docs/05 §14) | `payloads/bridge.tick.v1.json` |
+| bridge.sync_gap | v1 | BRG (history-window count mismatch — D33, docs/51) | ADM (manual review), AUD, EVL (gap_flagged verdict) | `payloads/bridge.sync_gap.v1.json` |
 
 ## Checkout events
 

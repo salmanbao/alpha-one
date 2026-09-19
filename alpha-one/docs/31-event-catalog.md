@@ -4,7 +4,7 @@
 > doc's §4). This is the catalog the CI gate checks against (docs/04 §5.7,
 > docs/28 §11): an event emitted but not cataloged, or a consumer that never
 > handled it, fails the build. The V1 event schemas live in
-> `contracts/events/payloads/` (envelope + 36 V1 event schemas) and the extended
+> `contracts/events/payloads/` (envelope + 37 V1 event schemas) and the extended
 > set in `contracts/events/extended/`; this table is the
 > producer/consumer map. `when`/`consumers` are condensed from the owning
 > doc's row; the owning doc is the authority. Tier: **V1** = the V1
@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (158 events — 36 V1 baseline, 122 extended — across 34 topics)
+## 2. The catalog (158 events — 37 V1 baseline, 121 extended — across 34 topics)
 
 ### `user.*`
 
@@ -125,10 +125,10 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `account.activated` | 07 (LCC) | LCC (CREATED → ACTIVE on broker.created) | BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD | V1 |
+| `account.activated` | 07 (LCC) | LCC (CREATED → ACTIVE on the completed provisioning command; the V2 event form is bridge.account_created) | BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD | V1 |
 | `account.day_rolled` | 07 (LCC) | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA | V1 |
 | `account.purchased` | 07 (LCC) | order.paid | NOT, ANA, CON | ext |
-| `account.provisioning_failed` | 07 (LCC) | broker.failed | NOT, CON (manual retry), AUD | ext |
+| `account.provisioning_failed` | 07 (LCC) | provisioning-command failure (the V2 event form is bridge.account_create_failed) | NOT, CON (manual retry), AUD | ext |
 | `account.breached` | 07 (LCC) | verdict.breach | NOT, AUD (critical), RSK (case open V2), BRG (enforce cmd), TD (breach report) | ext |
 | `account.phase_completed` | 07 (LCC) | target_hit | NOT, DOC (cert), ANA | ext |
 | `account.funded` | 07 (LCC) | funded.activated | NOT, DOC, ANA, PAY (eligibility on) | ext |
@@ -143,10 +143,10 @@
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
 | `bridge.tick` | 08 (BRG) | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) | V1 |
+| `bridge.sync_gap` | 08 (BRG) | BRG (history-window count mismatch — D33) | ADM (manual review), AUD, EVL (gap_flagged verdict) | V1 |
 | `bridge.account_created` | 08 (BRG) | provisioning | LCC, NOT, CON | ext |
 | `bridge.trading_disabled` | 08 (BRG) | after confirmed command | LCC (confirm transition), AUD | ext |
 | `bridge.positions_closed` | 08 (BRG) | after confirmed close-all | LCC, AUD, NOT (breach evidence) | ext |
-| `bridge.sync_gap` | 08 (BRG) | ticket discontinuity | ADM (manual review), AUD | ext |
 | `bridge.reconciliation_exception` | 08 (BRG) | nightly mismatch | ADM, AUD, CON | ext |
 | `bridge.command_dead` | 08 (BRG) | terminal command failure | CON (CRITICAL), AUD | ext |
 
