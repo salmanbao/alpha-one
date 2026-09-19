@@ -55,7 +55,7 @@ Resolved 2026-09-16 (Decision 5): KYC-05 emits these five events through the out
 | kyc.submitted | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 — consumer link per KYC-16's story ("so that lifecycle auto-upgrade and payout eligibility react without coupling"; LCC-07 / KYC-07 / KYC-08 gates remain synchronous status checks, not event consumption) | `payloads/kyc.submitted.v1.json` |
 | kyc.approved | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), LCC-06 (auto-upgrade on approval), PAY-03 (payout eligibility reacts without coupling), ANA-01 | `payloads/kyc.approved.v1.json` |
 | kyc.rejected | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 | `payloads/kyc.rejected.v1.json` |
-| kyc.expired | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 — EXPIRED trigger itself is still TODO — needs owner decision | `payloads/kyc.expired.v1.json` |
+| kyc.expired | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 + the session-TTL worker (D43, docs/53: 24 h session expiry) | NOT-01 (NOT-05 template: KYC result), ANA-01 — trigger resolved 2026-09-19 (D43: session TTL only; APPROVED never expires in V1) | `payloads/kyc.expired.v1.json` |
 | kyc.resubmission_requested | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 | `payloads/kyc.resubmission_requested.v1.json` |
 
 Note: the "KYC result" NOT-05 template's per-event mapping (which of the five events fires it) is TODO — needs owner decision.

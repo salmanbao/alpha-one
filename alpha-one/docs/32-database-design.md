@@ -27,7 +27,7 @@
 - **Indexes**: every `(tenant_id, …)` leading; the read-model tables (`*_ro`)
   are the query surface for reads (19 §3.1).
 
-## 2. The schema (124 tables in 29 DDL blocks, module-ordered)
+## 2. The schema (125 tables in 29 DDL blocks, module-ordered)
 
 ### 02 — AUTH (from docs/02-identity-access.md §9)
 
@@ -837,6 +837,21 @@ CREATE INDEX idx_pexec_payout ON payout_executions(payout_id, attempt);
 ### 12 — CHK (from docs/12-checkout-billing.md §9)
 
 ```sql
+CREATE TABLE checkout_sessions (              -- CHK-02/43/44 (D42: added — was dictionary-only)
+  id              ULID PRIMARY KEY,
+  tenant_id       ULID NOT NULL,
+  identity_id     ULID NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'reserved'
+    CHECK (state IN ('reserved','completed','expired','cancelled')),
+  price_snapshot  JSONB NOT NULL,           -- package_id, rule_set_id, base_cents, currency
+  coupon_code     TEXT,                     -- reserved (CHK-02); released on expire/cancel
+  reservation_expires_at TIMESTAMPTZ NOT NULL,
+  order_id        ULID,                     -- set on submit (the idempotent CHK-42 create)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at    TIMESTAMPTZ, cancelled_at TIMESTAMPTZ
+);
+CREATE INDEX idx_csess_tenant ON checkout_sessions(tenant_id, identity_id, state);
+
 CREATE TABLE orders (
   id              ULID PRIMARY KEY,
   tenant_id       ULID NOT NULL,
@@ -908,10 +923,14 @@ CREATE TABLE kyc_sessions (
   id             ULID PRIMARY KEY,
   tenant_id      ULID NOT NULL,
   identity_id    ULID NOT NULL,
-  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),
-  state          TEXT NOT NULL DEFAULT 'in_session'
-    CHECK (state IN ('in_session','in_review','manual_review','verified',
-                     'rejected','expired','re_verification_required')),
+  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),   -- level machinery is V2; V1 uses one flow (docs/53)
+  is_manual_review BOOLEAN NOT NULL DEFAULT false,  -- queue flag, NOT a state (D43, KYC-11/12)
+  state          TEXT NOT NULL DEFAULT 'not_started'
+    CHECK (state IN ('not_started','pending','in_review','approved',
+                     'rejected','needs_resubmission','expired')),
+    -- KYC-06's exact seven states (docs/53: the DDL's invented in_session/
+    -- manual_review/verified/re_verification_required removed; manual review
+    -- = in_review + is_manual_review)
   provider       TEXT NOT NULL DEFAULT 'veriff',
   provider_case_id TEXT,                     -- Veriff object id
   country_declared CHAR(2), country_ip CHAR(2),
@@ -927,7 +946,7 @@ CREATE TABLE kyc_sessions (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_kyc_tenant_identity ON kyc_sessions(tenant_id, identity_id, level, created_at DESC);
-CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'manual_review';
+CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'in_review' AND is_manual_review;
 
 CREATE TABLE kyc_documents (
   id         ULID PRIMARY KEY,

@@ -433,6 +433,56 @@
       "owner": "BE-2",
       "deadline": "Phase 1 (PAY build)",
       "answer": "**Answered 2026-09-19 \u2014 option A:** failed re-check = 422 payout.ineligible, payout stays pending_approval, no state change; the approver may reject manually with a reason. Pinned in docs/11 \u00a73.7 guard 2."
+    },
+    {
+      "id": "D40",
+      "source_doc": "53",
+      "section": "Checkout & KYC",
+      "question": "docs/12 presented the refund state machine as 'binding V1' citing CHK-09, but CHK-09 is the order.paid\u2192provisioning row \u2014 refunds are CHK-15 (V2.0), and the taxonomy's V1 baseline has no refund codes. Options \u2014 A: V1-Plus minimal manual refunds (ADM-only object; manual provider op + webhook confirm + LED reversal; no trader window, no auto-breach, no provider API); B: sheet-faithful, refunds fully V2; C: full \u00a73.4 machine as documented. See docs/53 \u00a72 F3.",
+      "raised_by": "Thirteenth-pass review (docs/53 F3)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (CHK build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** V1-Plus minimal manual refunds; the machine/DDL are shared so V2 lights up the other triggers without re-modeling."
+    },
+    {
+      "id": "D41",
+      "source_doc": "53",
+      "section": "Checkout & KYC",
+      "question": "docs/12's V1 rails included bank wire (manual capture, 72 h) citing CHK-20 \u2014 a V2.0 row; the sheet's V1 rails are Match2Pay/Interkasa/NOWPayments only. Options \u2014 A: keep wire in V1 as a documented scope addition; B: demote wire to V2 (sheet-faithful). See docs/53 \u00a72 F4.",
+      "raised_by": "Thirteenth-pass review (docs/53 F4)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (CHK build)",
+      "answer": "**Answered 2026-09-19 \u2014 option B:** wire demoted to V2 (CHK-20); V1 rails = Match2Pay + Interkasa + NOWPayments; the wire capture endpoint/TTL move to the V2 blueprint."
+    },
+    {
+      "id": "D42",
+      "source_doc": "53",
+      "section": "Checkout & KYC",
+      "question": "CHK-08 says the order record is created ON capture, CHK-42 says checkout submit never double-creates an order, and docs/12's DDL has orders in 'open' pre-payment \u2014 when does the order exist? Options \u2014 A: order at checkout submit (CHK-42, idempotent), capture moves open\u2192paid; B: sheet-literal, order born at capture. See docs/53 \u00a72 F5.",
+      "raised_by": "Thirteenth-pass review (docs/53 F5)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (CHK build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** order at submit (status open), capture = the fulfillment record; also added the checkout_sessions DDL (CHK-02/43/44 \u2014 previously dictionary-only)."
+    },
+    {
+      "id": "D43",
+      "source_doc": "53",
+      "section": "Checkout & KYC",
+      "question": "The KYC machine had three open edges (PENDING\u2192EXPIRED undefined, APPROVED\u2192EXPIRED 'P2', REJECTED\u2192PENDING 'open question') and the DDL invented four non-KYC-06 states; the catalog's kyc.expired TODO blocked since Decision 5. Options \u2014 A: EXPIRED = 24 h session TTL only; APPROVED never expires in V1; REJECTED terminal (new session via cooldown); manual review = IN_REVIEW + is_manual_review flag; B: keep the edges with defined triggers. See docs/53 \u00a72 F7.",
+      "raised_by": "Thirteenth-pass review (docs/53 F7)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (KYC build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** pinned everywhere (module doc, diagram, DDL, catalog, api/kyc.md); DDL now carries KYC-06's exact seven states."
+    },
+    {
+      "id": "D44",
+      "source_doc": "53",
+      "section": "Checkout & KYC",
+      "question": "docs/12 \u00a714 said purchase requires KYC (citing KYC-08, the payout gate); docs/13's duplicated gate tables disagreed (extended-only vs CHK-10 = V2); the sheet has no purchase-KYC row at all. Options \u2014 A: no V1 purchase gate (login-first checkout is the control; KYC-07 funding is the first gate; TTS L1-to-buy = V2 tenant config); B: V1-Plus purchase gate at session create. See docs/53 \u00a72 F8.",
+      "raised_by": "Thirteenth-pass review (docs/53 F8)",
+      "owner": "BE-1 + BE-2",
+      "deadline": "Phase 1 (CHK/KYC build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** no V1 purchase gate; docs/12 \u00a714 and docs/13 \u00a73.2 de-conflicted to one table."
     }
   ]
 }

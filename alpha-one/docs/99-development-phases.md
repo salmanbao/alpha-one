@@ -302,9 +302,12 @@ Phase-1 five events in the V1 catalog, guarded breach-reversal edges, expiry-as-
 suspension-freezes-everything — plus F13 surfaced for the next pass), the eleventh-pass
 artifact is `docs/51-brg-review.md` (the trading-bridge review — decisions D33–D36: history-window
 gap detection, the full bridge.tick shape, BRG-owned account_snapshots, worker-internal sync —
-and `bridge.sync_gap` joining the V1 catalog), and the twelfth-pass artifact is `docs/52-pay-review.md`
+and `bridge.sync_gap` joining the V1 catalog), the twelfth-pass artifact is `docs/52-pay-review.md`
 (the payout review — D32 answered: the FUNDED breach edge + hold-flag queue; D37–D39: no V1 request
-event, reserves as visibility-only, re-check-failure pins; the PAY-13 machine reconciled everywhere);
+event, reserves as visibility-only, re-check-failure pins; the PAY-13 machine reconciled everywhere),
+and the thirteenth-pass artifact is `docs/53-chk-kyc-review.md` (money-in + gates — D40–D44: minimal
+manual refunds, wire to V2, order-at-submit + checkout_sessions DDL, KYC edges pinned, no V1 purchase
+gate; the workbook itself used as the citation oracle);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.
