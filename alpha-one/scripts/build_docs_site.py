@@ -121,8 +121,10 @@ def _doc_group(name: str) -> str:
     n = int(num)
     if n <= 35:
         return "Cross-cutting (28–35)"
-    if n <= 45:
+    if n <= 40:
         return "PRD registers (36–40)"
+    if n <= 45:
+        return "Design decisions (41–45)"
     return "Development plan"
 
 
@@ -723,7 +725,8 @@ JS = """
 
 
 GROUP_ORDER = ("Overview", "Start here", "D1 ", "D2 ", "D3 ", "D4 ", "D5 ",
-               "Cross-cutting", "PRD registers", "Development plan", "Contracts", "Contracts · API")
+               "Cross-cutting", "PRD registers", "Design decisions", "Development plan",
+               "Contracts", "Contracts · API")
 
 
 def _group_rank(name: str) -> tuple[int, str]:
@@ -922,7 +925,7 @@ def build_hub(root: Path, docs: list[DocSpec], doc: DocSpec) -> str:
             f"<li><b>{html.escape(value, quote=True)}</b> {html.escape(label, quote=True)}</li>"
             for label, value in stats) + "</ul>")
 
-    regs = [d for d in docs if d.group.startswith("PRD registers")]
+    regs = [d for d in docs if d.group.startswith(("PRD registers", "Design decisions"))]
     if regs:
         parts.append("<h2>PRD registers</h2>")
         parts.append('<div class="hub-cards">')

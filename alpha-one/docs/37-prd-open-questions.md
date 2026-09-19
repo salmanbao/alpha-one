@@ -8,38 +8,40 @@
 > Every question the PRD raised, grouped by the module it blocks. An empty **Answer** cell means the question is still open and must be closed before the owning module's contract freeze (docs/99 §12). Answers captured in the workbook are reproduced verbatim; they outrank prose elsewhere in the doc set.
 
 
-Questions: **205** in 28 sections — **205 answered**, 0 open.
+Questions: **205** in 28 sections — **8 answered**, 197 open.
+
+Design-review questions (raised by the team, not the PRD workbook): **5** — **5 open** (§Design-review questions below).
 
 | Section | Questions | Open |
 |---|---|---|
-| KYC / Verification | 15 | 0 |
-| Trading Platform Bridge | 13 | 0 |
-| DevOps & Deployment | 11 | 0 |
-| Analytics & BI | 10 | 0 |
-| Support Inbox | 8 | 0 |
-| Auth & Identity | 7 | 0 |
-| Tenant Management | 7 | 0 |
-| Evaluation Engine | 7 | 0 |
-| Account Lifecycle | 7 | 0 |
-| Checkout & Billing | 7 | 0 |
-| Payout System | 7 | 0 |
-| Risk Management | 7 | 0 |
-| Affiliate System | 7 | 0 |
-| Ledger & Accounting | 7 | 0 |
-| Competition / Gamification | 7 | 0 |
-| Tenant Billing | 7 | 0 |
-| BYO Integration SDK | 7 | 0 |
-| Advanced API / Developer Portal | 7 | 0 |
-| Event Bus & Webhooks | 6 | 0 |
-| API Gateway | 6 | 0 |
-| Notification Service | 6 | 0 |
-| Trader Dashboard | 6 | 0 |
-| Admin Panel | 6 | 0 |
-| Audit & Compliance | 6 | 0 |
-| Platform Console | 6 | 0 |
-| Website / CMS | 6 | 0 |
-| CRM & Communications | 5 | 0 |
-| Document Generation | 4 | 0 |
+| KYC / Verification | 15 | 15 |
+| Trading Platform Bridge | 13 | 13 |
+| DevOps & Deployment | 11 | 10 |
+| Analytics & BI | 10 | 10 |
+| Support Inbox | 8 | 8 |
+| Auth & Identity | 7 | 6 |
+| Tenant Management | 7 | 5 |
+| Evaluation Engine | 7 | 7 |
+| Account Lifecycle | 7 | 7 |
+| Checkout & Billing | 7 | 7 |
+| Payout System | 7 | 7 |
+| Risk Management | 7 | 7 |
+| Affiliate System | 7 | 7 |
+| Ledger & Accounting | 7 | 7 |
+| Competition / Gamification | 7 | 7 |
+| Tenant Billing | 7 | 7 |
+| BYO Integration SDK | 7 | 7 |
+| Advanced API / Developer Portal | 7 | 7 |
+| Event Bus & Webhooks | 6 | 6 |
+| API Gateway | 6 | 5 |
+| Notification Service | 6 | 5 |
+| Trader Dashboard | 6 | 5 |
+| Admin Panel | 6 | 6 |
+| Audit & Compliance | 6 | 6 |
+| Platform Console | 6 | 6 |
+| Website / CMS | 6 | 6 |
+| CRM & Communications | 5 | 5 |
+| Document Generation | 4 | 3 |
 
 ## KYC / Verification
 
@@ -386,9 +388,23 @@ Questions: **205** in 28 sections — **205 answered**, 0 open.
 | 3 | What are the exact V1 certificate types? Recommended: Challenge Passed, Funded Trader, Payout Receipt. | Tech Lead | Funderblu Product Owner | Kickoff +5 days | Open |
 | 4 | Do we need a QR code on the certificate for external verification in V1? Recommended: No, unique ID is enough for V1. | Tech Lead | Tech Lead | Kickoff +5 days | Open |
 
+## Design-review questions
+
+Raised by the team during design review — they are **not** PRD workbook rows, so they are maintained in `scripts/design-questions.json` (the PRD rows above are generated from `scripts/prd-workbook.json`). Evidence for each is in `docs/41-auth-ten-open-source-evaluation.md`; an answer here must be applied to the owning module doc in the same change.
+
+| ID | Question | Raised by | Owner | Deadline | Answer |
+|---|---|---|---|---|---|
+| D1 | Identity component wiring: Better Auth has no Go SDK, so the V1 plan assumes a Node identity surface. Options — A: keep Better Auth, run it in the Node tier behind a documented JWT/JWKS contract for Go (one more deployable); B: Better Auth for flows, Go owns session/refresh-token tables and revocation; C: replace with a multi-tenant IdP (Zitadel AGPL-3.0, or Keycloak if deep SAML/LDAP is needed), everything OIDC; D: build the identity domain in Go (~3-4 dev-weeks, zero extra runtime, BVR-14 superseded). See docs/41 §7. | Design review (docs/41) | Tech Lead, BE-1 | Before Phase 0 exit | Open |
+| D2 | Does any tenant need SAML/OIDC SSO or SCIM at V1 cutover? Restates PRD row *Auth & Identity #6* as a build decision. The PRD schedules AUTH-24/25 at V3 and every OSS IdP that ships them at V1 (Zitadel, Keycloak, authentik) costs a second identity store plus, for Zitadel, an AGPL-3.0 review. Answering yes promotes AUTH-24/25 into V1 and changes D1. | Design review (docs/41 §4) | Sales owner, Tech Lead | Before Phase 0 exit | Open |
+| D3 | Isolation enforcement depth: keep ADR-1 app-level only (Go tenant guard + sqlc + CI guard test), or add Postgres RLS as a fail-closed second layer? RLS costs 2-4% on indexed queries and requires transaction-scoped `set_config('app.tenant_id', …, true)` under PgBouncer, `FORCE ROW LEVEL SECURITY` and a (tenant_id, …) index on every policy table; a missed guard currently leaks all tenants' rows, with RLS it returns zero rows. See docs/41 §5. | Design review (docs/41 §5) | Tech Lead, BE-1, DevOps | Before tenant-scoped tables are frozen | Open |
+| D4 | Authorization engine and deployment mode: keep Cerbos (BVR-23) as sidecar/central service, embed the Cerbos Go engine in-process (no extra process, fail-closed hazard disappears), switch to Casbin embedded (Apache-2.0, RBAC-with-domains, fastest, weakest decision logs), or fall back to the in-house engine behind `authorizer.Check`. The docs/02 §11 rule 'PDP unreachable → deny' only applies to the sidecar mode. | Design review (docs/41 §3.2) | Tech Lead, BE-2 | Phase 1 start (before AUTH-13) | Open |
+| D5 | Staff 2FA scope in V1: AUTH-09 as written (mandatory for every staff role) or finance + risk only? This is PRD open question 'Auth & Identity #1' restated as a build decision; it sizes the enrolment UX, recovery flow and support load for launch. | Design review (docs/41 §8) | Tech Lead, FunderBlu COO | Kickoff +2 days | Open |
+
 ## Using this register
 
 - **An open question is a design risk, not a blocker to writing docs** — the owning doc states the default it assumes and cites the question row; the answer then updates both.
 - **Answered rows are decisions.** They are binding for contract freeze; the `docs/99-development-phases.md` gate checklist re-reads this register at each phase exit.
-- **New questions** belong in the PRD workbook (so this script picks them up), not in ad-hoc comments.
+- **New questions** belong in `scripts/prd-workbook.json` (PRD rows) or `scripts/design-questions.json` (design-review rows) so this script picks them up, not in ad-hoc comments.
+
+- **Design-review rows carry an ID (`D1`, `D2`, …)** and are cited by that ID from the module docs; PRD rows are cited as `<Section> #<n>`.
 

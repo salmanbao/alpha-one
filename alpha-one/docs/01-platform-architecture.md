@@ -281,6 +281,13 @@ CON: create tenant (TEN) → plan + entitlements (Flipt flags) → white-label (
    writes; signed URLs expire ≤ 1 h.
 7. **Caching:** every Redis key is namespaced `t:{tenant_id}:...` — enforced by the
    cache client (same pattern as the DB guard).
+8. **Second layer (open, D3):** Postgres RLS is the only way to make a *forgotten*
+   predicate fail closed instead of leaking — the DB returns zero rows instead of all
+   rows. Adopting it costs 2–4 % on indexed queries and demands transaction-scoped
+   `set_config('app.tenant_id', …, true)` under PgBouncer transaction mode (ADR-8),
+   `FORCE ROW LEVEL SECURITY` (the owner bypasses policies otherwise) and a
+   `(tenant_id, …)` index on every policy table. Decision + mechanics:
+   `docs/41-auth-ten-open-source-evaluation.md` §5, register row **D3**.
 
 ## 8. Module dependency graph
 

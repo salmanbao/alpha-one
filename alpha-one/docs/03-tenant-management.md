@@ -350,6 +350,12 @@ branding) + in-mem LRU 60 s; invalidation via `tenant.*_changed` events + pub/su
 
 - **Isolation**: every table here is tenant-owned except `tenants` itself (platform
   realm). `tenant_id` immutability enforced at write (reject updates to the column).
+  **Enforcement depth is open (D3):** ADR-1 gives app-level enforcement only (Go
+  tenant guard + sqlc + CI guard test), where a forgotten predicate leaks *all*
+  tenants' rows; Postgres RLS with transaction-scoped
+  `set_config('app.tenant_id', …, true)`, `FORCE ROW LEVEL SECURITY` and a
+  `(tenant_id, …)` index per policy table makes the same mistake return *zero* rows
+  at 2–4 % query cost. Mechanics and failure modes: docs/41 §5.
 - **KYB gate** (V1): a tenant cannot reach `active` with `kyb_status != verified` —
   verification = CON staff review of legal entity docs (manual in V1; Veriff business
   flows V3). Sanctions screening of the legal entity + primary contact before
@@ -376,9 +382,18 @@ branding) + in-mem LRU 60 s; invalidation via `tenant.*_changed` events + pub/su
 
 ## 12. Open-source solutions
 
+> Re-evaluated 2026-09-19 together with AUTH: the candidate-by-candidate scoring is
+> [41 — AUTH + TEN open-source evaluation](41-auth-ten-open-source-evaluation.md).
+> The class that matters here is *multi-tenant databases* — shared schema + RLS vs
+> schema-per-tenant vs DB-per-tenant — and the conclusion is unchanged: ADR-1
+> (shared schema, `tenant_id`) is the only model that fits one Postgres on one box,
+> with **Postgres RLS as an optional fail-closed second layer (D3)**.
+
 | Option | Verdict |
 |---|---|
 | Flipt (self-hosted) | **CHOSEN** — code-level feature flags & per-tenant gating (PRD register) |
+| Postgres RLS (same database, second enforcement layer) | **Open (D3):** fail-closed, 2–4 % overhead, needs `FORCE RLS` + `SET LOCAL`/`set_config(…, true)` under PgBouncer transaction mode and a `(tenant_id, …)` index per policy table (docs/41 §5) |
+| Schema-per-tenant / DB-per-tenant | Rejected (ADR-1): N× migrations, catalog bloat, PgBouncer friction, connection-limit pressure; the isolation gain is not worth it at ≤ 200 tenants |
 | Spiffy/Temporal (provisioning) | Rejected V1: saga is 9 steps, one orchestrator loop in `workers` with PG job rows is simpler and observable; revisit if steps > 20 |
 | Nile/Citus (tenant sharding) | Rejected V1 (ADR-1); revisit at > 200 tenants |
 | Cerbos (tenant-level policies) | Same PDP as AUTH; tenant config policies live in the same policy repo |

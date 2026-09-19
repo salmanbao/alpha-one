@@ -45,7 +45,7 @@ Binding. "Enforced by" = who/what stops a violation.
 | BVR-11 | No commercial APM → **Prometheus + Grafana + Loki + Sentry** | observability | architecture review |
 | BVR-12 | No standalone gateway → **in-app middleware** behind Cloudflare | edge/routing | architecture review |
 | BVR-13 | No third analytics/BI tool in V1 → **read models + fixed reports** | reporting | architecture review |
-| BVR-14 | No managed IdP → **self-hosted Better Auth** + our AUTH-13 permission engine | auth & identity | architecture review |
+| BVR-14 | No managed IdP → **self-hosted Better Auth** + our AUTH-13 permission engine (Better Auth is TS-only: Go integrates over JWT/JWKS from a Node identity surface, or Go owns sessions — **D1**, docs/41 §3.1) | auth & identity | architecture review + Phase-0 verification |
 | BVR-15 | Any new third-party dependency → **register here before merge** | all dependency PRs | code review |
 | BVR-16 | Every external integration sits behind a **defined adapter interface** | payments, KYC, broker, email, storage, tax | code review (§5 table) |
 | BVR-17 | Before upgrading Redis beyond 7.2 → **licence review** | Redis version | change request (7.4+ = RSALv2/SSPLv1) |
@@ -54,7 +54,7 @@ Binding. "Enforced by" = who/what stops a violation.
 | BVR-20 | Do not build feature flags → **Flipt** | TEN-10, CON-31 | code review |
 | BVR-21 | No secrets-manager-with-UI in V1 (SOPS+age suffices) → **Infisical** is the V2 upgrade path | OPS-09 | change request |
 | BVR-22 | Do not build consent banners → **c15t** self-hosted (not in V1) | portals, tenant sites | code review |
-| BVR-23 | Do not build an RBAC policy point before **evaluating Cerbos** for AUTH-13 | AUTH-13/14 | architecture review (Cerbos = EVALUATE) |
+| BVR-23 | Do not build an RBAC policy point before **evaluating Cerbos** for AUTH-13 (evaluation done 2026-09-19: Cerbos confirmed over OPA/Casbin/OpenFGA; **deployment mode open — D4**, docs/41 §3.2) | AUTH-13/14 | architecture review done; spike = deploy mode + policy fit |
 | BVR-24 | Do not build webhook dispatch/retry/signing/logs → **Hook0** | EVT-11/13/14/15 | code review |
 | BVR-25 | **BullMQ Dashboard** for job observability (no custom job UI) | OPS-17, CON-21 | code review |
 | BVR-26 | Do not build SOC2/ISO evidence collection → **Comp AI or Openlane** | AUD-17/18 | compliance review |
@@ -81,8 +81,8 @@ needed — §9), **REJECTED** (never adopt).
 | Cloudflare | DNS, CDN, WAF, DDoS, edge | TEN-02/18, GW-01/20, OPS-15, DOC-06 | free tier | NOT STARTED | DevOps | Edge for every tenant domain. Confirm Cloudflare-for-SaaS for custom domains. |
 | Cloudflare R2 | Tenant-scoped object storage, zero egress | TEN-18, DOC-06 | free 10 GB, then per GB | NOT STARTED | DevOps | Set up week 2 (DOC-01). Tenant-prefixed keys. |
 | GitHub Actions | CI/CD | OPS-03/04/36 | free/$4 | SIGNED | DevOps | Pipelines week 1. SOPS secrets integration. |
-| Better Auth | Auth foundation (registration, login, sessions, MFA, OAuth) | AUTH-01..43 | free | EVALUATING | BE-1 | Phase-0 spike: confirm org plugin fits multi-tenant orgs (docs/02 §2). |
-| Cerbos | RBAC policy decision point | AUTH-13/14 | free self-hosted | EVALUATING | BE-2 | Evaluate before writing AUTH-13 logic (BVR-23). |
+| Better Auth | Auth foundation (registration, login, sessions, MFA, OAuth) | AUTH-01..43 | free | EVALUATING | BE-1 | Org plugin **confirmed** to fit multi-tenant orgs (per-org roles, custom + dynamic roles, invitations). Remaining: the Go integration model (**D1**, docs/41 §3.1/§7) — Better Auth is TypeScript-only, so either a Node identity surface issues JWTs Go verifies, or Go owns sessions. |
+| Cerbos | RBAC policy decision point | AUTH-13/14 | free self-hosted | EVALUATING | BE-2 | Evaluation done (docs/41 §3.2): Apache-2.0 PDP, stateless, decision logs, `PlanResources`. Spike = sidecar vs **embedded Go engine** (**D4**) + policy fit. |
 | Resend | TS email SDK + React Email | NOT-03/04/05 | $20/mo per 50k | EVALUATING | BE-2 | Dev + non-critical. Postmark stays production. Same iface. |
 | Sentry | Error tracking + stack traces | OPS-11 (V2.0) | free 5k/mo | NOT STARTED | DevOps | Add to every service day 1. Alert routing per OPS-39. |
 
@@ -267,8 +267,8 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 - [ ] **R2 setup (week 2)** — owner DevOps. Bucket + tenant prefixes.
 - [ ] **NOWPayments signup (week 2)** — owner BE-2. Networks TRC20/ERC20/BEP20.
 - [ ] **Veriff keys confirm (week 1)** — owner FunderBlu COO. Webhooks included?
-- [ ] **Better Auth spike (Phase 0)** — owner BE-1. Org plugin multi-tenancy fit.
-- [ ] **Cerbos spike (Phase 0/1)** — owner BE-2. Latency + policy fit; else in-house AUTH-13.
+- [ ] **Better Auth spike (Phase 0)** — owner BE-1. Go integration model (**D1**, docs/41 §7) + org/membership mapping; org plugin fit itself is already confirmed.
+- [ ] **Cerbos spike (Phase 0/1)** — owner BE-2. Deployment mode (sidecar vs embedded Go engine, **D4**) + latency + policy fit; else Casbin or in-house AUTH-13 (docs/41 §3.2).
 - [ ] **Drizzle adopt (Phase 0)** — owners BE-1 + DevOps. Else Prisma fallback (BVR-08).
 - [ ] **Sentry SDKs day 1** — owner DevOps. Every service from the first deploy.
 - [ ] **AGPL distribution checks** (Hook0, UnKey, Comp AI, Grafana, Loki) — at each adoption.

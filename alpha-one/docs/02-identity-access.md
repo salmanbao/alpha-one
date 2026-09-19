@@ -32,7 +32,8 @@ Requirement coverage: `AUTH-01,04,05,07,09,12,13,15,16,17,20,39,40,43` (V1.0) +
                              │  cookies: {tenant}.alpha1.io scope
                              ▼
                     Go api — AUTH domain package
-                       ├── authn: Better Auth (Go client, session store in PG)
+                       ├── authn: Better Auth identity surface (Node) → JWT/JWKS,
+                       │          sessions + memberships owned in PG   [decision D1]
                        ├── authz: Cerbos PDP (policy files in repo, versioned)
                        ├── rate limit / lockout (Redis sliding window)
                        └── field encryption (broker passwords, TOTP secrets)
@@ -46,15 +47,24 @@ Requirement coverage: `AUTH-01,04,05,07,09,12,13,15,16,17,20,39,40,43` (V1.0) +
         api_keys
 ```
 
-- **Better Auth** (PRD-mandated foundation, `AUTH-01..43`): we use its Go API
-  surface — sessions, users, organizations (tenant = org), 2FA TOTP, password
-  hashing (Argon2id). **Phase 0 spike (BE-1, 2 days):** confirm the org plugin
-  supports per-org member roles; if it doesn't, we own the membership table and use
-  Better Auth only for credential/session primitives. The rest of this doc is
-  agnostic to that outcome — the domain package is the boundary.
+- **Better Auth** (PRD-mandated foundation, `AUTH-01..43`): sessions, users,
+  organizations (tenant = org), 2FA TOTP, password hashing (Argon2id).
+  **Corrected 2026-09-19** ([docs/41](41-auth-ten-open-source-evaluation.md) §3.1):
+  Better Auth is TypeScript-only and ships **no Go SDK** — the earlier "Go client"
+  phrasing was not implementable. The org plugin *is* confirmed to support per-org
+  member roles, custom and runtime-created roles, invitations and org hooks, so the
+  old Phase-0 spike is answered. What remains open is the *wiring* (**D1** in
+  [docs/37](37-prd-open-questions.md), options A–D in docs/41 §7): either keep
+  Better Auth and give Go a documented token contract (JWT plugin + JWKS, verified
+  with `lestrrat-go/jwx`), let Go own the session/refresh tables, adopt a
+  multi-tenant IdP (Zitadel/Keycloak) or build the domain in Go. Until D1 is
+  answered, this doc assumes **Option A** and the domain package stays the boundary.
 - **Cerbos** (PRD-mandated PDP for `AUTH-13/14`): policies live in-repo
-  (`infra/policies/`), versioned with the code; the `api` asks Cerbos per request
-  and caches decisions per `(role, resource, action)` 60 s. If Phase 1 proves
+  (`infra/policies/`), versioned with the code; the `api` asks the PDP per request
+  and caches decisions per `(role, resource, action)` 60 s. **Deployment mode is
+  open (D4):** the PRD-era text implied a Compose sidecar, but Cerbos' engine is Go
+  and can be embedded in-process, which removes both the extra process and the
+  "PDP unreachable" failure mode (docs/41 §3.2). If the Phase-1 spike proves
   integration cost > 3 person-days, AUTH-13 becomes an in-house policy engine behind
   the same Go interface (`authorizer.Check(ctx, subject, action, resource)`).
 
@@ -419,31 +429,48 @@ KYC module's storage, AUTH stores only status pointers.
 |---|---|---|
 | Login p99 | < 300 ms (Argon2id ~150 ms dominates) | CPU-bound: cap logins/IP at edge (Cloudflare); if needed, move Argon2 to a worker pool (V2) |
 | Session check (per request) | Redis deny-set O(1); PG only on miss/refresh | Redis down → fail-open to PG check (degraded, alerted) |
-| Authz | Cerbos in-proc decision cache 60 s per (role,action,resource); PDP local process | PDP down → deny (authz failures fail **closed**) |
+| Authz | Cerbos in-proc decision cache 60 s per (role,action,resource); PDP local to the api unit (sidecar or embedded — **D4**) | PDP down → deny (authz failures fail **closed**); embedded mode (docs/41 §3.2) removes the dependency entirely |
 | Tenant resolution | 2-level cache (in-mem 30 s + Redis 5 min), 99%+ hit | cache flush storm → PG can absorb (keyed lookup, indexed) |
 | Lockouts | Redis INCR/EXPIRE | Redis down → per-instance in-mem counters (weaker, alerted) |
 | Scale headroom | 10k traders × 5 req/min = 830 req/min ≈ 14 req/s — 1 instance does 2k+ req/s | scale-out = add api replicas (stateless); session table needs only read replica (V2) |
 
 ## 12. Open-source solutions
 
+> Re-evaluated 2026-09-19 against the full `AUTH-01..43` set — the OpenID Connect
+> marketplace, the embedded libraries and the IdP servers were all scored on the
+> PRD's own constraints (one identity across tenants, two realms, Go runtime, one
+> Hetzner box, shared schema). Evidence, scoring and the rejected candidates:
+> [41 — AUTH + TEN open-source evaluation](41-auth-ten-open-source-evaluation.md).
+> The rows below are the decisions; §8 of docs/41 lists the five that are still open.
+
 | Option | Verdict |
 |---|---|
-| **Better Auth** (TS library, orgs, sessions, 2FA, DB-agnostic) | **CHOSEN** (PRD). Used via its Go-compatible HTTP API or thin Node BFF path; confirm org plugin in Phase 0 spike |
-| Keycloak / Authentik (IdP servers) | Rejected V1: Java ops weight, tenant-RBAC fit requires custom SPI; Authentik kept as **V3 SSO** option (register) |
-| Logto / UnKey (register) | Rejected: same class as Keycloak, less tenant fit |
-| **Cerbos** | **CHOSEN** PDP (PRD). Fallback: in-house policy engine, same interface |
-| OPA / SpiceDB | OPA = more flexible, steeper ops; SpiceDB = ReBAC overkill for our role+ABAC needs |
+| **Better Auth** (TS library, orgs, sessions, 2FA, MIT) | **CHOSEN** (PRD, BVR-14). But TS-only — Go integrates over JWT/JWKS from a Node identity surface, or Go owns sessions (**D1**). Org plugin confirmed: per-org member roles, custom + dynamic roles, invitations, hooks |
+| Keycloak / Authentik (IdP servers) | Rejected V1: Java ops weight (1–2 GB idle), Organizations only since 26.0, SCIM still preview, tenant-RBAC fit needs custom SPI. Authentik (MIT) kept as **V3 SSO** option, Keycloak as the deep-SAML/LDAP escape hatch |
+| Zitadel (Go, AGPL-3.0) | Best feature fit of any IdP (orgs as first-class, per-org IdP/branding, SAML/OIDC/**SCIM 2.0** built in, ~600 MB) but **AGPL-3.0** plus a second identity store we'd have to reconcile with `tenants` — only on the table if **D2** answers yes |
+| Ory Kratos/Hydra/Keto | Rejected: **no OSS multi-tenancy** — official guidance is one instance per tenant, and B2B orgs/SSO/SCIM are commercial. Apache-2.0 and Go, but per-tenant instances collide with ADR-9 |
+| Logto / Casdoor / Authelia / SuperTokens / FusionAuth | As before — Logto's OSS build has no multi-tenant console, Casdoor is UI-first with no advantage over Zitadel, Authelia has no SAML/tenancy, SuperTokens is plausible only if SDK-embedded Go auth is wanted, FusionAuth is commercial |
+| **Cerbos** (Apache-2.0 PDP) | **CHOSEN** PDP (PRD, BVR-23). Stateless, policy tests, decision logs, `PlanResources` query plans. **Deployment mode open (D4):** sidecar vs embedded Go library |
+| Casbin (Apache-2.0, embedded) | Runner-up PDP: RBAC-with-domains models tenant-scoped roles directly, sub-ms decisions, no extra process — but no decision log/explainability, so policy review is on us |
+| OPA / SpiceDB | OPA = more flexible, steeper ops and no authz domain model; SpiceDB/OpenFGA = ReBAC overkill for role + ABAC needs, and adds a tuple store to keep in sync |
 | Auth0 / Cognito | **Forbidden** (PRD): cost, tenant-RBAC mismatch |
 | Argon2 (password) | Standard library, all runtimes |
 | TOTP: `pquerna/otp` (Go) | Standard |
 | Breached passwords: HIBP range API | Standard, no key needed for range API |
+| SAML-only gap (V3) | Ory Polis (Apache-2.0, ex-BoxyHQ SAML Jackson) bridges SAML for any OIDC-only choice |
 
 ## 13. Technology stack
 
-Go (domain package in `api`), Better Auth (Go client or Node BFF path), Cerbos
-(self-hosted Compose service, policies in `infra/policies/`), Postgres, Redis,
-Postmark (emails), Sentry (auth-failure alerts), Flipt (feature-flag-gated rollout of
-2FA mandate per tenant), Cloudflare (edge rate limits + WAF for login routes).
+Go (domain package in `api`), Better Auth behind its Node identity surface (JWT/JWKS
+contract, **D1**), Cerbos (PDP — sidecar or embedded, **D4**; policies in
+`infra/policies/`), Postgres, Redis, Postmark (emails), Sentry (auth-failure alerts),
+Flipt (feature-flag-gated rollout of 2FA mandate per tenant), Cloudflare (edge rate
+limits + WAF for login routes).
+
+**Service-count note (ADR-9):** if **D1 = A/B** the Compose stack grows by one
+`auth` (Node) unit; if **D4 = sidecar** it grows by one `cerbos` unit. Both are
+Compose services on the same box, not new infrastructure; docs/01 §deployables must
+list them once D1/D4 are answered.
 
 ## 14. Integration — internal modules (glue)
 

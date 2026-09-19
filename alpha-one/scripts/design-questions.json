@@ -1,0 +1,56 @@
+{
+  "raised": "2026-09-19",
+  "note": "Questions raised by the team during design review, NOT PRD workbook rows. Rendered into docs/37-prd-open-questions.md by scripts/build_prd_registers.py so both kinds of question live in one register. Evidence for each: docs/41-auth-ten-open-source-evaluation.md. Closing a row here means editing this file, re-running the script, and applying the answer to the owning doc.",
+  "questions": [
+    {
+      "id": "D1",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Identity component wiring: Better Auth has no Go SDK, so the V1 plan assumes a Node identity surface. Options — A: keep Better Auth, run it in the Node tier behind a documented JWT/JWKS contract for Go (one more deployable); B: Better Auth for flows, Go owns session/refresh-token tables and revocation; C: replace with a multi-tenant IdP (Zitadel AGPL-3.0, or Keycloak if deep SAML/LDAP is needed), everything OIDC; D: build the identity domain in Go (~3-4 dev-weeks, zero extra runtime, BVR-14 superseded). See docs/41 §7.",
+      "raised_by": "Design review (docs/41)",
+      "owner": "Tech Lead, BE-1",
+      "deadline": "Before Phase 0 exit",
+      "answer": "Open"
+    },
+    {
+      "id": "D2",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Does any tenant need SAML/OIDC SSO or SCIM at V1 cutover? Restates PRD row *Auth & Identity #6* as a build decision. The PRD schedules AUTH-24/25 at V3 and every OSS IdP that ships them at V1 (Zitadel, Keycloak, authentik) costs a second identity store plus, for Zitadel, an AGPL-3.0 review. Answering yes promotes AUTH-24/25 into V1 and changes D1.",
+      "raised_by": "Design review (docs/41 §4)",
+      "owner": "Sales owner, Tech Lead",
+      "deadline": "Before Phase 0 exit",
+      "answer": "Open"
+    },
+    {
+      "id": "D3",
+      "source_doc": "41",
+      "section": "Tenant Management",
+      "question": "Isolation enforcement depth: keep ADR-1 app-level only (Go tenant guard + sqlc + CI guard test), or add Postgres RLS as a fail-closed second layer? RLS costs 2-4% on indexed queries and requires transaction-scoped `set_config('app.tenant_id', …, true)` under PgBouncer, `FORCE ROW LEVEL SECURITY` and a (tenant_id, …) index on every policy table; a missed guard currently leaks all tenants' rows, with RLS it returns zero rows. See docs/41 §5.",
+      "raised_by": "Design review (docs/41 §5)",
+      "owner": "Tech Lead, BE-1, DevOps",
+      "deadline": "Before tenant-scoped tables are frozen",
+      "answer": "Open"
+    },
+    {
+      "id": "D4",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Authorization engine and deployment mode: keep Cerbos (BVR-23) as sidecar/central service, embed the Cerbos Go engine in-process (no extra process, fail-closed hazard disappears), switch to Casbin embedded (Apache-2.0, RBAC-with-domains, fastest, weakest decision logs), or fall back to the in-house engine behind `authorizer.Check`. The docs/02 §11 rule 'PDP unreachable → deny' only applies to the sidecar mode.",
+      "raised_by": "Design review (docs/41 §3.2)",
+      "owner": "Tech Lead, BE-2",
+      "deadline": "Phase 1 start (before AUTH-13)",
+      "answer": "Open"
+    },
+    {
+      "id": "D5",
+      "source_doc": "41",
+      "section": "Auth & Identity",
+      "question": "Staff 2FA scope in V1: AUTH-09 as written (mandatory for every staff role) or finance + risk only? This is PRD open question 'Auth & Identity #1' restated as a build decision; it sizes the enrolment UX, recovery flow and support load for launch.",
+      "raised_by": "Design review (docs/41 §8)",
+      "owner": "Tech Lead, FunderBlu COO",
+      "deadline": "Kickoff +2 days",
+      "answer": "Open"
+    }
+  ]
+}

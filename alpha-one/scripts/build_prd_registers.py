@@ -27,6 +27,7 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "scripts" / "prd-workbook.json"
+DESIGN_Q = ROOT / "scripts" / "design-questions.json"
 DOCS = ROOT / "docs"
 EXTRACT_DATE = "2026-09-19"
 
@@ -130,12 +131,26 @@ def build_proposals(data: dict) -> str:
 # --------------------------------------------------------------------------- #
 
 
+def is_open(q: dict) -> bool:
+    """A row is open when the answer cell is empty or the literal 'Open'."""
+    ans = (q.get("answer") or "").strip()
+    return not ans or ans.lower().startswith("open")
+
+
+def design_questions() -> list[dict]:
+    """Questions raised by the team in design review (not PRD workbook rows)."""
+    if not DESIGN_Q.is_file():
+        return []
+    return json.loads(DESIGN_Q.read_text()).get("questions", [])
+
+
 def build_open_questions(data: dict) -> str:
     qs = data["open_questions"]
+    extra = design_questions()
     sections: dict[str, list[dict]] = {}
     for q in qs:
         sections.setdefault(q.get("section") or "Unfiled", []).append(q)
-    answered = [q for q in qs if (q.get("answer") or "").strip()]
+    answered = [q for q in qs if not is_open(q)]
 
     out = [HEADER.format(
         num="37", title="PRD Open Questions Register", date=EXTRACT_DATE,
@@ -147,10 +162,14 @@ def build_open_questions(data: dict) -> str:
     )]
     out.append(f"\nQuestions: **{len(qs)}** in {len(sections)} sections — "
                f"**{len(answered)} answered**, {len(qs) - len(answered)} open.\n")
+    if extra:
+        open_extra = sum(1 for q in extra if is_open(q))
+        out.append(f"Design-review questions (raised by the team, not the PRD workbook): "
+                   f"**{len(extra)}** — **{open_extra} open** (§Design-review questions below).\n")
     out.append("| Section | Questions | Open |")
     out.append("|---|---|---|")
     for name, rows in sorted(sections.items(), key=lambda kv: -len(kv[1])):
-        open_n = sum(1 for r in rows if not (r.get("answer") or "").strip())
+        open_n = sum(1 for r in rows if is_open(r))
         out.append(f"| {md_cell(name)} | {len(rows)} | {open_n} |")
 
     for name, rows in sorted(sections.items(), key=lambda kv: -len(kv[1])):
@@ -164,14 +183,35 @@ def build_open_questions(data: dict) -> str:
                 ans=md_cell(q.get("answer")),
             ))
 
+    out.append("\n## Design-review questions\n")
+    out.append("Raised by the team during design review — they are **not** PRD workbook rows, so "
+               "they are maintained in `scripts/design-questions.json` (the PRD rows above are "
+               "generated from `scripts/prd-workbook.json`). Evidence for each is in "
+               "`docs/41-auth-ten-open-source-evaluation.md`; an answer here must be applied to "
+               "the owning module doc in the same change.\n")
+    if extra:
+        out.append("| ID | Question | Raised by | Owner | Deadline | Answer |")
+        out.append("|---|---|---|---|---|---|")
+        for q in extra:
+            out.append("| {i} | {qn} | {by} | {own} | {dl} | {ans} |".format(
+                i=q.get("id") or "—", qn=md_cell(q.get("question")),
+                by=md_cell(q.get("raised_by")), own=md_cell(q.get("owner")),
+                dl=md_cell(q.get("deadline")), ans=md_cell(q.get("answer")),
+            ))
+    else:
+        out.append("*None recorded.*")
+
     out.append("\n## Using this register\n")
     out.append("- **An open question is a design risk, not a blocker to writing docs** — the "
                "owning doc states the default it assumes and cites the question row; the answer "
                "then updates both.")
     out.append("- **Answered rows are decisions.** They are binding for contract freeze; the "
                "`docs/99-development-phases.md` gate checklist re-reads this register at each phase exit.")
-    out.append("- **New questions** belong in the PRD workbook (so this script picks them up), "
+    out.append("- **New questions** belong in `scripts/prd-workbook.json` (PRD rows) or "
+               "`scripts/design-questions.json` (design-review rows) so this script picks them up, "
                "not in ad-hoc comments.\n")
+    out.append("- **Design-review rows carry an ID (`D1`, `D2`, …)** and are cited by that ID from "
+               "the module docs; PRD rows are cited as `<Section> #<n>`.\n")
     return "\n".join(out) + "\n"
 
 
