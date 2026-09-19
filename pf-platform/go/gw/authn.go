@@ -54,9 +54,10 @@ type Authenticator struct {
 
 const consoleCookieName = "pf_console_session"
 
-// internalPrefix is the compose-only internal plane (D46: /v1/internal/*,
-// static per-service bearer, never edge-routed).
-const internalPrefix = "/v1/internal/"
+// internalPrefix is the compose-only internal plane (docs/04 §3.1 step 2:
+// /internal/*, static per-service bearer, never edge-routed; docs/55 SOL-02
+// serves it on a separate compose-only listener).
+const internalPrefix = "/internal/"
 
 func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

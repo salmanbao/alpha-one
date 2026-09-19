@@ -144,7 +144,7 @@ func newFixture(t *testing.T) *fixture {
 			WriteSuccess(w, r, map[string]interface{}{"queue": []string{}})
 		}))
 
-	f.b.Mount(f.mux, http.MethodPost, "/v1/internal/jobs/", Route{Name: "job ingest", Class: "internal"},
+	f.b.Mount(f.mux, http.MethodPost, "/internal/jobs/", Route{Name: "job ingest", Class: "internal"},
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			WriteCreated(w, r, map[string]interface{}{"tenant": TenantFrom(r.Context())})
 		}))
@@ -547,20 +547,20 @@ func TestAuditSuccessAndFailure(t *testing.T) {
 
 func TestInternalServiceRealm(t *testing.T) {
 	f := newFixture(t)
-	req := httptest.NewRequest(http.MethodPost, "http://internal.example/v1/internal/jobs/", strings.NewReader("{}"))
+	req := httptest.NewRequest(http.MethodPost, "http://internal.example/internal/jobs/", strings.NewReader("{}"))
 	req.Header.Set("Authorization", "Bearer svc-token-alpha")
 	req.Header.Set("X-Tenant-Id", "tenLive")
 	rec := f.do(t, req)
 	wantCode(t, rec, http.StatusCreated)
 
 	// missing tenant header -> 403 (never tenant resolution by host on this plane)
-	req2 := httptest.NewRequest(http.MethodPost, "http://internal.example/v1/internal/jobs/", strings.NewReader("{}"))
+	req2 := httptest.NewRequest(http.MethodPost, "http://internal.example/internal/jobs/", strings.NewReader("{}"))
 	req2.Header.Set("Authorization", "Bearer svc-token-alpha")
 	rec2 := f.do(t, req2)
 	wantError(t, rec2, http.StatusForbidden, "permission.denied")
 
 	// wrong service token -> 401
-	req3 := httptest.NewRequest(http.MethodPost, "http://internal.example/v1/internal/jobs/", strings.NewReader("{}"))
+	req3 := httptest.NewRequest(http.MethodPost, "http://internal.example/internal/jobs/", strings.NewReader("{}"))
 	req3.Header.Set("Authorization", "Bearer nope")
 	req3.Header.Set("X-Tenant-Id", "tenLive")
 	rec3 := f.do(t, req3)

@@ -309,7 +309,11 @@ the thirteenth-pass artifact is `docs/53-chk-kyc-review.md` (money-in + gates �
 manual refunds, wire to V2, order-at-submit + checkout_sessions DDL, KYC edges pinned, no V1 purchase
 gate; the workbook itself used as the citation oracle), and the fourteenth-pass artifact is
 `docs/54-gw-evt-review.md` (the spine — D45–D47: the success envelope binding, the GW-01 groups as the
-URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved);
+URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved), and the gateway solution
+specification `docs/55-gw-solution-spec.md` (the developer-facing
+how-to-build for the eleven chain steps of docs/04 §3.1 — per-step
+algorithms, caches, degradation contracts, latency budgets, tests and the
+SOL-01…SOL-20 register; implementation-level only);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

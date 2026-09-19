@@ -35,7 +35,7 @@ type ErrorEnvelope struct {
 
 // codeStatus maps registered error codes to their HTTP status (the V1
 // baseline set plus the extended codes this package emits). An unregistered
-// code collapses to 500 + gw.internal_error — the same rule docs/04 §6.2
+// code collapses to 500 + gw.internal — the same rule docs/04 §6.2
 // enforces in CI (a leaked unregistered code must fail error_registry_test).
 var codeStatus = map[string]int{
 	"tenant.unknown_host":          404,
@@ -54,7 +54,7 @@ var codeStatus = map[string]int{
 	"gw.payload_too_large":         413,
 	"gw.method_not_allowed":        405,
 	"gw.timeout":                   504,
-	"gw.internal_error":            500,
+	"gw.internal":                  500, // SOL-07 (docs/55): taxonomy gw.internal pinned to 500
 }
 
 // WriteSuccess renders the binding D45 envelope:
@@ -86,12 +86,12 @@ func WritePage(w http.ResponseWriter, r *http.Request, data interface{}, cursor 
 	})
 }
 
-// WriteError renders GW-18. Unknown codes collapse to 500/gw.internal_error
-// with a message that leaks nothing.
+// WriteError renders GW-18. Unknown codes collapse to 500/gw.internal
+// (SOL-07, docs/55 §4.12) with a message that leaks nothing.
 func WriteError(w http.ResponseWriter, r *http.Request, code, message string) {
 	status, ok := codeStatus[code]
 	if !ok {
-		code, status, message = "gw.internal_error", http.StatusInternalServerError, "Internal error."
+		code, status, message = "gw.internal", http.StatusInternalServerError, "Something went wrong on our side."
 	}
 	corr := CorrelationFrom(r.Context())
 	w.Header().Set("X-Correlation-Id", corr)

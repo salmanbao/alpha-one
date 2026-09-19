@@ -10,7 +10,7 @@ proxy — TLS/WAF/edge rate limiting stay at Cloudflare (GW-20/33).
   in-memory implementation; production swaps the interface, not the chain.
 - Responses honor the **D45 success envelope** and the **GW-18 error
   contract**; every error code emitted is in the registered baseline set
-  (unknown codes collapse to `500 gw.internal_error`, mirroring the docs/04
+  (unknown codes collapse to `500 gw.internal`, mirroring the docs/04
   §6.2 registry gate).
 
 ## Verify
@@ -53,7 +53,7 @@ bash verify.sh   # go vet + go test -race; needs any Go >= 1.19 toolchain
 | `correlation.go` | step 8 middleware |
 | `security.go` | step 1: headers + `CF-Connecting-IP` trusted-CIDR rule |
 | `tenant.go` | step 2: resolver interface, `MapResolver`, `CachedResolver` (pos+neg TTL) |
-| `authn.go` | step 3: trader/staff JWT realm, console cookie realm, `/v1/internal/*` static bearer realm |
+| `authn.go` | step 3: trader/staff JWT realm, console cookie realm, `/internal/*` static bearer realm |
 | `statusgate.go` | step 3.5: gate interface, `MapStatusGate`, `CachedGate` with invalidation hooks |
 | `authz.go` | step 4: permission table, own-scope, 5-min step-up window (D38) |
 | `ratelimit.go` | step 5: sliding-log limiter + binding class policies (auth 10/5min, payout 5/h, else 100/min) |
@@ -72,7 +72,7 @@ bash verify.sh   # go vet + go test -race; needs any Go >= 1.19 toolchain
 | `StatusGate` | one indexed SQL query over `tenants`/`identities`/`tenant_members`; use `CachedGate` + invalidation on state transitions |
 | `Limiter` | Redis fixed-window counters (same `Allow` semantics) |
 | `Entitlements` | `tenant_entitlements` cache reader |
-| `IdempotencyStore` | PG `idempotency_keys` (24h TTL), `INSERT ... ON CONFLICT` claim |
+| `IdempotencyStore` | Redis `SETNX t:{ten}:idem:{method}:{path}:{key}` per GW-31 (24h TTL, AOF everysec; PG-backed store is the V2 upgrade behind the same interface — docs/55 §4.8) |
 | `AuditSink` | append-only `audit_events` writer (must alert on failure — docs/50 P1) |
 | `Logger` | `*slog.Logger` via a 3-line adapter (`Printf` shim) |
 
@@ -80,6 +80,11 @@ bash verify.sh   # go vet + go test -race; needs any Go >= 1.19 toolchain
 
 - Route matching uses `http.ServeMux` + explicit `Mount(method, …)`; a real
   router can sit underneath without touching the chain.
+- The scaffold binds `/internal/*` on the same listener as a path prefix;
+  production enforces docs/55 SOL-02: a second listener on the compose
+  network only (the public listener 404s internal paths).
+- The webhook signature realm (CHK-07/KY-05/EVT-10) and the GW-32
+  maintenance flag are specified in docs/55 §4.1/§4.3 but not scaffolded.
 - Timeout does not cancel the handler goroutine (request-context-aware
   upstreams cancel themselves; the client is released at the deadline).
 - `MemLimiter`/`MemIdemStore` are per-process and exact, not distributed —
@@ -105,4 +110,4 @@ bash verify.sh   # go vet + go test -race; needs any Go >= 1.19 toolchain
   suspended identity/membership → 403 with the registered codes.
 - Entitlements: un-entitled module route → `403 tenant.not_entitled`.
 - Payload limit default 1 MiB (declared max, GW-13); unknown error codes →
-  `500 gw.internal_error` (registry gate parity with docs/04 §6.2).
+  `500 `gw.internal` (SOL-07, docs/55 §4.12 — registry gate parity with docs/04 §6.2).

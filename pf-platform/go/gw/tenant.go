@@ -115,7 +115,7 @@ func TenantResolve(res TenantResolver, isInternal func(*http.Request) bool, next
 			host := hostOnly(r.Host)
 			id, known, err := res.ByHost(r.Context(), host)
 			if err != nil {
-				WriteError(w, r, "gw.internal_error", "Internal error.")
+				WriteError(w, r, "gw.internal", "Something went wrong on our side.")
 				return
 			}
 			if !known {

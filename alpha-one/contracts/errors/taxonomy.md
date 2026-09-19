@@ -199,12 +199,12 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `gw.rate_limited` | 429 | `Retry-After` set; scope in details (ip/user/tenant) |
 | `gw.quota_exceeded` | 429 | Plan quota; `details.metric` |
 | `gw.module_disabled` | 403 | Entitlement gate (module not enabled for tenant) |
-| `gw.idempotency_conflict` | 422 | Key reused with different body |
+| `gw.idempotency_conflict` | — | (folded — the V1 baseline code is `request.idempotency_conflict` **409**, GW-12; this extended variant predates the fold) |
 | `gw.payload_too_large` | 413 | Body over limit |
 | `gw.timeout` | 504 | Handler exceeded budget |
 | `gw.maintenance` | 503 | Maintenance mode |
 | `gw.method_not_allowed` | 405 | — |
-| `evt.webhook_signature_invalid` | 401 | Ingress: bad provider signature |
+| `evt.webhook_signature_invalid` | — | (folded — the V1 baseline code is `webhook.signature_invalid` **401**, EVT-10) |
 | `evt.webhook_schema_invalid` | 422 | Ingress: payload failed schema |
 | `evt.webhook_duplicate` | 200 | Ingress: already processed (idempotent 200) |
 | `evt.consumer_dlq` | — | Internal: consumer gave up (alert + DLQ row) |
