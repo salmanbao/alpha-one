@@ -41,7 +41,7 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (302 codes — 70 V1 baseline, 232 extended — across 25 modules)
+## 2. The registry (298 codes — 66 V1 baseline, 232 extended — across 25 modules)
 
 ### 02 — AUTH
 

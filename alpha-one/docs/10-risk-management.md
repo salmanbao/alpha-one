@@ -1,6 +1,6 @@
 # 10 — RSK: Risk Management (Fraud & Anti-Gaming)
 
-> Covers PRD module **RSK** (50 requirements). EVL enforces the rules a trader
+> Covers PRD module **RSK** (53 requirements). EVL enforces the rules a trader
 > *agreed to*; RSK catches the behavior no rule covers: syndicates, copy
 > trading, IP/device reuse, KYC identity reuse, rule gaming. **V1 ships the
 > model and case flow only** (RSK-01/10) — detectors land in V2 as a data
@@ -22,8 +22,8 @@
   — Alpha One is not a market maker; those are V3 items for a future execution
   offering.
 
-Requirement coverage: `RSK-01,10` (V1) + `02..08,12..20,28..36,41,43,45..51` (V2) +
-`09,21..27,37..39,48..49` (V3).
+Requirement coverage: `RSK-01,10` (V1.0) + `RSK-11` (V1.1: payout block on open case) +
+`02..08,12..20,28..36,40..47,50..53` (V2.0) + `09,21..27,37..39,48,49` (V3.0).
 
 ## 2. Architecture
 
@@ -86,7 +86,7 @@ opened **automatically** on `account.breached` (V1: kind=breach, payout_hold per
 tenant policy default true) — the "open risk case blocks payouts" default
 becomes concrete here.
 
-### 3.3 V2 detectors (design now, build in Phase 3)
+### 3.3 V2 detectors (design now, build in Phase 4 wave 3)
 
 | Detector (reqs) | Input | Window | Signal |
 |---|---|---|---|
@@ -106,13 +106,32 @@ dedupe on `dedup_key`; ≥ 70 → auto-open case, 40–69 → signal-only (queue
 office IPs for a tenant's office traders) suppress signals — managed in ADM,
 audited.
 
-### 3.4 Actions (RSK-13/14 — V2 formal workflow; V1 = hold only)
+### 3.4 Actions (RSK-13/14 — V2 formal workflow; V1.0 = case spine only, hold lands V1.1)
 
 Decision → actions are **executed through owning modules** with the case id as
 correlation: PAY `hold/release` (RSK-31: hold expiry = case auto-close + release),
 LCC `suspend/reinstate`, AUTH `suspend`, NOT templates. Action execution is
 recorded in `case.actions` with refs — the payout queue shows risk context
 (RSK-35: a payout with an open case is visibly held and why).
+
+### 3.5 Detector runtime state (Redis — narrow by design)
+
+RSK uses Redis **only for ephemerals** (all rebuildable; PG is the record):
+
+| Key | Op | Purpose |
+|---|---|---|
+| `rsk:dedup:{detector}:{dedup_key}` | SETNX + TTL = detector window | signal dedupe (best-effort; the PG `dedup_key` unique constraint is the correctness backstop) |
+| `rsk:count:{detector}:{account}:{bucket_min}` | INCR + EXPIRE 2× window | sliding-window counters (velocity, cycling pre-filters) without PG write pressure |
+| `rsk:runlock:{detector}:{shard}` | SET NX PX = run timeout | single-execution per detector run (the OPS-27 pattern; a crashed run's lock expires and the next schedule re-runs) |
+| `rsk:claim:{case_id}` | SET NX PX 30 s | staff claim race on case assignment (loser gets `rsk.case_claimed`) |
+
+**Explicit non-goal:** no account/position/equity hot state in Redis. The
+research §6.3 real-time layout (account hashes, price hashes, risk-utilization
+sorted sets) was considered and **rejected for RSK** — hot state lives in BRG
+PG snapshots + EVL state; RSK reads PG/batch and never subscribes to ticks.
+If a V3 detector needs tick-level features, it consumes EVL-computed features,
+not raw market data. Redis loss degrades RSK to re-emission (dedupe rebuilds);
+it can never corrupt a case.
 
 ## 4. Events (topic `risk`)
 
@@ -292,6 +311,7 @@ CREATE INDEX idx_rcase_trader ON risk_cases(tenant_id, trader_id, status);
 ## 13. Technology stack
 
 Go workers (detector jobs, manifest registry), Postgres (signals/cases/kinds),
+Redis (ephemerals only: dedupe sets, window counters, run locks, claim races — §3.5),
 ADM (queue UI, FE-1), NOT (notifications), AUD (mirror), Prometheus (detector
 runtime, case aging), Sentry.
 

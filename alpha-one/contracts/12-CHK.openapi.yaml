@@ -346,7 +346,7 @@ paths:
     get:
       tags:
       - core
-      summary: (purchasable packages × rules ×
+      summary: purchasable packages × rules ×
       operationId: get_v1_payments_catalog
       x-phase: extended
       security:
@@ -370,7 +370,7 @@ paths:
     get:
       tags:
       - core
-      summary: (status poll for the redirect-back UX)
+      summary: status poll for the redirect-back UX
       operationId: get_v1_payments_intents_id
       x-phase: extended
       parameters:
@@ -400,7 +400,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(own history: orders + invoices + refund status)'
+      summary: 'own history: orders + invoices + refund status'
       operationId: get_v1_payments_orders
       x-phase: extended
       security:
@@ -424,7 +424,7 @@ paths:
     post:
       tags:
       - core
-      summary: (policy-window check)
+      summary: policy-window check
       operationId: post_v1_payments_orders_id_refund_request
       x-phase: extended
       parameters:
@@ -484,7 +484,7 @@ paths:
     get:
       tags:
       - admin
-      summary: GET
+      summary: Checkout & Billing GET /v1/admin/payments
       operationId: get_v1_admin_payments
       x-phase: extended
       security:
@@ -538,7 +538,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (2FA, bank ref)
+      summary: 2FA, bank ref
       operationId: post_v1_admin_payments_wire_intent_id_capture
       x-phase: extended
       parameters:
@@ -574,7 +574,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (manual, reason, 2FA), GET
+      summary: manual, reason, 2FA — GET
       operationId: post_v1_admin_refunds
       x-phase: extended
       security:
@@ -627,7 +627,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2 job trigger)
+      summary: V2 job trigger
       operationId: post_v1_admin_reconcile_provider_import
       x-phase: extended
       parameters:

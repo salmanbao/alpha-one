@@ -137,10 +137,10 @@ These drive the capacity model in [29-scalability-operations](29-scalability.md)
 
 | Release | Codename | Content (one line) |
 |---|---|---|
-| **V1.0** | Core | Everything a tenant needs to onboard traders end-to-end: purchase → trade → evaluate → fund → pay out. (137 P0 requirements) |
-| **V1.1** | Plus | Polished V1: email verification, staff invites, admin queue polish, real-time KPIs, invoice PDFs. |
-| **V2.0** | Scale | Operations at scale: full ADM, analytics suite, tenant API & webhooks, mobile, community, competitions, CMS, migration hardening. |
-| **V3.0** | Ecosystem | Platform business: tenant self-serve billing, affiliates, developer SDK/portal, advanced trading, customer success tooling. |
+| **V1.0** | Core | Everything a tenant needs to onboard traders end-to-end: purchase → trade → evaluate → fund → pay out. (154 requirements: 146 P0 + 8 P1, docs/99 App. A) |
+| **V1.1** | Plus | Cutover safety + polish (21 requirements, docs/99 App. A): the RSK→PAY hold interlock, suspension/resume, EVL override, identity record + age gate, failed-payment handling, manual KYC review, payout-method management, real-time KPIs, trader invoices. |
+| **V2.0** | Scale | Operations at scale (631 requirements, docs/99 App. A): full ADM + console, support + chat, CRM, analytics suite, tenant API keys & webhooks, mobile, journal, academy, community, all module depth, FunderBlu migration. |
+| **V3.0** | Ecosystem | Platform business (206 requirements, docs/99 App. A): tenant sites (CMS), competitions, tenant self-serve billing, affiliates, developer SDK/portal, advanced trading (copy/backtest/paper), customer success + platform governance. |
 
 **Every requirement in the PRD carries one of these phase tags.** The development plan
 ([99-development-phases](99-development-phases.md)) maps requirements → phases →

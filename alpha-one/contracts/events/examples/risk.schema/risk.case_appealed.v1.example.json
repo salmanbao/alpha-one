@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `risk.case_appealed` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/risk.schema.json ($defs/risk_case_appealed). Per-event payload. Producer: 10 (RSK). When: trader appeal. Consumers: ADM, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "BYFJFJPNRQWCRGR6Q7AZP2MXNQ",
+  "type": "risk.case_appealed",
+  "version": 1,
+  "tenant_id": "81FMV67C76YAKQ87VCKW25M6BQ",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

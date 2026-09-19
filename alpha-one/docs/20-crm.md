@@ -1,6 +1,6 @@
 # 20 — CRM: CRM & Communications
 
-> Covers PRD module **CRM** (15 requirements). All V2/V3. CRM is the
+> Covers PRD module **CRM** (16 requirements). All V2/V3. CRM is the
 > **marketing-communications** layer: who a trader is in their lifecycle,
 > what we may say to them, and the campaigns we say it with. It deliberately
 > does **not** replace NOT (delivery) or SUP (support) — CRM decides
@@ -26,8 +26,7 @@ the consent record behind every marketing email), contact scoring
 email (NOT — CRM never sends the "your payout settled" class), and the
 trader-facing surfaces (TD).
 
-Requirement coverage: `CRM-01,02,03,04,05,07,10` (V2) + `06,08,09,11,13,14,15`
-(V3).
+Requirement coverage: `CRM-01,02,03,04,05,07,10,16` (V2.0) + `06,08,09,11,12,13,14,15` (V3.0).
 
 ## 2. Architecture
 

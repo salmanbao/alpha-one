@@ -133,7 +133,7 @@ paths:
     get:
       tags:
       - console
-      summary: (home screen)
+      summary: home screen
       operationId: get_v1_console_health
       x-phase: extended
       security:
@@ -157,7 +157,7 @@ paths:
     get:
       tags:
       - console
-      summary: (+ search), GET
+      summary: + search — GET
       operationId: get_v1_console_tenants
       x-phase: extended
       security:
@@ -180,7 +180,7 @@ paths:
     post:
       tags:
       - console
-      summary: (provision — V2 wizard; V1 = the TEN API
+      summary: provision — V2 wizard; V1 = the TEN API
       operationId: post_v1_console_tenants
       x-phase: extended
       security:
@@ -240,7 +240,7 @@ paths:
     post:
       tags:
       - console
-      summary: (V2)
+      summary: Platform Console POST /v1/console/tenants/{id}/saga/{step}/retry
       operationId: post_v1_console_tenants_id_saga_step_retry
       x-phase: extended
       parameters:
@@ -359,7 +359,7 @@ paths:
     get:
       tags:
       - console
-      summary: (state of all rungs)
+      summary: state of all rungs
       operationId: get_v1_console_controls
       x-phase: extended
       security:
@@ -383,7 +383,7 @@ paths:
     post:
       tags:
       - console
-      summary: (V2, Flipt override, 2FA)
+      summary: V2, Flipt override, 2FA
       operationId: post_v1_console_flags_key
       x-phase: extended
       parameters:
@@ -419,7 +419,7 @@ paths:
     get:
       tags:
       - console
-      summary: (CON-21), GET
+      summary: CON-21 — GET
       operationId: get_v1_console_jobs
       x-phase: extended
       security:
@@ -443,7 +443,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(CON-12: last'
+      summary: 'CON-12: last'
       operationId: get_v1_console_deploy
       x-phase: extended
       security:
@@ -467,7 +467,7 @@ paths:
     get:
       tags:
       - console
-      summary: (CON-09 cross-tenant search, owner role)
+      summary: CON-09 cross-tenant search, owner role
       operationId: get_v1_console_audit
       x-phase: extended
       security:
@@ -491,7 +491,7 @@ paths:
     get:
       tags:
       - console
-      summary: (CON-10)
+      summary: CON-10
       operationId: get_v1_console_metering
       x-phase: extended
       security:
@@ -515,7 +515,7 @@ paths:
     post:
       tags:
       - console
-      summary: (V2, 2FA → view-as token)
+      summary: V2, 2FA → view-as token
       operationId: post_v1_console_impersonation
       x-phase: extended
       security:
@@ -545,7 +545,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(CON-22: failed logins 24 h, anomaly blocks'
+      summary: 'CON-22: failed logins 24 h, anomaly blocks'
       operationId: get_v1_console_security
       x-phase: extended
       security:
@@ -569,7 +569,7 @@ paths:
     get:
       tags:
       - console
-      summary: '(CON-23: the master data — provider'
+      summary: 'CON-23: the master data — provider'
       operationId: get_v1_console_reference
       x-phase: extended
       security:
@@ -592,7 +592,7 @@ paths:
     post:
       tags:
       - console
-      summary: '(CON-23: the master data — provider'
+      summary: 'CON-23: the master data — provider'
       operationId: post_v1_console_reference
       x-phase: extended
       security:
@@ -622,7 +622,7 @@ paths:
     get:
       tags:
       - console
-      summary: (+ DELETE revoke) (CON-30)
+      summary: + DELETE revoke — (CON-30)
       operationId: get_v1_console_sessions
       x-phase: extended
       security:

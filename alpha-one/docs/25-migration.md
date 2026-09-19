@@ -31,11 +31,7 @@ process), TTS's marketing data (CRM starts fresh), TTS's affiliate data
 (V3 module, doesn't exist yet), anything PII beyond the §1 table without
 FunderBlu legal's sign-off.
 
-**Requirement coverage:** `MIG-01` (TTS importer — built for FunderBlu in
-the V1.0 era per docs/00, productized in V2), `MIG-04` (verification &
-reconciliation), `MIG-07` (dry-run mode) — these three are the FunderBlu
-scope; `MIG-02` (YourPropFirm), `MIG-03` (PropAccount), `MIG-06`
-(concierge service) are the V2/V3 productization of the same machinery.
+**Requirement coverage: `MIG-01,02,04,05,06,07,08` (V2.0; MIG-01/04/07 are the FunderBlu cutover scope, built first per docs/99) + `MIG-03` (V3.0: PropAccount).
 
 ## 2. Architecture
 

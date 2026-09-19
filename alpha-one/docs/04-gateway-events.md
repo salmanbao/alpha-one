@@ -18,8 +18,10 @@ Streams → consumer groups, the durable **event log**, replay, DLQs, **ingress
 webhooks** (provider → us, V1), and **outbound tenant webhooks** (us → tenant
 integrators, V2 via Hook0).
 
-Requirement coverage: GW `01..37` (V1: 02–07, 09–18, 20–21, 23, 28, 30; V2: 19
-sandbox, 22, 24–27, 29, 31–37), EVT `01,02,03,05,08,10` (V1) + the rest V2.
+Requirement coverage: GW `01,02,03,04,05,12,18` (V1.0: route groups, tenant resolution, authn, authz, rate limit, idempotency, error envelope) +
+`06,07,08,09,10,11,13,14,15,16,17,20,21,22,23,24,25,26,27,29,30,31,32,33,34,35,36,37` (V2.0) + `19,28` (V3.0: tenant sandbox, deprecation headers);
+EVT `01,02,03,05,08,10,20` (V1.0: outbox, relay, envelope, consumers, event log, ingress webhooks, command queue) +
+`04,06,07,09,11,12,13,14,15,16,17,18,19,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36` (V2.0) + `37` (V3.0).
 
 ## 2. Architecture
 
@@ -249,9 +251,11 @@ a non-registered code fails CI (`error_registry_test`).
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
 Public/system:
-`GET /healthz`, `GET /readyz`, `GET /v1/openapi.json`,
-`POST /v1/webhooks/metaapi`, `POST /v1/webhooks/veriff`, `POST /v1/webhooks/nowpayments`,
-`POST /v1/webhooks/match2pay`, `POST /v1/webhooks/interkasa` (EVT-10).
+
+- `GET /healthz` — liveness: the process is up (GW-14, unauthenticated).
+- `GET /readyz` — readiness: PG ping + Redis ping + relay lag under 60 s (GW-14, unauthenticated).
+- `GET /v1/openapi.json` — the served OpenAPI document for this deployment.
+- `POST /v1/webhooks/metaapi`, `POST /v1/webhooks/veriff`, `POST /v1/webhooks/nowpayments`, `POST /v1/webhooks/match2pay`, `POST /v1/webhooks/interkasa` — provider webhook ingress (EVT-10, signature-verified).
 
 Tenant-side (V2 webhook management): `GET|POST /v1/webhooks`,
 `GET|PATCH|DELETE /v1/webhooks/{id}`, `POST /v1/webhooks/{id}/test`,

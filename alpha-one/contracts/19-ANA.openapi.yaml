@@ -49,7 +49,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the V1 dashboard data — one
+      summary: the V1 dashboard data — one
       operationId: get_v1_admin_analytics_kpis
       x-phase: extended
       security:
@@ -73,7 +73,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (the ADM account list fast path, 17
+      summary: the ADM account list fast path, 17
       operationId: get_v1_admin_analytics_accounts
       x-phase: extended
       security:
@@ -97,7 +97,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (registry + definitions)
+      summary: registry + definitions
       operationId: get_v1_admin_analytics_reports
       x-phase: extended
       security:
@@ -157,7 +157,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (status + R2 URL when done)
+      summary: status + R2 URL when done
       operationId: get_v1_admin_analytics_reports_runs_id
       x-phase: extended
       parameters:
@@ -187,7 +187,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2 ANA-12/35)
+      summary: V2 ANA-12/35
       operationId: post_v1_admin_analytics_reports_id_schedule
       x-phase: extended
       parameters:
@@ -223,7 +223,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (ANA-33)
+      summary: ANA-33
       operationId: get_v1_admin_analytics_health
       x-phase: extended
       security:
@@ -247,7 +247,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (ANA-22, 2FA)
+      summary: ANA-22, 2FA
       operationId: post_v1_admin_analytics_rebuild
       x-phase: extended
       security:
@@ -277,7 +277,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (history, 24 h links)
+      summary: history, 24 h links
       operationId: get_v1_admin_analytics_exports
       x-phase: extended
       security:

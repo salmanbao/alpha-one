@@ -1,6 +1,6 @@
 # 15 — DOC: Documents & Certificates
 
-> Covers PRD module **DOC** (14 requirements). DOC turns state changes into
+> Covers PRD module **DOC** (16 requirements). DOC turns state changes into
 > **branded, verifiable PDFs**: the challenge agreement at purchase, the
 > funded-account certificate, the payout receipt, the invoice. A prop firm
 > lives on paper its traders screenshot — a beautiful, unimpeachable PDF is
@@ -26,8 +26,7 @@
   generation (DOC-14), unique certificate IDs (DOC-08), email delivery
   (DOC-07 — via NOT).
 
-Requirement coverage: `DOC-01,03,04,05` (V1) + `02,07,08,09,10,11,13,14,15,16`
-(V2).
+Requirement coverage: `DOC-01,03,04,05,06` (V1.0) + `02,07,08,09,10,11,12,13,14,15,16` (V2.0).
 
 ## 2. Architecture
 

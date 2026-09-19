@@ -115,7 +115,7 @@ paths:
     get:
       tags:
       - core
-      summary: '(own: certificates, receipts, agreements'
+      summary: 'own: certificates, receipts, agreements'
       operationId: get_v1_documents
       x-phase: extended
       security:
@@ -163,7 +163,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2, reason, 2FA)
+      summary: V2, reason, 2FA
       operationId: post_v1_admin_documents_regenerate
       x-phase: extended
       security:
@@ -193,7 +193,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2)
+      summary: Document Generation POST /v1/admin/documents/bulk
       operationId: post_v1_admin_documents_bulk
       x-phase: extended
       security:
@@ -223,7 +223,7 @@ paths:
     get:
       tags:
       - admin
-      summary: (V2 management + preview)
+      summary: V2 management + preview
       operationId: get_v1_admin_documents_templates
       x-phase: extended
       security:
@@ -246,7 +246,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (V2 management + preview)
+      summary: V2 management + preview
       operationId: post_v1_admin_documents_templates
       x-phase: extended
       security:
@@ -276,7 +276,7 @@ paths:
     post:
       tags:
       - admin
-      summary: (generate to staff address)
+      summary: generate to staff address
       operationId: post_v1_admin_documents_templates_id_test
       x-phase: extended
       parameters:

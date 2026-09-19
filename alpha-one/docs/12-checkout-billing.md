@@ -20,9 +20,9 @@ Rails (V1): **Match2Pay** (card + PK local), **Interkasa** (IN + PK local),
 (§4 decision). **Login-first checkout** (PRD default: you must be a signed-in
 trader to buy — no guest carts).
 
-Requirement coverage: `CHK-01..05,08,09,10,12,15,16,18,24,25,27,28,29,30,31,32,35,36,39,40,45`
-(V1-Core) + `06,07,11,13,14,17,19,20,21,22,23,26,33,34,37,38,41,42,43,44,46`
-(V1-Plus/V2).
+Requirement coverage: `CHK-01,02,04,06,07,08,09,42,43,44` (V1.0) + `16,17,40` (V1.1) +
+`03,05,10,11,12,13,14,15,18,19,20,21,22,23,24,26,28,29,30,31,32,33,34,35,36,38,39,41,45,46` (V2.0) +
+`25,27,37` (V3.0).
 
 ## 2. Architecture
 
@@ -389,6 +389,7 @@ CREATE INDEX idx_rfd_intent ON refunds(intent_id);
 | Hyperswitch | Rejected V1 (see PAY §12): 3–4 providers, thin needs |
 | Wire = manual | No OSS for manual bank ops — ADM capture screen + 2FA is the whole design (CHK-20/21) |
 | QuickBooks/Xero sync (research) | Consider-later (register) — V2 ANA/finance export first |
+| Sift / Riskified / Signifyd (fraud scoring) | Rejected V1: manual review + (V2) RSK chargeback signals suffice at our volume; evaluate behind a `FraudScore` adapter if chargeback rate justifies it |
 
 ## 13. Technology stack
 

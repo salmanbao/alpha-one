@@ -1,6 +1,6 @@
 # 17 — ADM: Admin Panel
 
-> Covers PRD module **ADM** (40 requirements). The tenant's operational
+> Covers PRD module **ADM** (41 requirements). The tenant's operational
 > cockpit. The PRD marks only **ADM-05 (account list)** as V1 — but V1
 > *operation* is impossible without the queues the V1 backend requires
 > humans in the loop on (payout approval, KYC manual review, risk cases,
@@ -32,8 +32,7 @@ bulk ops, list exports, broker management, payout forecast, SLA config,
 offer manager, global search 2.0, queue assignment, alert routing,
 onboarding checklist, admin notification centre, keyboard shortcuts.
 
-Requirement coverage: `ADM-05` (V1) + queue-justified early parts of
-`ADM-03,04,06,09,10,11` (V1 scope per docs/00) + remaining 33 (V2).
+Requirement coverage: `ADM-05` (V1.0) + `01,02,03,04,06..41` (V2.0; the payout/KYC/risk/account queue screens — ADM-03,04,06,09,10,11 — are built in the V1.0 era as thin queue views per docs/00 §6 and hardened in V2).
 
 ## 2. Architecture
 
@@ -65,7 +64,7 @@ updates (no polling storms).
 | Screen | Content | Backend surface |
 |---|---|---|
 | **Queue home** | unprocessed counts (payout, KYC, risk, support-triage), SLA aging columns (V2 config; V1 fixed: > 24 h amber, > 72 h red) | per-queue count endpoints |
-| **Accounts (ADM-05)** | list: id, trader, package, state, phase, opened date, equity (observed), breach flag; filters: state, package, trader name/id, date range; export CSV (V2 ADM-25; V1: the list only) | `GET /v1/admin/accounts` |
+| **Accounts (ADM-05)** | list: id, trader, package, state, phase, opened date, equity (observed), breach flag; filters: state, package, trader name/id, date range; export CSV (V2 ADM-25; V1: the list only) | LCC admin account-list reads (07 §7) |
 | **Account detail (ADM-06)** | tabs: Overview (state machine timeline — `account_state_history`), Metrics (observed vs evaluated — the EVL-49 pair, side by side, for dispute triage), Positions/Deals (BRG read), Payouts, Documents (signed URL fetch), Events (the audit mirror for this entity), Actions (pause/resume, request halt, open risk case, note) | LCC/BRG/PAY/DOC/AUD reads + LCC command endpoints |
 | **Payout queue** | table: trader, account, amount, rail, age, eligibility re-check badge (live), risk flag; approve (2FA dialog) / reject (reason taxonomy) / detail (calc snapshot, executions, method version) / export (PAY-44) | PAY admin API (11 §7) |
 | **KYC queue** | manual_review sessions: trader, level, provider verdict, reason class, doc viewer (sensitive-read audited), decide (2FA + reason) | KYC admin API (13 §7) |
@@ -155,8 +154,8 @@ plus:
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-ADM consumes: LCC admin (`GET /v1/admin/accounts`, detail reads, command
-triggers), PAY admin (11 §7), KYC admin (13 §7), RSK admin (10 §7), CHK
+ADM consumes: LCC admin (account-list reads, detail reads, command triggers —
+07 §7), PAY admin (11 §7), KYC admin (13 §7), RSK admin (10 §7), CHK
 admin (12 §7: wire capture, refunds, recon import), AUTH identity admin
 (02 §7: suspend/resume, role grant), ANA reads (19 §7: KPI cards), TEN
 settings (03 §7), AUD viewer (V2 ADM-18; V1: the per-entity events tab reads

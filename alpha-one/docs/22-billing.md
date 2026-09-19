@@ -1,6 +1,6 @@
 # 22 — BIL: Tenant Billing (Platform Revenue)
 
-> Covers PRD module **BIL** (21 requirements — 20 of them V3). This is the
+> Covers PRD module **BIL** (21 requirements — all V3). This is the
 > platform's own billing of **tenants** (FunderBlu and future firms):
 > subscription plans + usage charges for running on Alpha One. It is
 > distinct from CHK (trader→tenant money) and PAY (tenant→trader money):
@@ -34,10 +34,7 @@ MetaApi per-account fees, provider fees above a margin), billing approval
 workflow (BIL-21), invoice templates (BIL-19), self-serve signup
 (BIL-18 — the multi-tenant-farming endgame).
 
-Requirement coverage: V1/V2 = `BIL-16`-class manual mode + CON-10
-metering (the engine's input, built early by design) + `BIL-21` approval
-workflow early (invoice approval in the console, V2) + the 18 remaining
-(V3).
+Requirement coverage: `BIL-01..21` (all V3.0). Early precursors built by design (owned by other modules, see docs/21-console): tenant metering in the V2 era as the engine's input, console invoice approval in the V2 era; the V1/V2 posture is BIL-16-class manual mode.
 
 ## 2. Architecture
 

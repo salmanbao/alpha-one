@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `billing.invoice_created` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/billing.schema.json ($defs/billing_invoice_created). Per-event payload. Producer: 22 (BIL). When: Lago webhook. Consumers: DOC, NOT, CON (billing queue), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "1Z8RBHBY9NRC6G7GVV567GX2NA",
+  "type": "billing.invoice_created",
+  "version": 1,
+  "tenant_id": "FYKQH054RJSYB1ET575ZXHV3TS",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

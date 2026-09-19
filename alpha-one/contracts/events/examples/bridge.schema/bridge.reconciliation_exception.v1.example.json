@@ -1,0 +1,9 @@
+{
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `bridge.reconciliation_exception` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/bridge.schema.json ($defs/bridge_reconciliation_exception). Per-event payload. Producer: 08 (BRG). When: nightly mismatch. Consumers: ADM, AUD, CON. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "id": "5THYJ1XTEZPPBQ1T2RTH9F768R",
+  "type": "bridge.reconciliation_exception",
+  "version": 1,
+  "tenant_id": "Z4NYDVQJ7EKN6XE6KF8CZ78R0P",
+  "occurred_at": 1758278400000,
+  "payload": {}
+}

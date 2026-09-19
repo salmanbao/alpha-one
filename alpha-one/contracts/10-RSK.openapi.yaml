@@ -60,7 +60,7 @@ paths:
     post:
       tags:
       - core
-      summary: (ADM, risk role) with
+      summary: ADM, risk role — with
       operationId: post_v1_risk_cases
       x-phase: extended
       security:
@@ -89,7 +89,7 @@ paths:
     get:
       tags:
       - core
-      summary: (ADM), GET
+      summary: ADM — GET
       operationId: get_v1_risk_cases
       x-phase: extended
       security:
@@ -179,7 +179,7 @@ paths:
     post:
       tags:
       - core
-      summary: (manual release, reason)
+      summary: manual release, reason
       operationId: post_v1_risk_cases_id_hold_release
       x-phase: extended
       parameters:

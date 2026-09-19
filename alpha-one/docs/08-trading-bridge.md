@@ -1,6 +1,6 @@
 # 08 — BRG: Trading Platform Bridge
 
-> Covers PRD module **BRG** (46 requirements). The bridge is the platform's only
+> Covers PRD module **BRG** (47 requirements). The bridge is the platform's only
 > door into the broker world: it provisions MT5 accounts, keeps our copy of
 > trading state fresh by polling, and **executes** enforcement commands issued by
 > LCC/EVL. It is also the platform's **highest-risk external dependency** (MetaApi
@@ -19,9 +19,9 @@ V1 = **MT5 via MetaApi only** (PRD: MetaApi vs Brokeree decision in Week 2; cTra
 is the fallback only if no suitable MT5 route is found). MT4/cTrader/DXtrade
 adapters are V3 (BRG-24/25) behind the same interface.
 
-Requirement coverage: `BRG-01,02,05,06,07,08,09,10,11,12,14,43,44` (V1) +
-`03,04,13,15,16,18,19,20,22,27,29,30,31,32,33,34,35,37,42,45,46` (V2) +
-`21,23,26,36,38,39,40,41,47` (V3).
+Requirement coverage: `BRG-01,02,05,06,07,08,09,10,11,12,14,43,44` (V1.0) +
+`03,04,13,15,16,17,18,19,20,22,23,27,28,29,30,31,32,33,34,35,37,42,45,46` (V2.0) +
+`21,24,25,26,36,38,39,40,41,47` (V3.0).
 
 ## 2. Architecture
 
@@ -206,13 +206,18 @@ Namespace `BRG` (provider-safe strings only — MetaApi error codes mapped to ou
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Internal (service tokens): `POST /internal/v1/bridge/commands/{id}/retry` (CON
-tooling), `GET /internal/v1/bridge/accounts/{login}/state` (debug),
-`POST /internal/v1/bridge/reconcile` (manual run).
+Internal (service tokens):
 
-Staff (ADM V2 broker management, BRG-26/34 surfaces): `GET /v1/admin/broker/groups`,
-`GET /v1/admin/broker/accounts?state=`, `GET /v1/admin/broker/accounts/{login}/positions`,
-`GET /v1/admin/broker/health`.
+- `POST /internal/v1/bridge/commands/{id}/retry` — retry a failed enforcement command from CON tooling.
+- `GET /internal/v1/bridge/accounts/{login}/state` — debug read of a broker account's bridge-side state.
+- `POST /internal/v1/bridge/reconcile` — trigger a manual BRG↔broker reconciliation run.
+
+Staff (ADM V2 broker management, BRG-26/34 surfaces):
+
+- `GET /v1/admin/broker/groups` — list broker server groups with account counts.
+- `GET /v1/admin/broker/accounts` — list broker accounts, filterable by `?state=`.
+- `GET /v1/admin/broker/accounts/{login}/positions` — read live positions for one broker account.
+- `GET /v1/admin/broker/health` — provider health: success rate, p95, syncing accounts, backlog.
 
 Trader (TD): no direct BRG endpoints — all via LCC/ANA surfaces (positions &
 history = TD-08 reads ANA read model fed by `bridge.tick`/deals).
