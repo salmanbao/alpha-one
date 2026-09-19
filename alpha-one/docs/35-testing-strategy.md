@@ -125,6 +125,24 @@ with `auth.token_invalid`-class errors and a status notice; restore + verify log
 JWKS endpoint blocked → cached keys serve, alert fires; ZITADEL upgrade rehearsal on a
 restored prod dump → smoke login + provisioning dry-run.
 
+**Identity resolution & realms (docs/44 §3/§6.1):** a person logging in at a second tenant
+gets a **second** `identity_idp_links` row against the same identity, both orgs' events
+resolve, and neither login overwrites the other's `idp_user_id`; a link miss with a known
+email re-links by `identity_key`; a login from the other realm for an existing
+`identity_key` → `auth.realm_mismatch` and **no** column change; a retired link is not
+reused on return (staff-approval path); the `SECURITY DEFINER` accessors return console
+sessions while an `app_rw` query without context returns zero rows.
+
+**Authorization (docs/44 §4):** `scripts/verify_roles.py` in CI — `roles.yaml` ⇄
+`casbin_rule` seed ⇄ rendered tables agree (including `inherits` expansion); a boot with an
+empty/unloadable rule set denies every route and alerts; a key with no binding is denied
+for every role; the four ABAC constraints (own-data, payout step-up, $500k override,
+audited reads) each have a positive and a negative fixture; `firm:support` cannot reach
+`kyc.document.read` or `payout.approve`.
+
+**Status gate (docs/44 §7):** tenant → identity → membership precedence with one fixture
+per failure code, and the ≤ 5 s cache invalidated by `user.suspended` inside the same test.
+
 **Deprovisioning propagation** (docs/43): deactivate a user **in the ZITADEL console**
 and assert the membership flips and the live session dies within one poll interval + 1 s;
 kill the `idp-sync` worker → `IdpSyncStalled` pages inside 5 min → restart → the catch-up

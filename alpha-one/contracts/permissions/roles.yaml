@@ -1,0 +1,142 @@
+{
+  "$comment": "Alpha One — role × permission-key bindings. Machine-readable source for the Casbin seed and for the rendered tables in docs/02 §3.1 + contracts/permissions/registry.md. Decision D14 (docs/44 §4), 2026-09-19.",
+  "version": 1,
+  "decided": "2026-09-19",
+  "decision": "D14",
+  "artifact": "docs/44-auth-multitenancy-review.md §4",
+  "model": {
+    "key_format": "resource.action (AUTH-13); keys are module-declared and enforced at the API layer (GW-04)",
+    "scopes": {
+      "all": "tenant-wide: any resource inside the caller's tenant (`dom = tenant_id`)",
+      "own": "self-scoped: ABAC additionally requires resource.user_id == subject.id (and resource.tenant_id == subject.tenant_id, always checked first)",
+      "platform": "cross-tenant: console realm only; tenant roles never hold these, platform roles never hold tenant keys (AUTH-16)"
+    },
+    "inheritance": "`inherits` lists the roles whose keys this role also gets (Casbin `g` edges are seeded from these). Bindings below are written as EFFECTIVE holder sets: every role that can exercise the key is listed, so the set is closed under descendants (if a role holds a key, every role that inherits from it is listed too). scripts/verify_roles.py enforces that closure and that the rendered table in docs/02 §3.1 matches this file.",
+    "fail_closed": "A key with no binding is denied for every role; a role with no binding can do nothing. An empty or unloadable policy set fails closed at boot (docs/44 §4)."
+  },
+  "realms": {
+    "tenant": ["firm:owner", "firm:admin", "firm:risk", "firm:compliance", "firm:support", "firm:finance", "user:trader"],
+    "platform": ["platform:super_admin", "platform:ops", "platform:support", "platform:finance", "platform:readonly"]
+  },
+  "role_catalog": {
+    "user:trader": {
+      "realm": "tenant",
+      "description": "Trader. Self-actions only; every key it holds is scope `own`.",
+      "inherits": []
+    },
+    "firm:support": {
+      "realm": "tenant",
+      "description": "Trader context and tickets; no payout, KYC decision or configuration write.",
+      "inherits": []
+    },
+    "firm:finance": {
+      "realm": "tenant",
+      "description": "Orders, payouts processing, refunds, reports.",
+      "inherits": []
+    },
+    "firm:compliance": {
+      "realm": "tenant",
+      "description": "KYC review/approval, audit export, data-subject requests.",
+      "inherits": []
+    },
+    "firm:risk": {
+      "realm": "tenant",
+      "description": "Risk queue, account overrides (ABAC-bounded), read-all trades/accounts.",
+      "inherits": []
+    },
+    "firm:admin": {
+      "realm": "tenant",
+      "description": "Tenant administration: traders, challenges, payouts, KYC, comms, configuration.",
+      "inherits": ["firm:risk", "firm:compliance", "firm:support", "firm:finance"]
+    },
+    "firm:owner": {
+      "realm": "tenant",
+      "description": "Everything in-tenant including settings, team, billing view and audit. In the V1 key set owner and admin hold the same keys — what distinguishes owner is governance (roles/team/billing), whose surface lands with tenant.identity.* in V1.1/V2.",
+      "inherits": ["firm:admin"]
+    },
+    "platform:readonly": {
+      "realm": "platform",
+      "description": "Read-only platform visibility (health, tenants, analytics); grants no write and no cross-realm action.",
+      "inherits": []
+    },
+    "platform:finance": {
+      "realm": "platform",
+      "description": "Platform financials (CON-19); read-only elsewhere.",
+      "inherits": ["platform:readonly"]
+    },
+    "platform:support": {
+      "realm": "platform",
+      "description": "Read-assist and tenant contact registry (CON-01). No tenant-realm action (AUTH-16).",
+      "inherits": ["platform:readonly"]
+    },
+    "platform:ops": {
+      "realm": "platform",
+      "description": "Health, jobs, incidents, platform controls, session revocation.",
+      "inherits": ["platform:readonly"]
+    },
+    "platform:super_admin": {
+      "realm": "platform",
+      "description": "Tenant lifecycle, platform controls, console identity administration. The only role that may suspend or terminate a tenant.",
+      "inherits": ["platform:ops", "platform:support", "platform:finance"]
+    }
+  },
+  "bindings": {
+    "user.suspend": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "user.unsuspend": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "tenant.read": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops", "platform:support", "platform:finance", "platform:readonly"] },
+    "tenant.create": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "tenant.update": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "tenant.suspend": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "tenant.terminate": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "tenant.entitlement.change": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "tenant.integration.write": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "tenant.integration.read": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "challenge.write": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "ruleset.write": { "scope": "all", "roles": ["firm:owner", "firm:admin"] },
+    "account.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk", "firm:support", "firm:finance"] },
+    "account.suspend": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "account.manual_override": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"], "abac": "risk override > $500k requires a firm:owner approval flag in context (docs/02 §3.1)" },
+    "account.evaluate": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "payout.request": { "scope": "own", "roles": ["user:trader"] },
+    "payout.approve": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:finance"], "abac": "step-up: mfa_verified_at within 5 min (docs/02 §3.1)" },
+    "payout.read_queue": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:finance", "firm:risk"] },
+    "payout.record_execution": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:finance"] },
+    "payout.policy.write": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:finance"] },
+    "payout.method.write": { "scope": "own", "roles": ["user:trader"] },
+    "payout.method.read": { "scope": "own", "roles": ["user:trader"] },
+    "payout.method.review": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:finance", "firm:compliance"], "abac": "access is audited (AUD-23)" },
+    "kyc.review": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
+    "kyc.document.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"], "abac": "access is audited (AUD-23)" },
+    "kyc.restrictions.write": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
+    "document.read": { "scope": "own", "roles": ["user:trader"] },
+    "risk.case.create": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "audit.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
+    "audit.export": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
+    "analytics.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "platform.identity.admin": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "platform.tenant.provision": { "scope": "platform", "roles": ["platform:super_admin"] },
+    "platform.session.revoke": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops"] },
+    "console.session.revoke": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops"], "note": "surface ships with CON-30 / AUTH-27 (V2 per docs/02 §4.1)" }
+  },
+  "trader_self_actions": {
+    "rule": "Declared keys with scope `own` — AUTH-13's 'declared keys' is satisfied and the ABAC own-data matcher enforces the resource check. No key is required for actions that have no resource beyond the caller's own session (login, logout, password change, MFA enrolment).",
+    "keys": ["payout.request", "payout.method.write", "payout.method.read", "document.read"]
+  },
+  "provisional_bindings": {
+    "$comment": "Identity/SSO/SCIM keys (registry §Identity-management keys). Proposed holders recorded now so the freeze (docs/99 §12) is mechanical; NOT seeded into Casbin until the key's phase ships.",
+    "tenant.identity.read": { "phase": "V1.1", "roles": ["firm:owner", "firm:admin", "firm:support"] },
+    "tenant.identity.invite": { "phase": "V2", "roles": ["firm:owner", "firm:admin"] },
+    "tenant.identity.role_change": { "phase": "V2", "roles": ["firm:owner"] },
+    "tenant.identity.remove": { "phase": "V2", "roles": ["firm:owner", "firm:admin"] },
+    "tenant.sso.read": { "phase": "V1.1", "roles": ["firm:owner", "firm:admin"] },
+    "tenant.sso.configure": { "phase": "V1.1", "roles": ["firm:owner"] },
+    "tenant.scim.manage": { "phase": "V1.1", "roles": ["firm:owner"] },
+    "platform.analytics.read": { "phase": "V2 (ANA-28 cross-tenant pattern; reserved 2026-09-19)", "roles": ["platform:super_admin", "platform:ops", "platform:support", "platform:finance", "platform:readonly"] }
+  },
+  "superseded_role_names": {
+    "$comment": "Names that appeared in earlier drafts (docs/02 §3.1 pre-2026-09-19, docs/21 CON-01). One catalog now: see role_catalog.",
+    "platform:owner": "platform:super_admin",
+    "platform:admin": "platform:super_admin (no intermediate admin tier in V1)",
+    "platform:billing": "platform:finance"
+  }
+}

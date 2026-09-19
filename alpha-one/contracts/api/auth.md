@@ -29,8 +29,12 @@ pair introduced by decisions D5/P2.
 Per-route groups (GW-01): every authenticated request carries a **ZITADEL access
 token** (short-lived JWT) that the API verifies over JWKS with the audience of the
 realm it belongs to (tenant application vs console application, AUTH-16). Immediate
-revocation is ours: Redis deny-set + the `auth_sessions` projection, with reuse of a
-rotated refresh token revoking all sessions of the identity (AUTH-07). Access and ID
+revocation is ours: Redis deny-set + the `auth_sessions` projection. Refresh rotation
+and reuse detection are **ZITADEL's** (a reused token revokes its family); our side owns
+the response — revoke all sessions of the identity + CRITICAL audit (AUTH-07, decision
+D17). Session materialisation resolves the identity through `identity_idp_links`
+(link → `identity_key` fallback) so one person's several ZITADEL users map to one
+identity row (docs/02 §3.1, decision D13). Access and ID
 token lifetimes are 15 min, written to the instance OIDC settings at provisioning
 (decision D10, docs/43 §6). IdP-side deprovisioning — directory deactivation, console
 user removal, self-deletion — reaches the same deny-set/session-kill path through the
@@ -38,7 +42,9 @@ user removal, self-deletion — reaches the same deny-set/session-kill path thro
 §2–§3); roles and permissions are still resolved from our stores, not from the token
 (P4). Staff routes
 additionally require an MFA assertion (`amr`) or a redeemed backup code (AUTH-09/11).
-API keys are V2 (AUTH-21) — not in this contract.
+API-key primitives exist in V1 for **internal consumers only** (service auth, future
+AUTH-21 surface) — there is no tenant-facing key endpoint in this contract (decision
+D18); tenant machine integrations use the TEN-11 integration secrets.
 
 ## Tenant resolution
 Tenant comes from the request domain/subdomain resolved at the edge (TEN-02) and is enforced by gateway middleware (GW-02). Every query and action is restricted to the caller's tenant in the data layer (AUTH-15, TEN-03). Requests on unknown hosts are rejected before auth runs.

@@ -235,8 +235,24 @@ docs/34 §9 alongside the five above:
 8. **Self-delete posture** — no `user.self.delete`-capable role grants present, or a
    written DPO acceptance on file (decision D12, docs/43 §8).
 
-The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12);
-like docs/42 it changes V1 design detail only — **no PRD workbook row was changed**.
+**Gates added by the fourth-pass review (docs/44, 2026-09-19)** — recorded in docs/34 §9:
+
+9. **Authorization set is complete and fail-closed** — `contracts/permissions/roles.yaml`
+   seeded into `casbin_rule` by migration, `scripts/verify_roles.py` green in CI
+   (YAML ⇄ seed ⇄ rendered tables, `inherits` expanded), and a boot with an empty or
+   unloadable rule set denies every route and raises the SEV-1 alert (docs/44 §4).
+10. **Identity-link resolution** — one identity across two orgs resolves through
+    `identity_idp_links` in both directions (login + `idp-sync`), no overwrite of the
+    other org's `idp_user_id`, and the `SECURITY DEFINER` accessors are the only
+    context-free reads (docs/44 §3/§5).
+11. **DB principals** — `app_rw` / `app_platform` / `migrator` exist with the §5 grants;
+    the negative suite proves `app_rw` sees zero rows without context (console sessions
+    included) while `app_platform` works and is the only role that does (docs/44 §5).
+
+The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12) and
+the fourth-pass artifact is `docs/44-auth-multitenancy-review.md` (G21–G33, decisions
+D13–D18); like docs/42 both change V1 design detail only — **no PRD workbook row was
+changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)
 

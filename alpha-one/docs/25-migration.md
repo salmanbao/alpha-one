@@ -439,7 +439,7 @@ CREATE TABLE migration_corrections (          -- §3.5
   mutates; corrections chain; the COO+ops pattern; the domain's own
   correction semantics (reversals, not edits) — the LED-04 discipline
   extends to migration.
-- **Access:** the migration console surface is platform:owner + a
+- **Access:** the migration console surface is `platform:super_admin` + a
   named ops role (CON-18); the disposition/cutover/correction actions
   are the critical-tier set (the CON-09 audit view's most-watched
   events during Phase 2).

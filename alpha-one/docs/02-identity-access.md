@@ -134,31 +134,92 @@ stores one user per org, and it is the anchor `AUTH-36` (duplicate identity merg
 V2) will use. The Phase-0 spike must confirm the org-scope behaviour on the pinned
 version and record the outcome; nothing above depends on the upstream fix landing.
 
+**Identity ↔ IdP links (review G21, docs/44 §3 — decision D13, binding).** Because one
+person holds **one ZITADEL user per organization**, `identities` cannot carry a single
+`idp_user_id` as its join key: the second org's login would overwrite the first, and the
+first org's deprovisioning events would then resolve to nothing. The join is a table,
+**`identity_idp_links`** (one row per `(identity, org)`, §9), and `identities.idp_user_id`
+is only a denormalised pointer to the most recently used link.
+
+| Path | Resolution rule |
+|---|---|
+| `POST /v1/auth/session` | link lookup by token `sub` → identity; miss → `identity_key` match on the verified email → attach a link; miss → create identity + link. A link is written for **every** `(identity, org)` the person logs in from |
+| `idp-sync` (docs/43 §3) | `aggregate_id` → `identity_idp_links` → identity; unknown link → resolve by `identity_key` when the payload carries the email, otherwise **hold the cursor + alert** (never guess a tenant) |
+| Re-link after deletion (docs/43 §9) | deleted link → `state='retired'` (its `idp_user_id` is the audit alias); a returning user gets a new link and is never silently re-linked — staff approval, re-KYC |
+
+**One realm per identity (review G25, binding).** `identities.realm` is set at first
+login and is a *working context*, not a personal trait: a person who must act as platform
+staff **and** as a tenant member uses two identities with distinct emails. A login from
+the other realm whose `identity_key` matches an existing identity is **refused**
+(`auth.realm_mismatch`, §6.1) rather than silently flipping the column — the operator then
+decides. The V2 impersonation path (CON-07) is the audited, read-only way to cross realms,
+so no dual-realm identity is needed (review G31: tokens carry context, not authority).
+
 ```
-roles (hierarchy — child inherits parent):
-  platform:super_admin ⊃ platform:admin ⊃ {platform:ops, platform:billing, platform:readonly}
+roles (hierarchy — child inherits parent; catalog owned by contracts/permissions/roles.yaml):
+  platform:super_admin ⊃ {platform:ops, platform:support, platform:finance, platform:readonly}
   firm:owner ⊃ firm:admin ⊃ {firm:risk, firm:compliance, firm:support, firm:finance}
-  user:trader            (funDED traders carry an attribute, not a new role, V1)
+  user:trader            (funded traders carry an attribute, not a new role, V1)
 ```
 
 **V1 baseline permission model (AUTH-13, binding)** — `resource.action` keys:
 keys are **module-declared** and **enforced at the API layer** (GW-04). The
-V1 registry (30 keys, each with module owner + the Req ID that justifies it)
-is `contracts/permissions/registry.md`. Rules from the research:
+V1 registry (**36 keys**, each with module owner + the Req ID that justifies it)
+is `contracts/permissions/registry.md`. Rules:
 
-- **Trader self-actions** (registration, login, own account reads, checkout,
-  own payout requests, own documents) are **identity-scoped**: the caller is
-  the resource. Whether they additionally require declared keys is an open
-  question (AUTH-13 requires declared keys; the sheet's stories are
-  self-referential).
+- **Trader self-actions** (own payout requests and methods, own documents) are
+  **declared keys with scope `own`**: AUTH-13's "declared keys" is satisfied, and
+  the own-data ABAC matcher does the resource check (`resource.user_id == subject.id`
+  after `resource.tenant_id == subject.tenant_id`). Actions with no resource beyond
+  the caller's own session (login, logout, password change, MFA enrolment) need no key.
+  (Review G22, decision D14 — this closes the earlier open question.)
 - **`tenant.impersonate`: no such key in V1.** AUTH-16 is a *separation*
   contract — the console identity cannot act inside a tenant at all because
   no impersonation path exists in V1. Enablement (TEN-16, CON-07, AUD-08) is
   V2.0 and would introduce the key with its audit format.
-- **Role bindings** (which role gets which key) are not defined by any V1 row
-  — open owner decision (AUTH-12 defines the roles: Super Admin, Tenant
-  Admin, custom staff, Trader, API Consumer).
+- **Role bindings are ratified (review G22, decision D14, 2026-09-19).**
+  `contracts/permissions/roles.yaml` is the machine-readable source: role catalog
+  (`firm:*` / `user:trader` / `platform:*`), inheritance, and every key bound to
+  `scope` (`all` / `own` / `platform`) + an effective role set. It seeds the Casbin
+  policy table (§9) and `scripts/verify_roles.py` asserts the three views agree.
+  A key with no binding is denied for every role.
 - Field-level permissions beyond route/action permissions are out of scope.
+
+**Role catalog (AUTH-12, unified — review G30).** Tenant realm: `user:trader`,
+`firm:support`, `firm:finance`, `firm:compliance`, `firm:risk`, then `firm:admin`
+(inherits those four) and `firm:owner` (inherits admin). Platform realm:
+`platform:readonly`, `platform:finance`, `platform:support`, `platform:ops`, and
+`platform:super_admin` (inherits ops + support + finance). Earlier drafts also used
+`platform:owner` / `platform:admin` / `platform:billing`; those names are superseded
+and recorded in `roles.yaml` (`superseded_role_names`). Tenant roles never satisfy
+platform policies and vice versa — the realm is carried by the token audience and by
+the role prefix.
+
+<!-- roles:begin (generated from contracts/permissions/roles.yaml — do not edit by hand) -->
+
+**Tenant realm**
+
+| Role | Permission keys (effective) |
+|---|---|
+| `user:trader` | `document.read`, `payout.method.read`, `payout.method.write`, `payout.request` |
+| `firm:support` | `account.read` |
+| `firm:finance` | `account.read`, `payout.approve`, `payout.method.review`, `payout.policy.write`, `payout.read_queue`, `payout.record_execution` |
+| `firm:compliance` | `audit.export`, `audit.read`, `kyc.document.read`, `kyc.restrictions.write`, `kyc.review`, `payout.method.review` |
+| `firm:risk` | `account.evaluate`, `account.manual_override`, `account.read`, `account.suspend`, `analytics.read`, `payout.read_queue`, `risk.case.create` |
+| `firm:admin` | `account.evaluate`, `account.manual_override`, `account.read`, `account.suspend`, `analytics.read`, `audit.export`, `audit.read`, `challenge.write`, `kyc.document.read`, `kyc.restrictions.write`, `kyc.review`, `payout.approve`, `payout.method.review`, `payout.policy.write`, `payout.read_queue`, `payout.record_execution`, `risk.case.create`, `ruleset.write`, `tenant.integration.read`, `tenant.integration.write`, `user.suspend`, `user.unsuspend` |
+| `firm:owner` | `account.evaluate`, `account.manual_override`, `account.read`, `account.suspend`, `analytics.read`, `audit.export`, `audit.read`, `challenge.write`, `kyc.document.read`, `kyc.restrictions.write`, `kyc.review`, `payout.approve`, `payout.method.review`, `payout.policy.write`, `payout.read_queue`, `payout.record_execution`, `risk.case.create`, `ruleset.write`, `tenant.integration.read`, `tenant.integration.write`, `user.suspend`, `user.unsuspend` |
+
+**Platform realm**
+
+| Role | Permission keys (effective) |
+|---|---|
+| `platform:readonly` | `tenant.read` |
+| `platform:finance` | `tenant.read` |
+| `platform:support` | `tenant.read` |
+| `platform:ops` | `console.session.revoke`, `platform.session.revoke`, `tenant.read` |
+| `platform:super_admin` | `console.session.revoke`, `platform.identity.admin`, `platform.session.revoke`, `platform.tenant.provision`, `tenant.create`, `tenant.entitlement.change`, `tenant.read`, `tenant.suspend`, `tenant.terminate`, `tenant.update` |
+
+<!-- roles:end -->
 
 **Roles (AUTH-12)** and the extended (post-V1) permission catalog (design
 level; the V1 key registry above is the binding subset):
@@ -198,7 +259,8 @@ Go policy layer):
 tier redirects to ZITADEL Hosted Login v2 (register or sign in), org-scoped for tenant
 traffic. ZITADEL returns the code; the web tier exchanges it (PKCE) and issues the `api`
 a bearer access token. Our `POST /v1/auth/session` (new) *materialises* the session:
-upsert `identities` by `idp_user_id`, resolve the tenant from the request domain and the
+resolve the identity through `identity_idp_links` (falling back to `identity_key`, §3.1),
+resolve the tenant from the request domain and the
 user's membership, write the `auth_sessions` projection row, emit `user.login_success`
 (AUD/NOT/RSK). ZITADEL is the source of truth for *authentication* facts; our row is the
 source of truth for *authorization* facts. **Enumeration resistance** (`AUTH-33`, V2) is
@@ -209,9 +271,12 @@ from ZITADEL's per-org lockout policy with our per-IP counters as the second lay
 refresh tokens; `api` keeps a **Redis deny-set** (jti/session-id, 24 h TTL) and the
 `auth_sessions` projection so revocation is immediate. **V1 baseline survives
 intact (binding):** rotating refresh, server-side revocation, and *reuse of a rotated
-refresh token → revoke all sessions of the identity + CRITICAL audit* — reuse detection
-is implemented by us (ZITADEL's `RevokeAllMyRefreshTokens` + session v2 `DeleteSession`
-do the killing). Sliding idle 30 min / absolute 30 d are our session policy, enforced by
+refresh token → revoke all sessions of the identity + CRITICAL audit*. **Rotation and
+reuse detection are ZITADEL's** (OIDC refresh rotation; a reused token revokes its family)
+— decision D17, docs/44 §6.2; our side is the *response*: `RevokeAllMyRefreshTokens` +
+session v2 `DeleteSession` + deny-set, which is what makes the kill immediate. We keep no
+refresh secrets (§9 — the `refresh_hash` columns are removed). Sliding idle 30 min /
+absolute 30 d are our session policy, enforced by
 the instance OIDC settings (docs/43 §6) plus the `auth_sessions` row; per-org overrides
 are `AUTH-34` (V2) and the ZITADEL login-UI session is a separate per-org policy. Trader
 lists/revokes sessions in TD via
@@ -227,7 +292,10 @@ for every staff-role action.
 **Why the enforcement lives in our API, not the IdP (review G2, docs/42 §3.2).**
 ZITADEL's `force_mfa` is an **organization/instance** policy — there is no per-user or
 per-role enforcement (upstream #6316), and turning it on for the tenant org would force
-MFA on traders too, which is `AUTH-10`/V2. The V1 mechanics:
+MFA on traders too, which is `AUTH-10`/V2. **The platform org is the exception and gets
+`force_mfa = true`** (review G33): every member of `alpha1-platform` is staff, so the
+IdP-side policy is exactly right there and sits behind our `amr` gate as defence in
+depth. Tenant orgs keep it off in V1. The V1 mechanics:
 
 1. `POST /v1/auth/mfa/enrollment` (ours) checks the caller's role is staff, then calls
    ZITADEL's user-service `v2/users/{id}/totp` endpoint **with the user's own access
@@ -288,7 +356,8 @@ fully and is rejected for V1 (docs/41 §4.1).
 
 **Backup, restore, upgrades.** The IdP database rides the ADR-10 ritual: nightly
 `pg_basebackup` + WAL, and the **monthly restore drill covers both databases** (row
-counts, `identities.idp_user_id` join integrity, one login smoke-test against the
+counts, `identity_idp_links` integrity (every active link → an identity; no identity
+with two live links in one org), one login smoke-test against the
 restored copy). Version is pinned; every upgrade is rehearsed on staging against a
 restored prod dump. Because the IdP is event-sourced, migrations are one-way: the
 rollback plan is **restore the pre-upgrade dump**, never "downgrade the binary".
@@ -421,6 +490,8 @@ From `contracts/errors/taxonomy.md` (the V1 execution sheet; module AUTH). These
 > `auth.backup_code_invalid` and `auth.account_suspended` (§7.0).
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
+| `auth.realm_mismatch` | 403 | A login from the other realm for an existing `identity_key` (staff ↔ trader) — refused instead of flipping `identities.realm` (review G25, docs/44 §6.1) | "This account cannot sign in here." |
+| `auth.membership_suspended` | 403 | The identity is fine but its membership at this tenant is suspended (GW step 3.5c, docs/44 §7) | "Your access to this firm is suspended." |
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) | "Please check your details and try again." |
 | `auth.email_taken` | 409 | Email already registered on this tenant | "An account with this email already exists." |
 | `auth.account_suspended` | 403 | User suspended; sessions and tokens already invalidated | "Your account has been suspended." |
@@ -620,6 +691,22 @@ CREATE TABLE identities (
 );
 CREATE INDEX idx_identities_status ON identities(status) WHERE status = 'suspended';
 
+-- one identity ↔ N ZITADEL users (one per org) — review G21 / decision D13, docs/44 §3
+CREATE TABLE identity_idp_links (
+  idp_user_id   TEXT PRIMARY KEY,              -- ZITADEL user id (sub)
+  identity_id   ULID NOT NULL REFERENCES identities(id),
+  idp_org_id    TEXT NOT NULL,                 -- ZITADEL org (resource owner) of this user object
+  tenant_id     ULID REFERENCES tenants(id),   -- NULL for the platform org
+  state         TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','retired')),
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  retired_at    TIMESTAMPTZ,
+  UNIQUE (identity_id, idp_org_id)             -- one live user object per org per identity
+);
+CREATE INDEX idx_idp_links_identity ON identity_idp_links(identity_id) WHERE state = 'active';
+-- `identities.idp_user_id` / `idp_org_id` above are a denormalised pointer to the most
+-- recently used link (join convenience), never the lookup key.
+
 CREATE TABLE tenant_memberships (
   id          ULID PRIMARY KEY,
   identity_id ULID NOT NULL REFERENCES identities(id),
@@ -642,8 +729,8 @@ CREATE TABLE auth_sessions (
   is_console    BOOLEAN NOT NULL DEFAULT false,     -- platform realm (AUTH-16)
   idp_session_id TEXT NOT NULL,                     -- ZITADEL session id
   idp_token_jti  TEXT,                              -- current access-token jti
-  refresh_hash  TEXT UNIQUE,                        -- single-use, rotated (ours)
-  prev_refresh_hash TEXT,                           -- for reuse detection
+  -- refresh tokens are ZITADEL's (rotation + reuse detection, D17): we store no
+  -- refresh secret, only the session facts needed for revocation and step-up
   amr           TEXT[] NOT NULL DEFAULT '{}',       -- otp/webauthn/pwd (AUTH-09)
   user_agent TEXT, ip INET, geo JSONB,
   mfa_verified_at TIMESTAMPTZ,                      -- step-up freshness (auth_time)
@@ -681,15 +768,53 @@ CREATE TABLE api_keys (
 );
 CREATE INDEX idx_apikeys_tenant ON api_keys(tenant_id) WHERE revoked_at IS NULL;
 -- audit_events: see 05-ledger-audit (AUD-01 schema) — AUTH emits into it.
+
+-- authorization policy (ADR-14): standard Casbin tables + the change ledger
+CREATE TABLE casbin_rule (
+  id    BIGSERIAL PRIMARY KEY,
+  ptype TEXT NOT NULL,          -- p (policy) | g (role inheritance)
+  v0 TEXT, v1 TEXT, v2 TEXT, v3 TEXT, v4 TEXT, v5 TEXT
+);
+CREATE UNIQUE INDEX idx_casbin_rule ON casbin_rule (ptype, v0, v1, v2, v3, v4, v5);
+CREATE TABLE authz_policy_versions (
+  version    BIGINT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor      TEXT NOT NULL,     -- migration or staff runbook (V1 has no policy-CRUD surface)
+  summary    TEXT NOT NULL      -- the full delta is an audit_events row
+);
 ```
 
-**RLS (D3).** `tenant_memberships`, `auth_sessions` (tenant rows) and `api_keys` are
-tenant-owned: each gets `ENABLE`/`FORCE ROW LEVEL SECURITY`, a policy on
+**Authorization policy (ADR-14, review G23 / decision D15, binding).** `casbin_rule` is
+seeded **by migration** from `contracts/permissions/roles.yaml` (V1 exposes no
+policy-CRUD surface — AUTH-14/AUTH-03 are V2, so every change is a reviewed deploy);
+`model.conf` ships in the binary. Reload: a change writes the rows + a
+`authz_policy_versions` bump + an `audit_events` row, then publishes `casbin:reload`;
+each `api` instance reloads and re-checks the version on request (cached ≤ 30 s) so a
+missed message self-heals. **Boot fails closed:** an empty or unloadable rule set denies
+every request and raises a SEV-1 alert — never allow. `scripts/verify_roles.py` asserts
+`roles.yaml` ⇄ seeded rows ⇄ the rendered tables, including the `inherits` expansion.
+
+**RLS (D3; exemption model review G24 / decision D16 — docs/44 §5).** The tenant-owned
+set is explicit: `tenant_memberships`, `auth_sessions` (tenant rows), `api_keys`, plus
+every per-module tenant table (accounts, trades, payouts, KYC documents/decisions, audit
+rows, …). Each gets `ENABLE`/`FORCE ROW LEVEL SECURITY`, a policy on
 `current_setting('app.tenant_id', true)` (fail-closed: unset → 0 rows), `WITH CHECK`
-on writes, and a `(tenant_id, …)` index; `identities` and `auth_backup_codes` are
-platform-owned (reached only through an identity-scoped accessor) and stay guard-only.
-Negative tests: no tenant context → zero rows, cross-tenant write rejected
-(docs/35 §5, TEN-36).
+on writes, and a `(tenant_id, …)` index. Platform-owned and **not** RLS-scoped:
+`identities`, `identity_idp_links`, `auth_backup_codes`, `tenants`, `casbin_rule`,
+`authz_policy_versions` and platform-scoped audit rows — guard-only, reached through
+identity-scoped accessors.
+
+| Principal | DB role | Policy |
+|---|---|---|
+| Request paths | `app_rw` | RLS enforced; context set with `SET LOCAL` inside the transaction (PgBouncer txn-mode safe) |
+| Auth resolution (session by id, key by hash, link by `idp_user_id`, console-session check) | `app_rw` + **`SECURITY DEFINER` accessors** (four named functions in the `auth` schema) | the only way to read those tables without a tenant context; console sessions (`is_console`, `tenant_id IS NULL`) are reachable **only** this way |
+| Cross-tenant services (relay, ledger/audit appliers, ANA updaters, `idp-sync`, CON read models) | `app_platform` | `BYPASSRLS`, enumerated services only, and their queries still carry explicit `tenant_id` predicates (CI grep-class check on new sqlc queries, docs/06) — RLS is their backstop, not their isolation |
+| Migrations / DDL | `migrator` | `BYPASSRLS`, a discrete job, never in application config |
+
+Negative tests (docs/35 §5.1): no tenant context → zero rows on every tenant table;
+cross-tenant write rejected by `WITH CHECK`; `app_rw` reading `auth_sessions` without a
+context → zero rows **including console rows**, while the accessor succeeds; a migration
+on a tenant-owned table succeeds under `FORCE ROW LEVEL SECURITY`.
 
 **Why PG sessions instead of Redis:** revocation is a correctness feature
 (payout-adjacent accounts must be killable instantly across all instances); PG
@@ -809,12 +934,12 @@ FingerprintJS deferred (PRD default).
 |---|---|---|---|---|
 | 1. Deploy ZITADEL (Compose + own DB) and harden it: TLS host, SMTP off, backups in the ADR-10 ritual, AGPL legal review closed, **instance OIDC token lifetimes set (900 s access/ID) and read back** | BE-1 | 3 d | OPS env | `/debug/healthz` green; console reachable; login works for a scratch org; the OIDC settings read back at 900 s (docs/43 §6, docs/99 gate 6) |
 | 2. Tenant provisioning hooks: create org + project/application, per-org password/lockout/session policies + branding defaults, write `tenants.idp_org_id` (idempotent, compensatable) | BE-1 | 3 d | 1, TEN step | re-running the saga step is a no-op; a second saga run never duplicates an org |
-| 3. Token path: hosted-login hand-off from the web tier (PKCE, org scope), JWKS verification middleware (issuer + audience per realm), `POST /v1/auth/session`, `auth_sessions` projection + Redis deny-set, logout with `DeleteSession` + end-session | BE-1 | 5 d | 2 | TD + ADM login on a staging subdomain; a revoked session is refused < 1 s; console-audience token refused by tenant routes (AUTH-16) |
-| 4. Authorization: Casbin model (`g(r.sub, p.sub, r.dom)`), policy table + loader/reload, role catalog, the `authorizer.Check` interface, denial logging | BE-1 | 4 d | 2 | fixture tests: trader can't read another's trades; ≥ 30 permission keys resolved by role; a policy change reloads without redeploy |
+| 3. Token path: hosted-login hand-off from the web tier (PKCE, org scope), JWKS verification middleware (issuer + audience per realm), `POST /v1/auth/session` (identity resolved through `identity_idp_links`, D13), `auth_sessions` projection + Redis deny-set, logout with `DeleteSession` + end-session | BE-1 | 5 d | 2 | TD + ADM login on a staging subdomain; a revoked session is refused < 1 s; console-audience token refused by tenant routes (AUTH-16) |
+| 4. Authorization: Casbin model (`g(r.sub, p.sub, r.dom)`), `casbin_rule` seeded by migration from `contracts/permissions/roles.yaml` + loader/reload + fail-closed boot, the `authorizer.Check` interface, denial logging | BE-1 | 4 d | 2 | fixture tests: trader can't read another's trades; **all 36 V1 keys resolve by role and `scripts/verify_roles.py` is green in CI**; a policy change reloads without redeploy; a boot with an empty policy set denies every route and alerts (D15, docs/99 gate 9) |
 | 5. 2FA enforcement + backup codes: staff first-login enrolment flow (hosted), `amr`/`auth_time` rule in the API, `/v1/auth/2fa/backup-codes` + `/backup-code`, admin reset path (AUTH-28) | BE-2 | 4 d | 3 | staff login without a factor is refused by the API; backup code redeems once; reset flow audited |
 | 6. Suspension/activation: status mirror to ZITADEL (deactivate/reactivate, session termination) + event fan-out + platform-realm separation test + **`idp-sync` pull consumer** (event log → inbox → membership, docs/43 §3) | BE-1 | 4 d | 3, 4 | suspended user's live session dies < 1 s; unsuspend restores with audit; a deactivation performed **in the ZITADEL console** lands in `tenant_memberships` in < 30 s, and re-polling the same page changes nothing (idempotence) |
-| 7. API-key primitives (create/revoke/hash/scopes) | BE-2 | 2 d | 3 | key works end-to-end against one read route |
-| 8. RLS layer: policies + `FORCE ROW LEVEL SECURITY` + transaction-scoped `set_config` in the DB wrapper + negative tests (D3) | BE-1 | 3 d | 2 | isolation suite green under both layers; no-context query returns zero rows |
+| 7. API-key primitives (create/revoke/hash/scopes) for **internal consumers only** — no tenant-facing endpoint (D18) | BE-2 | 2 d | 3 | the internal consumer authenticates with a key; no tenant route accepts one |
+| 8. RLS layer: policies + `FORCE ROW LEVEL SECURITY` + transaction-scoped `set_config` in the DB wrapper, the three DB roles (`app_rw` / `app_platform` / `migrator`) and the four `SECURITY DEFINER` accessors (D3, D16) | BE-1 | 4 d | 2, 3 | isolation suite green under both layers; a no-context query returns zero rows **including console sessions**, while the accessor succeeds; only `app_platform` reads cross-tenant (docs/99 gate 11) |
 | 9. Audit + login history feed: Actions v2 event webhooks → `audit_events`, anomaly counters, security headers (if event executions prove unreliable — upstream #10268/#12225 — the same `idp-sync` poller ingests the login events from the event log, docs/43 §2) | BE-2 | 3 d | 5 | AUD-23 sensitive-access audit visible; login history rows appear |
 | 10. SSO + SCIM for the cutover tenant (AUTH-24/25): org IdP config, metadata exchange, attribute→role mapping on our side, SCIM user provisioning token + deactivation path | BE-1 + BE-2 | 5 d | 3, 4 | the tenant's staff sign in through their IdP; SCIM create/deactivate lands as our membership rows |
 | 11. V2: social login, step-up API surface, IP allowlists, session policy config, email-change + closure flows | BE-2 | 8 d | 10 | — |

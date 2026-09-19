@@ -18,10 +18,10 @@ tags:
   description: Core domain endpoints (trader + shared)
 - name: console
   description: Platform console (CON) surface
-- name: internal
-  description: Service-to-service / worker / provider-webhook
 - name: admin
   description: Tenant admin (ADM) surface
+- name: internal
+  description: Service-to-service / worker / provider-webhook
 paths:
   /v1/admin/audit:
     get:

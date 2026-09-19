@@ -151,6 +151,12 @@ repository, all decisions in-process behind `authorizer.Check(ctx, subject,
 action, resource)`. Cerbos/BVR-23 superseded as a runtime; the documented
 revisit trigger is > 200 tenants or > 500 policy rows, at which point a
 dedicated PDP (Cerbos, Apache-2.0) becomes worth its process.
+**Amended 2026-09-19 (D14/D15, docs/44 §4):** the bindings (role → permission key)
+are a ratified artifact — `contracts/permissions/roles.yaml`, seeded into the
+`casbin_rule` table by migration — and the policy lifecycle is explicit: change =
+rows + `authz_policy_versions` + audit row + `casbin:reload` publish, instances
+re-checks the version on request (cached ≤ 30 s), and boot with an empty or
+unloadable rule set **fails closed** (deny all + SEV-1 alert).
 
 ## 4. Event backbone
 

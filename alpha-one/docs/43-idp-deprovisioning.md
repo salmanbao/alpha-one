@@ -74,8 +74,8 @@ ZITADEL event store (instance sequence; retained by default)
    ▼                                                          poll every 10 s
 idp-sync worker (Go; one instance, joins the existing worker set — docs/01 §4.1)
    │   1. INSERT idp_inbox(event_id PK) ON CONFLICT DO NOTHING      ← idempotent ingest
-   │   2. map:  resource_owner → tenants.idp_org_id
-   │            aggregate_id   → identities.idp_user_id
+   │   2. map:  resource_owner → identity_idp_links.idp_org_id → tenant
+   │            aggregate_id   → identity_idp_links.idp_user_id → identity
    │   3. apply in one PG tx: tenant_memberships.status, session kill, outbox row
    │   4. advance idp_sync_cursors.last_sequence    ← only after the page is applied
    ▼
@@ -125,6 +125,13 @@ Phase-0 gate: enumerate the live list from the pinned version's
 | `user.human.added` / `user.human.selfregistered` | resolve/create the `identities` stub + membership in state `invited` — never `active` |
 | `user.human.email.changed` / `.verified`, `user.username.changed` | maintain `identities.email` / `identity_key`; the email-change payout hold stays an app rule (`AUTH-29`) |
 | `org.member.added` / `.changed` / `.removed` / `.cascade.removed`, `instance.member.*` | audit-only: they record who may change our mirror. `instance.member.added` with `SELF_MANAGEMENT_GLOBAL` also feeds the §8 detection rule |
+
+**Routing rules (review G32, docs/44 §8).** `resource_owner` = the platform org → the
+platform-staff path (link `tenant_id NULL`, notify `platform.identity.admin` holders);
+`resource_owner` matching no `tenants.idp_org_id` and not the platform org → **hold the
+cursor + alert** (never guess a tenant, never drop); a tenant in `deleted`/`archived` →
+apply to the membership row and audit (the termination saga already suspended its
+identities).
 
 **No new V1 event contract is needed:** the pipeline emits the existing
 `user.suspended` / `user.activated` (`contracts/events/payloads/`, `contracts/events/catalog.md`),
@@ -262,13 +269,14 @@ carries the DPO as co-owner rather than being closed by engineering.
 ## 9. Re-link after deletion
 
 A deleted user who returns gets a **new** ZITADEL user id, and our login path upserts
-`identities` by `idp_user_id` (`docs/02` §3.2) — so today the returning user would
-produce a second identity row and a duplicate membership, the failure `G1`/`AUTH-36`
-exists for, now with a guaranteed trigger. Rule:
+`identity_idp_links` (`docs/02` §3.1, review G21 / decision D13) — so the returning user
+would otherwise resolve to a new identity and a duplicate membership, the failure
+`G1`/`AUTH-36` exists for, now with a guaranteed trigger. Rule:
 
-1. no `idp_user_id` match → fall back to `identity_key` (the normalised-email hash join key);
+1. no **active link** match → fall back to `identity_key` (the normalised-email hash join key);
 2. if that identity carries a self-deletion/closure marker → **never silently re-link**:
-   staff approval, re-KYC where applicable, old `idp_user_id` retained as an audit alias;
+   staff approval, re-KYC where applicable — the closed link stays `state='retired'` as
+   the audit alias (the link table is what makes "old `idp_user_id` retained" real);
 3. `deleted_at` is set only after business closure and the retention decision — access
    revocation is immediate, erasure is a separate policy step (`AUTH-35`, D9).
 

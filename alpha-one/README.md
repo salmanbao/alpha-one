@@ -115,6 +115,7 @@ constantly).
 | [41-auth-ten-open-source-evaluation](docs/41-auth-ten-open-source-evaluation.md) | AUTH + TEN: every candidate open-source identity/authorization/multi-tenancy solution scored against the PRD rows, the mandated picks re-examined, and the nine decisions they produced (ZITADEL + Casbin + Postgres RLS) |
 | [42-auth-ten-gap-analysis](docs/42-auth-ten-gap-analysis.md) | Second-pass AUTH/TEN review: 20 findings (G1–G20) against the ZITADEL/Casbin/RLS decisions, all closed in-pass — the artifact behind the `docs/02` §3.x resolutions and the contract-pack fixes |
 | [43-idp-deprovisioning](docs/43-idp-deprovisioning.md) | Third-pass design: near-real-time IdP deprovisioning (`idp-sync` pull consumer + durable inbox over the event log), delivery-failure handling, the 15-min token-lifetime bound, reconciliation as the safety net, the self-service deletion posture, and the industry precedent (decisions D10–D12) |
+| [44-auth-multitenancy-review](docs/44-auth-multitenancy-review.md) | Fourth-pass AUTH/AuthZ/multi-tenancy review: 13 findings (G21–G33) across identity↔IdP cardinality (one person = one user *per org*), the ratified role→permission-key binding contract (`roles.yaml`), Casbin storage/reload/fail-closed boot, the RLS exemption model, refresh-token ownership and the request-path status gate — all closed in-pass (decisions D13–D18) |
 
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The

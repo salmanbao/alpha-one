@@ -12,10 +12,14 @@
 
 **V1 (3 — binding):**
 - **Console auth realm (CON-01):** the `platform:*` role family in a
-  separate ZITADEL application/audience (AUTH-12/16): `platform:owner`
-  (everything, incl. tenant suspension), `platform:ops` (health, jobs,
-  incidents), `platform:support` (read-assist, tenant contact registry),
-  `platform:finance` (platform financials, CON-19 V2 early-read).
+  separate ZITADEL application/audience (AUTH-12/16). The catalog is owned by
+  `contracts/permissions/roles.yaml` (docs/02 §3.1; unified in review G30):
+  `platform:super_admin` (everything, incl. tenant suspension/termination),
+  `platform:ops` (health, jobs, incidents, session revocation),
+  `platform:support` (read-assist, tenant contact registry),
+  `platform:finance` (platform financials, CON-19 V2 early-read),
+  `platform:readonly` (read-only visibility). The earlier name `platform:owner`
+  is an alias for `platform:super_admin`.
 - **Console shell (CON-29):** the app shell on `console.alphaone.example`
   (Next.js `web/con`), module navigation, global tenant search (V1: id/name
   only), session management (CON-30).
@@ -62,9 +66,10 @@ Requirement coverage: `CON-01,29,30` (V1.0) + `02..23,25,27,28,31..33` (V2.0) + 
  GW /v1/console/* → Go console APIs:
    · TEN (03): provisioning saga trigger, entitlements, suspension
    · OPS state (06): health, jobs, deploys, relay lag, backup status
-   · CON (05): platform audit view (cross-tenant, owner-role)
+   · CON (05): platform audit view (cross-tenant, `platform:super_admin`)
    · ANA (19): platform KPIs (cross-tenant = the ANA-28 V3 pattern,
-     available to platform:owner from V2 — the platform's own analytics)
+     available to platform:super_admin from V2 behind the reserved
+     `platform.analytics.read` key)
    · RSK: cross-tenant abuse signals (V2 CON-13)
    · BIL (V3): subscriptions
    · Flipt (flags), UptimeKuma (external checks) — read surfaces
@@ -118,14 +123,19 @@ blast radius).
 
 The only cross-realm entry: `view-as {tenant, identity}` from a tenant
 detail → opens the TD/ADM **in a clearly-badged read-only session**
-(banner: "You are viewing as X — platform:owner {name}"). Rules: ≤ 15 min
-per session, renewable (each renewal re-2FA'd), **read-only** (the
-impersonation session's GW token carries a `readonly` claim — any
-state-changing route 403s, structurally), every request audited with the
-real operator id, and a hard deny-list: **payout approve, credential
-reveal, and settings write are never available in any impersonation
+(banner: "You are viewing as X — platform:super_admin {name}"). Rules: ≤ 15 min
+per session, renewable (each renewal re-2FA'd), **read-only**, every request
+audited with the real operator id, and a hard deny-list: **payout approve,
+credential reveal, and settings write are never available in any impersonation
 session, any role** (the platform can see; the platform does not act as a
 trader or tenant staff).
+
+Read-only is enforced **server-side from the impersonation session record**, not
+from a token claim (review G31, docs/44 §7): tokens carry *context* facts only
+(`sub`, audience, `amr`, `auth_time`, session id, the impersonation reference) and
+never roles, permission keys or an authorization verdict — any state-changing
+route 403s because `authorizer.Check` refuses the impersonation subject, not
+because a claim says so.
 
 ### 3.4 Cross-tenant observability (V2)
 

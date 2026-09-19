@@ -301,6 +301,21 @@ annual pentest scope, §11)
 
 ### 3.3 Data (the 05, the 01 §3, the ADR-1)
 
+**RLS principals (review G24, docs/44 §5 — decision D16, binding).** The tenant-owned
+tables (`tenant_memberships`, `auth_sessions`, `api_keys`, and every per-module tenant
+table: accounts, trades, payouts, KYC documents/decisions, tenant audit rows) carry
+`ENABLE`/`FORCE ROW LEVEL SECURITY` fail-closed on `current_setting('app.tenant_id', true)`.
+Four DB roles are the whole exemption model: `app_rw` (request paths, RLS enforced,
+context set with `SET LOCAL`), `app_rw` + four `SECURITY DEFINER` accessors in the `auth`
+schema (the only way to resolve a session by id, a key by hash, a link by `idp_user_id`,
+or a console session without a tenant context), `app_platform` (`BYPASSRLS`, enumerated
+cross-tenant services only: relay, ledger/audit appliers, ANA updaters, `idp-sync`, CON
+read models — their queries still carry explicit `tenant_id` predicates), and `migrator`
+(`BYPASSRLS`, discrete DDL job, never in app config). `identities`, `identity_idp_links`,
+`auth_backup_codes`, `tenants`, `casbin_rule` and platform-scoped audit rows are
+platform-owned and guard-only. A worker that reads cross-tenant without `app_platform`
+sees zero rows — that is the point.
+
 - **The tenant isolation (the structural):**
   every table carries the `tenant_id` (the
   32 doc's convention, the no-exception

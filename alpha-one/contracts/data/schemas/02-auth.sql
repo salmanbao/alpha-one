@@ -30,6 +30,22 @@ CREATE TABLE identities (
 );
 CREATE INDEX idx_identities_status ON identities(status) WHERE status = 'suspended';
 
+-- one identity ↔ N ZITADEL users (one per org) — review G21 / decision D13, docs/44 §3
+CREATE TABLE identity_idp_links (
+  idp_user_id   TEXT PRIMARY KEY,              -- ZITADEL user id (sub)
+  identity_id   ULID NOT NULL REFERENCES identities(id),
+  idp_org_id    TEXT NOT NULL,                 -- ZITADEL org (resource owner) of this user object
+  tenant_id     ULID REFERENCES tenants(id),   -- NULL for the platform org
+  state         TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','retired')),
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  retired_at    TIMESTAMPTZ,
+  UNIQUE (identity_id, idp_org_id)             -- one live user object per org per identity
+);
+CREATE INDEX idx_idp_links_identity ON identity_idp_links(identity_id) WHERE state = 'active';
+-- `identities.idp_user_id` / `idp_org_id` above are a denormalised pointer to the most
+-- recently used link (join convenience), never the lookup key.
+
 CREATE TABLE tenant_memberships (
   id          ULID PRIMARY KEY,
   identity_id ULID NOT NULL REFERENCES identities(id),
@@ -52,8 +68,8 @@ CREATE TABLE auth_sessions (
   is_console    BOOLEAN NOT NULL DEFAULT false,     -- platform realm (AUTH-16)
   idp_session_id TEXT NOT NULL,                     -- ZITADEL session id
   idp_token_jti  TEXT,                              -- current access-token jti
-  refresh_hash  TEXT UNIQUE,                        -- single-use, rotated (ours)
-  prev_refresh_hash TEXT,                           -- for reuse detection
+  -- refresh tokens are ZITADEL's (rotation + reuse detection, D17): we store no
+  -- refresh secret, only the session facts needed for revocation and step-up
   amr           TEXT[] NOT NULL DEFAULT '{}',       -- otp/webauthn/pwd (AUTH-09)
   user_agent TEXT, ip INET, geo JSONB,
   mfa_verified_at TIMESTAMPTZ,                      -- step-up freshness (auth_time)
@@ -91,3 +107,17 @@ CREATE TABLE api_keys (
 );
 CREATE INDEX idx_apikeys_tenant ON api_keys(tenant_id) WHERE revoked_at IS NULL;
 -- audit_events: see 05-ledger-audit (AUD-01 schema) — AUTH emits into it.
+
+-- authorization policy (ADR-14): standard Casbin tables + the change ledger
+CREATE TABLE casbin_rule (
+  id    BIGSERIAL PRIMARY KEY,
+  ptype TEXT NOT NULL,          -- p (policy) | g (role inheritance)
+  v0 TEXT, v1 TEXT, v2 TEXT, v3 TEXT, v4 TEXT, v5 TEXT
+);
+CREATE UNIQUE INDEX idx_casbin_rule ON casbin_rule (ptype, v0, v1, v2, v3, v4, v5);
+CREATE TABLE authz_policy_versions (
+  version    BIGINT PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  actor      TEXT NOT NULL,     -- migration or staff runbook (V1 has no policy-CRUD surface)
+  summary    TEXT NOT NULL      -- the full delta is an audit_events row
+);
