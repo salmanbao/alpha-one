@@ -53,7 +53,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: never includes the key. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: key lifecycle. Consumers: AUD \u2014 never includes the key. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }

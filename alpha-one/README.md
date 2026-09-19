@@ -104,12 +104,30 @@ constantly).
 | [34-tooling-registry](docs/34-tooling-registry.md) | **Binding** build/buy decisions: the 28 BVR rules, the integration map, license policy, adapter registry |
 | [35-testing-strategy](docs/35-testing-strategy.md) | Test pyramid, the 16-invariant suite, contract gates, load/security/migration assurance per milestone |
 
+### 3x — PRD registers (generated from the workbook)
+| Doc | Contents |
+|---|---|
+| [36-prd-feature-proposals](docs/36-prd-feature-proposals.md) | The 14 `PROP-*` proposals (all unreviewed) + the release roadmap with its gates and counts |
+| [37-prd-open-questions](docs/37-prd-open-questions.md) | All 205 workbook questions by module — 8 answered (binding), 197 open, each with owner + deadline — plus the 16 design-review questions (**D1–D5**, **P1–P4**, **D10–D11** answered; **D6–D9**, **D12** open with recorded defaults) raised by the AUTH/TEN evaluations and the deprovisioning review |
+| [38-prd-out-of-scope](docs/38-prd-out-of-scope.md) | The 266 deliberate exclusions by module — the "do not build this" register |
+| [39-prd-change-log](docs/39-prd-change-log.md) | The workbook's 67-row change log, the 7 backlog-audit findings, and the 13 controlled vocabularies |
+| [40-uploads-coverage](docs/40-uploads-coverage.md) | Source traceability: every `uploads/` file, where it landed, and what stayed open |
+| [41-auth-ten-open-source-evaluation](docs/41-auth-ten-open-source-evaluation.md) | AUTH + TEN: every candidate open-source identity/authorization/multi-tenancy solution scored against the PRD rows, the mandated picks re-examined, and the nine decisions they produced (ZITADEL + Casbin + Postgres RLS) |
+| [42-auth-ten-gap-analysis](docs/42-auth-ten-gap-analysis.md) | Second-pass AUTH/TEN review: 20 findings (G1–G20) against the ZITADEL/Casbin/RLS decisions, all closed in-pass — the artifact behind the `docs/02` §3.x resolutions and the contract-pack fixes |
+| [43-idp-deprovisioning](docs/43-idp-deprovisioning.md) | Third-pass design: near-real-time IdP deprovisioning (`idp-sync` pull consumer + durable inbox over the event log), delivery-failure handling, the 15-min token-lifetime bound, reconciliation as the safety net, the self-service deletion posture, and the industry precedent (decisions D10–D12) |
+| [44-auth-multitenancy-review](docs/44-auth-multitenancy-review.md) | Fourth-pass AUTH/AuthZ/multi-tenancy review: 13 findings (G21–G33) across identity↔IdP cardinality (one person = one user *per org*), the ratified role→permission-key binding contract (`roles.yaml`), Casbin storage/reload/fail-closed boot, the RLS exemption model, refresh-token ownership and the request-path status gate — all closed in-pass (decisions D13–D18) |
+| [45-auth-contract-hardening](docs/45-auth-contract-hardening.md) | Fifth-pass AUTH/AuthZ/multi-tenancy review: 12 findings (G34–G45) across per-tenant token binding (`aud` + session), the immutable identity join key (`identity_emails`), the verified-email link gate, SSO group→role posture, V1 step-up, the IdP admin plane, credential-change session kill, route→permission contract coverage, support wording, staff runbooks, auth retention and the availability posture — 6 decided (D19–D24), 6 resolved by default |
+
+> Regenerate with `python3 scripts/parse_prd_workbook.py` →
+> `python3 scripts/build_prd_registers.py` (both have `--check` modes). The
+> machine-readable mirror of every PRD sheet is `scripts/prd-workbook.json`.
+
 ### Contracts
 | Path | Contents |
 |---|---|
 | [contracts/README.md](contracts/README.md) | How to read the contract pack, versioning rules |
 | [contracts/shared/](contracts/shared/) | Shared OpenAPI components: envelopes, errors, pagination, event envelope |
-| [contracts/*.openapi.yaml](contracts/) | One OpenAPI 3.1 spec per module (26 specs, 445 operations) |
+| [contracts/*.openapi.yaml](contracts/) | One OpenAPI 3.1 spec per module (26 specs, 434 operations) |
 | [contracts/api/](contracts/api/) | Human-readable endpoint contracts per module (36: 20 binding V1 + 16 provisional post-V1) |
 | [contracts/events/](contracts/events/) | V1 baseline catalog + payloads; post-V1 topic schemas (141 events) + example fixtures |
 | [contracts/data/](contracts/data/) | Field dictionary + per-module SQL schemas (26, split from docs/32) |
@@ -139,8 +157,9 @@ constantly).
 - **API versioning**: URL-based (`/v1/`), additive changes only inside a version.
 - **Docs cite requirements** as `MODULE-NN` (e.g. `BRG-07`) referring to the PRD master
   backlog; module docs list which requirements they cover.
-- **The PRD backlog is the scope authority**: 1012 rows (154 V1.0 + 21 V1.1 + 631 V2.0
-  + 206 V3.0), machine-readable in `scripts/prd-backlog.json`. Every module doc's §1
+- **The PRD backlog is the scope authority**: 1020 rows (154 V1.0 + 21 V1.1 + 630 V2.0
+  + 214 V3.0 + 1 unassigned — BRG-28, the workbook's open placeholder),
+  machine-readable in `scripts/prd-backlog.json`. Every module doc's §1
   coverage claim is cross-checked against it (`complete_contracts_pack.py --check-only`),
   and docs/99 Appendix A maps every row to exactly one phase.
 

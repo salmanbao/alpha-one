@@ -25,6 +25,7 @@ paths:
       operationId: post_v1_console_auth_login
       x-phase: V1
       x-v1-baseline: contracts/api/con.md
+      x-permission: none
       x-idempotency: optional
       x-auth: none (public console login) — CON-01
       x-v1-errors:
@@ -61,6 +62,7 @@ paths:
       operationId: post_v1_console_auth_logout
       x-phase: V1
       x-v1-baseline: contracts/api/con.md
+      x-permission: self
       x-idempotency: optional
       x-auth: Super Admin console session — CON-01
       security:

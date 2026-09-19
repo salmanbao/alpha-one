@@ -29,6 +29,7 @@ paths:
       operationId: get_v1_trader_accounts
       x-phase: V1
       x-v1-baseline: contracts/api/lcc.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader — TD-03
       security:
@@ -56,6 +57,7 @@ paths:
       operationId: get_v1_trader_accounts_account_id
       x-phase: V1
       x-v1-baseline: contracts/api/lcc.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader (owner) — TD-03
       x-v1-errors:

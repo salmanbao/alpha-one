@@ -70,6 +70,7 @@ paths:
       operationId: get_v1_trader_payouts
       x-phase: V1
       x-v1-baseline: contracts/api/pay.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader (self) — TD-10 (track payout status)
       security:
@@ -167,6 +168,7 @@ paths:
       x-v1-errors:
       - payout.not_pending_approval
       - payout.ineligible
+      - authz.step_up_required
       parameters:
       - name: payout_id
         in: path

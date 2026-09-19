@@ -17,7 +17,9 @@ baseline files are never rewritten, only appended to in clearly-marked sections)
 
 Provenance:
   - scripts/prd-backlog.json: parsed from uploads/Alpha One PRD.pdf
-    (master backlog row-starts `MOD-NN D[1-5]`; 1012 rows). Re-parse if the PRD changes.
+    (master backlog row-starts `MOD-NN D[1-5]` + the workbook registers; 1020 rows).
+    Re-parse if the PRD changes (scripts/parse_prd_workbook.py, which also emits
+    scripts/prd-workbook.json — the full sheet mirror).
   - Module docs: alpha-one/docs/*.md (authoritative prose; this script copies §7 verbatim).
 
 Usage:  python3 scripts/complete_contracts_pack.py [--check-only]
@@ -426,8 +428,19 @@ def coverage_check():
             if phantom: print(f"  Claimed but NOT in PRD ({len(phantom)}): {', '.join(phantom[:25])}" + ("…" if len(phantom) > 25 else ""))
             for s in seg_issues[:12]: print(f"  ATTRIBUTION: {s}")
             if len(seg_issues) > 12: print(f"  … +{len(seg_issues)-12} more attribution notes")
+    # 5b. every PRD module must be claimed somewhere: the legacy extractor once
+    # lost PLT-01..08 and nothing noticed, because an unclaimed module simply
+    # had no coverage line to compare.
+    all_claims = "\n".join(open(f).read() for f in sorted(DOCS.glob("*.md")))
+    prd_modules = sorted({k.split("-")[0] for k in PRD})
+    unclaimed = [m for m in prd_modules
+                 if not re.search(r"\b" + re.escape(m) + r"-\d|\b" + re.escape(m) + r"\b[^\n]{0,3}module", all_claims, re.I)]
+    if unclaimed:
+        issues += 1
+        print(f"\n-- module coverage --\n  PRD modules never claimed by a doc: {', '.join(unclaimed)}")
     if issues == 0:
-        print("All module docs' coverage claims match the PRD backlog.")
+        print("All module docs' coverage claims match the PRD backlog; "
+              f"all {len(prd_modules)} PRD modules are covered.")
     return issues
 
 def main():

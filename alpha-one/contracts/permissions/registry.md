@@ -9,6 +9,10 @@ Derived from the V1 Execution Sheet (V1.0 / V1.1) of `Alpha One PRD.xlsx`.
 Key format: `resource.action` (AUTH-13). Keys are module-declared and enforced at the API layer (GW-04).
 Every key names its owning module and description with the Req ID that justifies it.
 
+**V1 key count: 36** (31 original + 3 platform keys promoted 2026-09-19 + `payout.method.review`
+and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 keys. **Role bindings: `contracts/permissions/roles.yaml`**
+(decision D14, docs/44 §4): the single source for who holds what, seeded into Casbin.
+
 | Permission key | Module owner | Description |
 |---|---|---|
 | `user.suspend` | AUTH | Suspend a user, immediately invalidating sessions and tokens. (AUTH-20) |
@@ -20,7 +24,7 @@ Every key names its owning module and description with the Req ID that justifies
 | `tenant.terminate` | TEN | Terminate a tenant. (TEN-01) |
 | `tenant.entitlement.change` | TEN | Enable or disable modules per tenant; manual and immediate in V1. (TEN-08) |
 | `tenant.integration.write` | TEN | Store tenant integration config (broker credentials, payment keys, KYC settings, email sender). (TEN-11) |
-| `tenant.integration.read` | TEN | View masked integration config. (TEN-11; masking rules — TODO — needs owner decision, TEN-12) |
+| `tenant.integration.read` | TEN | View masked integration config — never decrypts (docs/03 §3.7, TEN-12). (TEN-11) |
 | `challenge.write` | EVL | Define challenges: type, sizes, pricing, phases, per-phase rules. (EVL-01) |
 | `ruleset.write` | EVL | Create and version rule sets; choose migration policy for in-flight accounts. (EVL-02, EVL-34) |
 | `account.read` | LCC | List and filter all trading accounts by status, phase, challenge, broker. (ADM-05) |
@@ -38,23 +42,44 @@ Every key names its owning module and description with the Req ID that justifies
 | `kyc.restrictions.write` | KYC | Maintain the restricted country list. (KYC-13) |
 | `document.read` | DOC | View and download own certificates. (DOC-06) — trader self-action |
 | `risk.case.create` | RSK | Open a risk case manually. (RSK-10) |
-| `audit.read` | AUD | View and search audit logs; every view/search itself recorded. (AUD-21) — key naming — TODO — needs owner decision (AUD-06 not a V1 row) |
+| `payout.method.review` | PAY | View **another trader's** payout methods for approval; access is audited (AUD-23). (PAY-08/PAY-09) — added 2026-09-19 (D14) |
+| `kyc.document.read` | KYC | View/download a trader's KYC documents; access is audited (AUD-23). (KYC-11) — added 2026-09-19 (D14) |
+| `audit.read` | AUD | View and search audit logs; every view/search itself recorded. (AUD-21) — key name ratified 2026-09-19 (D14) |
 | `audit.export` | AUD | Export audit logs; export itself recorded. (AUD-21) |
-| `analytics.read` | ANA | View the real-time KPI dashboard. (ANA-32) — key naming — TODO — needs owner decision (ANA-13 not a V1 row) |
-| `console.session.revoke` | CON | Revoke another super admin's console session. (CON-30) |
+| `analytics.read` | ANA | View the real-time KPI dashboard **of the caller's own firm**. (ANA-32) — key name ratified 2026-09-19 (D14) |
+| `console.session.revoke` | CON | Revoke another super admin's console session. (CON-30) — surface is V2 (AUTH-27); key reserved here |
+| `platform.identity.admin` | AUTH | Platform-staff identity administration: create/deactivate console users, force MFA reset (AUTH-28), break-glass. (AUTH-16, AUTH-28) — promoted to V1 2026-09-19 (D14) |
+| `platform.tenant.provision` | TEN | Run/resume the tenant provisioning saga and destroy a tenant org in the IdP. (docs/03 §3.5) — promoted to V1 2026-09-19 (D14) |
+| `platform.session.revoke` | AUTH | Revoke another identity's sessions (admin forced logout, AUTH-27). — promoted to V1 2026-09-19 (D14) |
 
 ## Permission model notes
-- Trader self-actions (registration, login, own account reads, checkout, own payout requests, own documents) are identity-scoped: the caller is the resource. Whether they additionally require permission keys — TODO — needs owner decision (AUTH-13 requires declared keys; the sheet's stories are self-referential).
+- **Role bindings are ratified (2026-09-19, decision D14, docs/44 §4).** The mapping
+  (role → key, with scope and ABAC constraints) is `contracts/permissions/roles.yaml`:
+  it seeds the Casbin `casbin_rule` table by migration, and docs/02 §3.1 renders it.
+  A key with no binding is denied for every role; `scripts/verify_roles.py` keeps the YAML,
+  the seed and the rendered tables in agreement.
+- Trader self-actions (own payout requests and methods, own documents) are **declared keys
+  with scope `own`**: AUTH-13's "declared keys" is satisfied and the own-data ABAC matcher
+  does the resource check. Actions with no resource beyond the session (login, logout,
+  password change, MFA enrolment) require no key. (Closed 2026-09-19, D14.)
 - `tenant.impersonate`: **no such key in V1.** AUTH-16 is a separation contract — the console identity cannot act inside a tenant at all because no impersonation path exists. Enablement (TEN-16, CON-07, AUD-08) is V2.0 and would introduce the key with its audit format. See `api/auth.md` ("Impersonation (AUTH-16)").
-- Role bindings (which role gets which key) are not defined by any V1 row — TODO — needs owner decision (AUTH-12 defines roles: Super Admin, Tenant Admin, custom staff, Trader, API Consumer).
 - Field-level permissions beyond route/action permissions are out of scope (Out Of Scope sheet).
+- **Every V1 endpoint declares its authorization in the contract** (`x-permission`): a registry
+  key, or an explicit keyless marker — `self` (the caller acting on their own data; the own-data
+  matcher still runs) or `none` (unauthenticated / signature-authenticated, e.g. provider
+  webhooks). `scripts/verify_roles.py` fails the build when a V1 operation declares nothing or
+  declares an unbound key, and lists bound keys no route uses (review G41).
 
 ## Open contract questions
-- TODO — needs owner decision: role-to-permission binding table per role (AUTH-12 × AUTH-13).
-- TODO — needs owner decision: permission keys for trader self-actions — required or identity-scoped only?
+- Resolved 2026-09-19 (D14): role-to-permission binding table → `contracts/permissions/roles.yaml`.
+- Resolved 2026-09-19 (D14): trader self-actions → declared keys with scope `own`.
 - Resolved 2026-09-17: no `tenant.impersonate` key in V1 (AUTH-16 separation-only; no impersonation endpoint exists). Enablement is V2.
-- TODO — needs owner decision: keys for staff access to sensitive data (AUD-23 audits access to KYC documents and payout methods; which permission gates that access?).
-- TODO — needs owner decision: key naming conventions above marked TODO (`audit.read`, `analytics.read`, `payout.read_queue`, masking reads).
+- Resolved 2026-09-19 (D14): keys for staff access to sensitive data (AUD-23) → `kyc.document.read`
+  and `payout.method.review`, both audit-on-access; holders restricted to
+  `firm:owner` / `firm:compliance` / `firm:finance` per `roles.yaml`.
+- Resolved 2026-09-19 (D14): key naming ratified — `audit.read` / `analytics.read` stay as-is;
+  `payout.read_queue` keeps its name (the queue is a distinct resource; renaming would churn
+  `docs/11`, `contracts/api/pay.md` and the generated OpenAPI for no semantic gain).
 
 
 ---
@@ -147,3 +172,30 @@ Every key names its owning module and description with the Req ID that justifies
 | `nps.manage` | CS | Send + analyze NPS surveys. (CS-01) |
 | `qbr.read` | CS | Generate + view QBR reports. (CS-07) |
 | `playbook.execute` | CS | Run onboarding/retention playbooks. (CS-04, CS-05) |
+| `platform.analytics.read` | CON | Platform-wide analytics in the console: tenant roll-ups, no per-trader PII. (CON-11; the ANA-28 cross-tenant pattern — V2/V3). Kept separate from `analytics.read` so no key spans both realms (AUTH-16) — 2026-09-19 (D14) |
+
+---
+
+## Identity-management keys (review G16, 2026-09-19 — provisional)
+
+The ADR-13 identity model gives the tenant a surface that the V1 registry did not
+name: member administration, SSO registration and SCIM tokens. These keys are
+**provisional** (V1.1/V2 surfaces per docs/02 §7), each frozen with its phase
+(docs/99 §12); their proposed role bindings are recorded in
+`contracts/permissions/roles.yaml` (`provisional_bindings`) so the freeze is mechanical.
+`platform.identity.admin`, `platform.tenant.provision` and `platform.session.revoke`
+were **promoted to the V1 table above (2026-09-19, D14)** — V1 console surfaces already
+use them.
+
+| Permission key | Module owner | Description |
+|---|---|---|
+| `tenant.identity.read` | AUTH | List tenant members and their roles/status (ADM team screen). |
+| `tenant.identity.invite` | AUTH | Invite a staff member into the tenant (AUTH-03, V2). |
+| `tenant.identity.role_change` | AUTH | Change a member's role; audited (`user.role_changed`). (AUTH-12/14) |
+| `tenant.identity.remove` | AUTH | Remove a member from the tenant; deactivates the IdP user when no memberships remain. |
+| `tenant.sso.read` | AUTH | View the org's SSO/IdP configuration. (AUTH-24) — group→role mapping is **out of V1** (decision D22): the surface shows the SSO config only |
+| `tenant.sso.configure` | AUTH | Register/update/remove the tenant's SAML/OIDC IdP (metadata, certificates, mapping). (AUTH-24, P3) |
+| `tenant.scim.manage` | AUTH | Issue/rotate the SCIM bearer token and inspect SCIM-provisioned users. (AUTH-25, P3) |
+| `platform.identity.admin` | AUTH | Platform-staff identity administration: create/deactivate console users, force MFA reset (AUTH-28), break-glass. (AUTH-16, AUTH-28) |
+| `platform.tenant.provision` | TEN | Run/resume the tenant provisioning saga and destroy a tenant org in the IdP. (docs/03 §3.5) |
+| `platform.session.revoke` | AUTH | Revoke another identity's sessions (admin forced logout, AUTH-27). |

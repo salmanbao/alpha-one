@@ -92,7 +92,7 @@ meaningful scope (see §6 for release semantics; full requirement-level mapping 
 ### D4 — Platform infrastructure
 | Module | Name | One line | Rel |
 |---|---|---|---|
-| **AUTH** | Identity, AuthN/AuthZ | Multi-tenant auth (Better Auth), roles & policies (Cerbos), API keys, 2FA, sessions | 1.0 |
+| **AUTH** | Identity, AuthN/AuthZ | Multi-tenant auth (**ZITADEL**, ADR-13), roles & policies (**Casbin**, ADR-14), API keys, 2FA, sessions | 1.0 |
 | **TEN** | Tenant Management | Tenant lifecycle, white-label (branding, domain), feature entitlements, settings | 1.0 |
 | **EVT** | Event Bus & Webhooks | Redis Streams backbone, outbox relay, consumer contracts, tenant outbound webhooks | 1.0 |
 | **GW** | API Gateway | In-app gateway layer behind Cloudflare: tenant resolution, auth, rate limits, quotas, idempotency, error contract | 1.0 |
@@ -139,7 +139,7 @@ These drive the capacity model in [29-scalability-operations](29-scalability.md)
 |---|---|---|
 | **V1.0** | Core | Everything a tenant needs to onboard traders end-to-end: purchase → trade → evaluate → fund → pay out. (154 requirements: 146 P0 + 8 P1, docs/99 App. A) |
 | **V1.1** | Plus | Cutover safety + polish (21 requirements, docs/99 App. A): the RSK→PAY hold interlock, suspension/resume, EVL override, identity record + age gate, failed-payment handling, manual KYC review, payout-method management, real-time KPIs, trader invoices. |
-| **V2.0** | Scale | Operations at scale (631 requirements, docs/99 App. A): full ADM + console, support + chat, CRM, analytics suite, tenant API keys & webhooks, mobile, journal, academy, community, all module depth, FunderBlu migration. |
+| **V2.0** | Scale | Operations at scale (630 requirements, docs/99 App. A): full ADM + console, support + chat, CRM, analytics suite, tenant API keys & webhooks, mobile, journal, academy, community, all module depth, FunderBlu migration. |
 | **V3.0** | Ecosystem | Platform business (206 requirements, docs/99 App. A): tenant sites (CMS), competitions, tenant self-serve billing, affiliates, developer SDK/portal, advanced trading (copy/backtest/paper), customer success + platform governance. |
 
 **Every requirement in the PRD carries one of these phase tags.** The development plan

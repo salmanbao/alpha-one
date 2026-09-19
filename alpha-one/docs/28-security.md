@@ -4,7 +4,7 @@
 > compliance); this doc is the **threat model + the platform-wide
 > control stack** those sections implement. Binding sources:
 > ADR-1..12 (docs/01 §3), the stack (docs/01 §2), the Tooling
-> Register (docs/00 §7 — SOPS+age, Better Auth, Cerbos, Hook0,
+> Register (docs/00 §7 — SOPS+age, ZITADEL, Casbin, Hook0,
 > Cloudflare+R2, Postmark…), the 8 non-negotiables (docs/00 §8),
 > and the V1 defaults (docs/00 §6 — audit append-only, manual
 > payout approval, login-first checkout, MT5 broker).
@@ -264,8 +264,8 @@ annual pentest scope, §11)
   resolution (the 04 §3.4, the custom
   domain > the subdomain > the X-Tenant-Id
   (the internal) > the API key), the auth
-  (the session / the key, the 02), the ABAC
-  (the Cerbos, the 02 §3.4), the rate limit
+  (the ZITADEL token / the key, the 02), the ABAC
+  (the Casbin, the 02 §3.1), the rate limit
   (the 04 §3.4), the idempotency (the 04
   §3.3), the payload cap (the 10MB, the 00
   §6, the `gw.payload_too_large`), the error
@@ -300,6 +300,21 @@ annual pentest scope, §11)
   the 16 §12).
 
 ### 3.3 Data (the 05, the 01 §3, the ADR-1)
+
+**RLS principals (review G24, docs/44 §5 — decision D16, binding).** The tenant-owned
+tables (`tenant_memberships`, `auth_sessions`, `api_keys`, and every per-module tenant
+table: accounts, trades, payouts, KYC documents/decisions, tenant audit rows) carry
+`ENABLE`/`FORCE ROW LEVEL SECURITY` fail-closed on `current_setting('app.tenant_id', true)`.
+Four DB roles are the whole exemption model: `app_rw` (request paths, RLS enforced,
+context set with `SET LOCAL`), `app_rw` + four `SECURITY DEFINER` accessors in the `auth`
+schema (the only way to resolve a session by id, a key by hash, a link by `idp_user_id`,
+or a console session without a tenant context), `app_platform` (`BYPASSRLS`, enumerated
+cross-tenant services only: relay, ledger/audit appliers, ANA updaters, `idp-sync`, CON
+read models — their queries still carry explicit `tenant_id` predicates), and `migrator`
+(`BYPASSRLS`, discrete DDL job, never in app config). `identities`, `identity_idp_links`,
+`auth_backup_codes`, `tenants`, `casbin_rule` and platform-scoped audit rows are
+platform-owned and guard-only. A worker that reads cross-tenant without `app_platform`
+sees zero rows — that is the point.
 
 - **The tenant isolation (the structural):**
   every table carries the `tenant_id` (the
@@ -396,10 +411,10 @@ the 32 doc's `audit_log` DDL (the
 
 ### 3.5 The crypto (the 02 §3.7, the 01 §2)
 
-- **The passwords:** the Argon2id (the 64MB/
-  3/4, the 02 §3.5, the register-
-  consistent (the Better Auth's
-  default, the 01 §2)).
+- **The passwords:** Argon2id (ZITADEL's
+  default parameters, consistent with the
+  64MB/3/4 target, the 02 §3.2, ADR-13);
+  the breach check (HIBP) is ours.
 - **The envelope:** the AES-256-GCM (the
   per-tenant DEK, the 02 §3.7), the
   master = the age (the 06 §3.1's SOPS,
@@ -440,6 +455,8 @@ the 32 doc's `audit_log` DDL (the
 | **S5 — the public** (the competition, the public profile, the changelog) | The leaderboard (the 24 Part B), the public performance (the 27 Part B's TRD-02), the changelog (the 27 Part A) | The PG (the 24 §9, the 19 §3.1) | The public (the no-auth, the 19 §10's masked-PII: the handle, the masked name, the no-S2/S1 (the structural)), the as_of-labeled (the 24 Part B, the ANA-14) | The competition-life + the 12-mo (the 24 Part B's retention, the leaderboard's honesty) |
 | **S6 — the synthetic** (the staging, the sandbox, the migration dry-run) | The staging data (the 06 §2), the sandbox tenant (the 27 Part A), the migration's anonymized copy (the 25 §3.7) | The staging PG / the R2 (the staging prefix) | The staff (the 06 §2's staging access), the no-prod-PII (the 06 §2's binding: the synthetic-only, the 25 §3.7's anonymization) | The 30-day (the sandbox's expiry, the 27 §5), the staging: the 90-day (the 06 §2's hygiene) |
 
+| **S2b — the auth artifacts** (the sessions, the IPs, the denies) | The `auth_sessions` (the 02 §9: the IP, the user agent, the geo, the `mfa_verified_at`), the Redis deny-set (the 02 §3.2), the revoked/expired rows | The Postgres (the 02 §9) + the Redis (the TTL) | The own-data (the 02 §3.4's ABAC), the `platform:ops` (the revoke), the never-exported in bulk (the 17 §3.4) | The active: the session-life; the IP/UA/geo columns: **scrubbed at 90 days** (the row keeps the identity/tenant/reason as the audit-adjacent record); the deny-set: the 24-h TTL (the 02 §3.2); the backup codes: purged on use + on offboarding; the `identity_emails` retired rows: the identity-life (needed for the re-link, the 02 §3.1) |
+
 ## 5. Secrets & keys (the 06 §3.1, the 01 §2, the ADR posture)
 
 - **The store:** the SOPS+age (the 01 §2,
@@ -474,11 +491,24 @@ the 32 doc's `audit_log` DDL (the
   long-lived (the signed URL, the
   TTL (the 24 Part A's 15-min, the
   13's 5-min)), the session's secret
-  (the 02 §3.5, the Better Auth's
-  secret, the SOPS), the webhook's
+  (the 02 §3.2, the ZITADEL application
+  and client secrets, the SOPS),
+  **the IdP class** (the 02 §3.3's
+  register: the `ZITADEL_MASTERKEY`
+  (the key-ceremony, the never-rotated),
+  the provisioning machine-user key
+  (the 90-d), the per-tenant SCIM
+  bearer tokens (the 90-d, the stored
+  hashed), the Actions-v2 target
+  signing key (the 180-d), the
+  IdP's own PG DSN (the separate
+  database, the §3.3's store —
+  dump and master key stored
+  **separately** so a stolen dump
+  alone decrypts nothing)), the webhook's
   secret (the 27 §3.2's two-secrets,
-  the per-key), the Cerbos's policy
-  (the 02 §3.4, the no-secret (the
+  the per-key), the Casbin policy
+  (the 02 §3.1, the no-secret (the
   policy is the config, the
   version-controlled, the 06's
   config-repo), the Flipt's (the 01
@@ -537,25 +567,33 @@ the 32 doc's `audit_log` DDL (the
 
 ## 6. AuthN & AuthZ (recap — full design: 02)
 
-- **The foundation:** the Better Auth
-  (the 01 §2, the register; the Go
-  client / the Node BFF, the 02 §3.1's
-  Phase-0 spike), the session (the PG +
-  the Redis's deny-set, the 02 §3.5),
-  the MFA (the TOTP, the 02 §3.5, the
-  the 2FA-on-money (the 02 §3.4, the
-  the < 5-min TTL (the 02 §3.4))),
-  the password (the Argon2id, the §3.5),
+- **The foundation:** ZITADEL self-hosted
+  (ADR-13, the 01 §2, the register): hosted
+  login per tenant organization, OIDC tokens
+  verified by the api over JWKS (audience per
+  realm), sessions terminated through ZITADEL
+  APIs, MFA (TOTP) with our backup codes and
+  the staff `amr` rule (the 02 §3.2),
+  the 2FA-on-money (the 02 §3.1, the
+  the < 5-min TTL (the 02 §3.1))),
+  the password policy per org (Argon2id),
   the refresh (the single-use, the
-  reuse-detection, the 02 §3.5),
-  the anomaly (the 02 §3.6, the score,
+  reuse-detection, the 02 §3.2),
+  the anomaly (the 02 §10.5, the score,
   the block/MFA), the API key (the
-  02 §3.5, the sha256, the scope,
-  the 600/min).
-- **The authorization:** the Cerbos
-  PDP (the 01 §2, the register;
-  the fallback: the in-house behind
-  the `authorizer.Check` (the 02
+  02 §3.4, the sha256, the scope,
+  the 600/min), the HIBP check (ours
+  — **with the V1 deviation**:
+  enforced on our own change/registration
+  paths only, because ZITADEL owns
+  hosted-login password set/reset and
+  exposes no pre-change hook, the
+  02 §3.2, the docs/42 §3.3's
+  accepted gap with the owner).
+- **The authorization:** Casbin
+  embedded (ADR-14, the 01 §2, the register;
+  RBAC with domains, `dom` = tenant id)
+  behind the `authorizer.Check` (the 02
   §3.1's spike outcome)), the ABAC
   (the 02 §3.4: the own-data,
   the money-MFA, the risk.override's
@@ -990,7 +1028,7 @@ dependency)
 | Phase | The security work | Owner | Depends |
 |---|---|---|---|
 | **P0 (the infra, the 06):** the SOPS+age (the secrets, the §5), the Cloudflare (the origin-auth, the §3.1), the UFW (the §3.1), the compose (the no-published-data-port, the §3.1), the egress-allowlist (the §3.1, the T5), the CI (the `gitleaks`, the dep-scan, the SAST, the §11), the backup (the WAL + the daily, the 06 §3.2), the restore-drill (the monthly, the 06 §3.2, the §5's triple) | DevOps | the 01 §1's compose, the 01 §2's stack |
-| **P1 (the AUTH, the 02):** the Better Auth (the session, the §6), the Argon2id (the §3.5), the MFA (the TOTP, the §6), the refresh-reuse (the §6), the anomaly (the §6, the 02 §3.6), the envelope (the per-tenant DEK, the §3.3, the 02 §3.7), the API-key (the sha256, the §6, the 02 §3.5), the Cerbos (the ABAC, the §6, the 02 §3.4) | BE-1 | P0 |
+| **P1 (the AUTH, the 02):** ZITADEL deploy + org-per-tenant provisioning (ADR-13), the hosted-login hand-off + JWKS verification (the §6), the MFA (the TOTP + our backup codes, the §6), the refresh-reuse (the §6), the anomaly (the §6, the 02 §10.5), the envelope (the per-tenant DEK, the §3.3, the 02 §10.2), the API-key (the sha256, the §6, the 02 §3.4), Casbin embedded (the ABAC, the §6, the 02 §3.1) | BE-1 | P0 |
 | **P2 (the GW + the EVT, the 04):** the chain (the tenant-resolution, the §3.2, the 04 §3), the rate-limit (the §3.2, the 04 §3.4), the idempotency (the §3.2, the 04 §3.3), the error-contract (the §3.2, the 04 §6, the 30 doc), the webhook (the HMAC, the §8, the 04 §5.6), the DLQ (the §8, the 04 §5.6), the isolation-test (the §3.3, the 04 §11) | BE-1 | P1 |
 | **P3 (the AUD + the LED, the 05):** the audit (the fail-closed, the §3.4, the 05 §3.3), the append-only (the trigger, the 05 §9), the critical-tier (the §3.4, the 05 §3.3), the 7-yr (the §3.4, the 05 §3.5), the snapshot + the hash (the §3.4, the 05 §3.5), the reconciliation (the §7, the 11 §3.5) | BE-1 | P2 |
 | **P4 (the money, the 11/12/13/17):** the payout (the 16-check, the §7, the 11 §3.1), the HWM (the §7, the 11 §3.2), the 2FA-on-approve (the §7, the 02 §3.4), the method-cooldown (the §7, the 11 §3.3), the checkout (the frozen-price, the §7, the 12 §3.2), the capture-match (the §7, the 12 §3.2), the refund-machine (the §7, the 12 §3.3), the KYC (the envelope, the §3.3, the 13), the reverify (the §3.3, the 13 §3.3), the ADM (the two-op, the §3.4, the 17 §3.3), the export-limit (the §3.4, the 17 §3.4) | BE-1 + BE-2 | P3 |

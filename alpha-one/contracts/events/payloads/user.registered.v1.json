@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.registered.v1.json",
+  "title": "Alpha One \u2014 event user.registered v1",
+  "description": "V1 catalog event `user.registered` (v1). Envelope per EVT-03. Consumers per contracts/events/catalog.md: NOT-01 (welcome), AUD, ANA. Payload INFERRED; field confirmation is an open owner decision.",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "user.registered"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "identity_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "email_hash": {
+              "type": "string",
+              "description": "sha256 of the normalised email (never the address itself)"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "registration_form",
+                "invitation",
+                "sso_jit",
+                "scim",
+                "migration"
+              ]
+            },
+            "registered_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "identity_id",
+            "source",
+            "registered_at"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -255,8 +255,8 @@ Namespace `LCC`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `GET /v1/trader/accounts` | Trader — TD-03 | self-read (accounts of caller) # AUTH-13; key — TODO — needs owner decision | n/a | standard |
-| `GET /v1/trader/accounts/{account_id}` | Trader (owner) — TD-03 | self-read | n/a | `account.not_found` |
+| `GET /v1/trader/accounts` | Trader — TD-03 | `self` — own accounts (AUTH-13 model; no registry key) | n/a | standard |
+| `GET /v1/trader/accounts/{account_id}` | Trader (owner) — TD-03 | `self` — own account | n/a | `account.not_found` |
 | `GET /v1/admin/accounts` | Staff — ADM-05 | `account.read` # AUTH-13, key derived from ADM-05 | n/a | standard |
 | `POST /v1/admin/accounts/{account_id}/suspend` | Tenant Admin (V1.1) — LCC-11 | `account.suspend` # LCC-11 | required | `account.not_found`, `account.not_active` |
 | `POST /v1/admin/accounts/{account_id}/resume` | Tenant Admin (V1.1) — LCC-11 | `account.suspend` (resume is the paired action) # LCC-11 | required | `account.not_suspended` |

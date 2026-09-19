@@ -4,7 +4,7 @@
 > doc's §4). This is the catalog the CI gate checks against (docs/04 §5.7,
 > docs/28 §11): an event emitted but not cataloged, or a consumer that never
 > handled it, fails the build. The V1 event schemas live in
-> `contracts/events/payloads/` (envelope + 18 V1 events) and the extended
+> `contracts/events/payloads/` (envelope + 31 V1 event schemas) and the extended
 > set in `contracts/events/extended/`; this table is the
 > producer/consumer map. `when`/`consumers` are condensed from the owning
 > doc's row; the owning doc is the authority. Tier: **V1** = the V1
@@ -25,39 +25,52 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (150 rows — 141 extended-topic events across 32 topics + 9 V1-only PascalCase events; the 9 dotted V1 names overlap the extended set)
+## 2. The catalog (158 events — 31 V1 baseline, 127 extended — across 34 topics)
 
 ### `user.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `user.registered` | 02 (AUTH) | AUTH | identity + tenant + source | ext |
-| `user.login_success` | 02 (AUTH) | AUTH | failure carries attempt count, ip, ua | ext |
-| `user.suspended` | 02 (AUTH) | AUTH (on AUTH-20/43) | suspension reason code | ext |
-| `user.role_changed` | 02 (AUTH) | AUTH | old+new role | ext |
-| `user.session_revoked` | 02 (AUTH) | AUTH | which session, by whom | ext |
-| `user.password_changed` | 02 (AUTH) | AUTH | — | ext |
-
-### `api_key.*`
-
-| Event | Producer | When / V1 producer | Consumers | Tier |
-|---|---|---|---|---|
-| `api_key.created` | 02 (AUTH) | AUTH | never includes the key | ext |
+| `user.registered` | 02 (AUTH) | AUTH-01 | NOT-01 (welcome), AUD, ANA | V1 |
+| `user.login_success` | 02 (AUTH) | AUTH-04 (session materialisation) | AUD, ANA, RSK (anomaly baseline) | V1 |
+| `user.login_failure` | 02 (AUTH) | ZITADEL via Actions v2 | AUD, RSK (anomaly), NOT (security notice) | V1 |
+| `user.suspended` | 02 (AUTH) | AUTH-20 / AUTH-43 / idp-sync (IdP-driven, docs/43) | NOT, GW (immediate session kill), AUD | V1 |
+| `user.activated` | 02 (AUTH) | AUTH-43 (unsuspend) / idp-sync | NOT, AUD | V1 |
+| `user.session_revoked` | 02 (AUTH) | AUTH (logout AUTH-39, suspension AUTH-20) | AUD — admin-initiated revocation is AUTH-27 (V2) | V1 |
+| `user.password_changed` | 02 (AUTH) | AUTH-05 / AUTH-40 | session invalidator (all other sessions), AUD | V1 |
+| `user.role_changed` | 02 (AUTH) | membership role edited | cache-invalidator (authz), AUD | ext |
+| `user.status_changed` | 02 (AUTH) | any identity status transition (from, to, reason) | GW, AUD, ANA | ext |
+| `user.email_changed` | 02 (AUTH) | email change verified (AUTH-29, V2) | AUD, NOT (both addresses) | ext |
 
 ### `tenant.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `tenant.member_invited` | 02 (AUTH) | AUTH (V2) | — | ext |
-| `tenant.created` | 03 (TEN) | TEN | AUD, CON | ext |
-| `tenant.activated` | 03 (TEN) | TEN | GW (allow traffic), NOT (owner), AUD, ANA | ext |
-| `tenant.suspended` | 03 (TEN) | TEN | AUTH (kill sessions), GW (deny), NOT (owner), AUD — **all stop within 1 s** | ext |
-| `tenant.reactivated` | 03 (TEN) | TEN | GW, NOT, AUD | ext |
-| `tenant.plan_changed` | 03 (TEN) | TEN | Flipt sync, limits revalidate, AUD | ext |
-| `tenant.settings_changed` | 03 (TEN) | TEN | cache invalidator (t:{id}:*), AUD (before/after diff) | ext |
-| `tenant.branding_changed` | 03 (TEN) | TEN | web (cache bust), DOC/NOT (next render), AUD | ext |
-| `tenant.deletion_scheduled` | 03 (TEN) | TEN | CON, AUD, MIG (blocks cutover) | ext |
-| `tenant.limit_exceeded` | 03 (TEN) | enforcers | NOT (owner), ANA | ext |
+| `tenant.created` | 03 (TEN) | TEN-01 | AUD, CON, NOT (owner) | V1 |
+| `tenant.member_invited` | 03 (TEN) | AUTH-03 (V2 row, V1 SSO-tenant exception) | NOT, CON | V1 |
+| `tenant.provisioning_step_completed` | 03 (TEN) | TEN (orchestrator, docs/03 §3.5) | CON (live view), NOT (staff) | V1 |
+| `tenant.activated` | 03 (TEN) | TEN (checklist complete) | GW (allow traffic), NOT (owner), AUD, ANA | V1 |
+| `tenant.suspended` | 03 (TEN) | TEN-15 | AUTH (kill sessions), GW (deny), NOT (owner), AUD — **all stop within 1 s** | V1 |
+| `tenant.reactivated` | 03 (TEN) | TEN-15 | GW, NOT, AUD, AUTH (identities stay active; sessions require a new login) | V1 |
+| `tenant.plan_changed` | 03 (TEN) | plan/entitlement edit | Flipt sync, limits revalidate, AUD | ext |
+| `tenant.settings_changed` | 03 (TEN) | settings JSONB edited | cache invalidator (t:{id}:*), AUD (before/after diff) | ext |
+| `tenant.branding_changed` | 03 (TEN) | logo/colours/texts edited | web (cache bust), DOC/NOT (next render), AUD | ext |
+| `tenant.deletion_scheduled` | 03 (TEN) | termination saga (§5.2) | CON, AUD, MIG (blocks cutover) | ext |
+| `tenant.deactivated` | 03 (TEN) | recovery window (TEN-45, V2) | GW, AUTH, NOT, AUD | ext |
+| `tenant.limit_exceeded` | 03 (TEN) | enforcer warning at 80%, hard stop at 100% | NOT (owner), ANA | ext |
+| `tenant.entitlement_changed` | 03 (TEN) | module on/off | GW (route gating), Flipt, AUD (TEN-08) | ext |
+
+### `api_key.*`
+
+| Event | Producer | When / V1 producer | Consumers | Tier |
+|---|---|---|---|---|
+| `api_key.created` | 02 (AUTH) | key lifecycle | AUD — never includes the key | ext |
+
+### `identity.*`
+
+| Event | Producer | When / V1 producer | Consumers | Tier |
+|---|---|---|---|---|
+| `identity.provisioned` | 02 (AUTH) | IdP-side user created by the tenant saga or SCIM | TEN (access review), AUD | ext |
 
 ### `gateway.*`
 

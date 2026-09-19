@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.activated.v1.json",
+  "title": "Alpha One \u2014 event user.activated v1",
+  "description": "V1 catalog event `user.activated` (v1). Envelope per EVT-03. Consumers: NOT, AUD (AUTH-43 unsuspend).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "user.activated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "identity_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "membership_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "actor": {
+              "type": "string"
+            },
+            "activated_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "identity_id",
+            "activated_at"
+          ]
+        }
+      }
+    }
+  ]
+}

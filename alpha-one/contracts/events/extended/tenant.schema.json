@@ -39,26 +39,6 @@
         }
       }
     },
-    "tenant_member_invited": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/EventEnvelope"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "tenant.member_invited"
-            },
-            "payload": {
-              "type": "object",
-              "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH (V2). Consumers: \u2014. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
-            }
-          }
-        }
-      ]
-    },
     "tenant_created": {
       "allOf": [
         {
@@ -73,7 +53,47 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: AUD, CON. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: TEN-01. Consumers: AUD, CON, NOT (owner). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "tenant_member_invited": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tenant.member_invited"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 03 (TEN). When: AUTH-03 (V2 row, V1 SSO-tenant exception). Consumers: NOT, CON. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "tenant_provisioning_step_completed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tenant.provisioning_step_completed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 03 (TEN). When: TEN (orchestrator, docs/03 \u00a73.5). Consumers: CON (live view), NOT (staff). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -93,7 +113,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: GW (allow traffic), NOT (owner), AUD, ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: TEN (checklist complete). Consumers: GW (allow traffic), NOT (owner), AUD, ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -113,7 +133,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: AUTH (kill sessions), GW (deny), NOT (owner), AUD \u2014 **all stop within 1 s**. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: TEN-15. Consumers: AUTH (kill sessions), GW (deny), NOT (owner), AUD \u2014 **all stop within 1 s**. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -133,7 +153,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: GW, NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: TEN-15. Consumers: GW, NOT, AUD, AUTH (identities stay active; sessions require a new login). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -153,7 +173,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: Flipt sync, limits revalidate, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: plan/entitlement edit. Consumers: Flipt sync, limits revalidate, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -173,7 +193,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: cache invalidator (t:{id}:*), AUD (before/after diff). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: settings JSONB edited. Consumers: cache invalidator (t:{id}:*), AUD (before/after diff). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -193,7 +213,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: web (cache bust), DOC/NOT (next render), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: logo/colours/texts edited. Consumers: web (cache bust), DOC/NOT (next render), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -213,7 +233,27 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: TEN. Consumers: CON, AUD, MIG (blocks cutover). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: termination saga (\u00a75.2). Consumers: CON, AUD, MIG (blocks cutover). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "tenant_deactivated": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tenant.deactivated"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 03 (TEN). When: recovery window (TEN-45, V2). Consumers: GW, AUTH, NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -233,7 +273,27 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 03 (TEN). When: enforcers. Consumers: NOT (owner), ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 03 (TEN). When: enforcer warning at 80%, hard stop at 100%. Consumers: NOT (owner), ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "tenant_entitlement_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "tenant.entitlement_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 03 (TEN). When: module on/off. Consumers: GW (route gating), Flipt, AUD (TEN-08). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -242,10 +302,13 @@
   },
   "anyOf": [
     {
+      "$ref": "#/$defs/tenant_created"
+    },
+    {
       "$ref": "#/$defs/tenant_member_invited"
     },
     {
-      "$ref": "#/$defs/tenant_created"
+      "$ref": "#/$defs/tenant_provisioning_step_completed"
     },
     {
       "$ref": "#/$defs/tenant_activated"
@@ -269,7 +332,13 @@
       "$ref": "#/$defs/tenant_deletion_scheduled"
     },
     {
+      "$ref": "#/$defs/tenant_deactivated"
+    },
+    {
       "$ref": "#/$defs/tenant_limit_exceeded"
+    },
+    {
+      "$ref": "#/$defs/tenant_entitlement_changed"
     }
   ]
 }

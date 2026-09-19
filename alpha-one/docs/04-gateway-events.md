@@ -31,7 +31,7 @@ EVT `01,02,03,05,08,10,20` (V1.0: outbox, relay, envelope, consumers, event log,
 │ client   │──► 1 security headers & hardening            │   │ domain tx:  write + outbox  │
 └──────────┘  │ 2 tenant resolution (GW-02)               │   └──────────────┬──────────────┘
               │ 3 authn (session|service|api-key)         │                  ▼
-              │ 4 authz (Cerbos; AUTH-13)                 │   ┌─────────────────────────────┐
+              │ 4 authz (Casbin; AUTH-13)                 │   ┌─────────────────────────────┐
               │ 5 rate limit: IP (edge) + user + tenant   │   │ relay (1 instance, PG lock) │
               │ 6 quota + entitlement gate (TEN)          │   │  poll outbox (keyset, 500)  │
               │ 7 idempotency (Redis, 24h, scoped)        │   │  XADD topic.<domain>        │
@@ -65,9 +65,10 @@ each doc's §7.1.
 | # | Step | Behavior | Req |
 |---|---|---|---|
 | 1 | Edge handoff | Trust Cloudflare: `CF-Connecting-IP` (only if CF proxy chain verified, GW-33), WAF/DDoS done at edge | GW-20, GW-33 |
-| 2 | Tenant resolution | **V1: domain/subdomain only** (edge resolves, TEN-02; rejected before auth runs; unknown → `404 tenant.unknown_host`). Extended (V2+): header for internal calls, API-key binding (AUTH-21 is V2) — §02 §3.3 order | GW-02, TEN-02 |
-| 3 | Authn | **V1:** JWT (trader/staff) or console realm session verified on every protected route; invalid → `401 auth.invalid_credentials`. API keys are V2 (AUTH-21). Extended: service HMAC for internal | GW-03, GW-16 |
-| 4 | Authz | **V1:** module-declared `resource.action` permission keys (AUTH-13) enforced per route; registry `contracts/permissions/registry.md`; denied → `403 permission.denied`. Engine: policy evaluation behind `authorizer.Check` (Cerbos is the candidate engine — an implementation detail; the contract is the key model). Console realm separate (CON-01) | GW-04, AUTH-13 |
+| 2 | Tenant resolution | **V1: domain/subdomain only** on the public edge (TEN-02; rejected before auth runs; unknown → `404 tenant.unknown_host`). **Internal routes** (`internal` group) are never edge-routed: they are reachable only on the compose network and resolve the tenant from `X-Tenant-Id` (§02 §3.3 order) | GW-02, TEN-02 |
+| 3 | Authn | **V1:** JWT (trader/staff) or console realm session verified on every protected route; invalid → `401 auth.invalid_credentials`. **Internal routes:** static per-service bearer token from SOPS (one per service, 90 d rotation) — never user tokens; every call logged with the service identity + `correlation_id` (docs/44 §7; HMAC/mTLS is the V2 upgrade). **API keys:** primitives exist in V1 but have **no tenant-facing surface** until AUTH-21 (decision D18) | GW-03, GW-16 |
+| 3.5 | **Status gate** (docs/44 §7) | a) tenant state → `tenant.suspended` / `tenant.not_ready`; b) identity state → `auth.account_suspended`; c) membership state for `(identity, tenant)` → `auth.membership_suspended` (console realm skips c). Resolved in this order so the error never reveals which layer failed beyond what the host already discloses; cached in Redis ≤ 5 s keyed by `(identity, tenant)`, invalidated by `user.suspended` / `user.activated` / membership events | GW-04, AUTH-20/43, TEN-15 |
+| 4 | Authz | **V1:** module-declared `resource.action` permission keys (AUTH-13) enforced per route; registry `contracts/permissions/registry.md` + bindings `contracts/permissions/roles.yaml` (role → key, seeded into Casbin — D14/D15); denied → `403 permission.denied`. Engine: policy evaluation behind `authorizer.Check` (Casbin embedded — ADR-14; an implementation detail, the contract is the key model). Console realm separate (CON-01) | GW-04, AUTH-13 |
 | 5 | Rate limit | edge (per-IP) → per-user (Redis 100 rpm default) → per-route (auth 10/5 min, payout 5/h) | GW-05 |
 | 6 | Tenant quota + entitlement | plan limits (RPM, concurrency) + module entitlement gate; suspended tenant → 403 | GW-06, GW-22, GW-23 |
 | 7 | Idempotency | `X-Idempotency-Key` (UUIDv4) → `SETNX t:{ten}:idem:{method}:{path}:{key}` TTL 24 h (GW-31); stored result replayed verbatim (same status); **conflict** (same key, different body hash) → `409 request.idempotency_conflict` (GW-12 V1 code) | GW-12, GW-31, GW-37 |
@@ -406,7 +407,7 @@ relay lock is PG-side.
 Go (`api` middleware package, `relay` service, `workers` consumers), Redis 7
 (streams + idempotency + rate limits), Postgres (outbox/events), Hook0,
 Flipt (maintenance flag), Cloudflare (edge), Prometheus (relay lag, DLQ depth,
-rate-limit hits), Sentry (consumer crashes), Uptime Kuma (probe `/readyz`).
+IdP-sync lag/stall, rate-limit hits), Sentry (consumer crashes), Uptime Kuma (probe `/readyz`).
 
 ## 14. Integration — internal modules (glue)
 

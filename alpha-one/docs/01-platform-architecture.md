@@ -54,6 +54,7 @@ on-call surface.
 | Service | Language | Responsibility | Scaling |
 |---|---|---|---|
 | `web` | Next.js 15 / TS | TD, ADM, CON, CMS frontends (routed by host/subdomain). SSR/RSC for pages; no business logic | stateless, 1 instance V1 |
+| `zitadel` | Go (upstream) | Identity provider (ADR-13): hosted login, credentials, MFA factors, sessions, orgs/projects, SSO/SAML, SCIM, login policy. Own database in the same Postgres instance | single instance (stateless except PG); upstream image, unmodified |
 | `api` | Go 1.27 | All public + internal REST APIs. Hosts the **in-app gateway layer** (GW). Sync request handling | stateless, 1–2 instances |
 | `bridge` | Go 1.27 | BRG: MetaApi connections, account provisioning, polling sync, enforcement actions | stateless over PG, 1 instance (MetaApi rate-limited anyway) |
 | `engine` | Rust (axum) | EVL: rule evaluation, verdicts, PnL math, day-boundary processing | stateless, 1–2 instances; invoked by `api`/`bridge`/`workers` |
@@ -87,8 +88,8 @@ with enforced boundaries (linter: `goimports` + custom `boundary` check in CI).
 | Event bus | **Redis Streams + consumer groups**, fed by **Postgres outbox** | At-least-once delivery; consumers must be idempotent. Rejected: direct PG NOTIFY (no replay), Kafka. |
 | Outbound webhooks | **Hook0** (self-hosted) | Retry, HMAC signing, replay UI, per-tenant endpoint mgmt. AGPL reviewed (self-hosted, no SaaS — acceptable). Rejected: homegrown delivery (rebuilds Hook0), Zapier (V3 at best). |
 | API gateway | **In-app middleware** (Go `api`) behind **Cloudflare** | Tenant resolution → authn → authz → rate limit → quota → idempotency → logging. Rejected: Kong, Traefik (forbidden in V1 — extra service, and Cloudflare already does edge security). |
-| AuthN | **Better Auth** (Go-compatible via its API, or the TS `web` BFF path) | Multi-tenant org model, sessions, 2FA (TOTP), DB-backed. Confirm multi-tenant org plugin in Phase 0 (BE-1 owns). Rejected: Auth0, Cognito (tenant-RBAC mismatch; cost; forbidden in PRD). |
-| AuthZ | **Cerbos** (PDP) | Policy-as-code RBAC; `api` calls Cerbos per request decision (cached per (role, resource) pair). If integration proves painful in Phase 1, AUTH-13 becomes an in-house policy engine with the same interface. |
+| AuthN | **ZITADEL** (self-hosted, AGPL-3.0, ADR-13) | One Organization per tenant, per-org login policy/branding/IdP, OIDC + SAML + SCIM (users), TOTP/passkeys, event-sourced audit stream, Actions v2 for token claims and audit webhooks. Hosted Login v2 issues the tokens the Go `api` verifies over JWKS; revocation is enforced by our `auth_sessions` projection + Redis deny-set. Rejected: Auth0, Cognito (forbidden), Keycloak/authentik (ops weight, weaker tenancy fit), Ory (no OSS multi-tenancy), Better Auth (TS-only, no Go SDK — superseded BVR-14). |
+| AuthZ | **Casbin** (embedded Go library, ADR-14) | RBAC with domains (`dom` = `tenant_id`) behind `authorizer.Check(ctx, subject, action, resource)`; policies stored in Postgres, model file in the repo, decisions in-process (< 1 ms). Cerbos superseded as runtime; revisit if policy volume grows past the documented trigger (docs/02 §12). |
 | Feature flags | **Flipt** (self-hosted) | TEN-10 (per-tenant entitlement gating), CON-31. |
 | Secrets | **SOPS + age** in repo | Repo is the source of truth; Compose loads at deploy. Rejected: HashiCorp Vault (forbidden), Infisical (V2 upgrade path). |
 | Hosting | **Hetzner** dedicated server (AX line), **Docker Compose** | Rejected: Kubernetes (forbidden V1), AWS (cost + lock-in), multiple regions (V3 at best). |
@@ -133,6 +134,30 @@ and verdict logic only*.
 boundaries and rule evaluation. Platform clock is used only for non-trading
 lifecycle. Day boundaries are computed **per broker server timezone** (BRG-12).
 
+**ADR-13**: **ZITADEL is the identity provider** (decision D1/P1, 2026-09-19).
+Self-hosted single instance, one Organization per tenant, hosted login + OIDC
+(tenant realm and console realm = two applications/audiences), SAML + SCIM per
+organisation. Authentication facts (credentials, MFA factors, sessions, login
+policy) move to ZITADEL; authorization facts (membership, roles, custom roles,
+permission registry) stay in our Postgres (decision P4). Consequences: one new
+Compose service and one new database inside the existing Postgres; AGPL-3.0
+discipline (unmodified upstream, customisation only through Actions v2, legal
+review at Phase 0 exit); Better Auth/BVR-14 superseded; AUTH-24/25 pulled into
+V1 by decisions D2/P3.
+
+**ADR-14**: **Casbin (embedded) is the authorization engine** (decision D4,
+2026-09-19). RBAC with domains, policies as rows in Postgres, model file in the
+repository, all decisions in-process behind `authorizer.Check(ctx, subject,
+action, resource)`. Cerbos/BVR-23 superseded as a runtime; the documented
+revisit trigger is > 200 tenants or > 500 policy rows, at which point a
+dedicated PDP (Cerbos, Apache-2.0) becomes worth its process.
+**Amended 2026-09-19 (D14/D15, docs/44 §4):** the bindings (role → permission key)
+are a ratified artifact — `contracts/permissions/roles.yaml`, seeded into the
+`casbin_rule` table by migration — and the policy lifecycle is explicit: change =
+rows + `authz_policy_versions` + audit row + `casbin:reload` publish, instances
+re-checks the version on request (cached ≤ 30 s), and boot with an empty or
+unloadable rule set **fails closed** (deny all + SEV-1 alert).
+
 ## 4. Event backbone
 
 ### 4.1 Topology
@@ -151,6 +176,7 @@ lifecycle. Day boundaries are computed **per broker server timezone** (BRG-12).
    · ledger applier
    · evaluation trigger
    · audit applier
+   · idp-sync (IdP deprovisioning, docs/43)
 ```
 
 ### 4.2 Envelope (binding — see `contracts/shared/event-envelope.json`)
@@ -190,6 +216,7 @@ Rules:
 | consumer → side effect | **idempotent** | idempotency keys derived from `event_id`; consumers check-then-act under row locks |
 | consumer failure | retry w/ exponential backoff (5 attempts) → DLQ | workers supervisor; DLQ alerting to NOT + CON |
 | replay | manual, from PG `events` by (topic, seq range) | CON screen + `relayer replay` CLI |
+| ZITADEL event log → `idp-sync` | **at-least-once** (cursor + inbox dedupe) | poll `admin/v1/events/_search` from `idp_sync_cursors.last_sequence`; a stalled cursor alerts (docs/43 §5) |
 
 **Ordering:** no global ordering guarantee. Per-entity ordering is preserved by
 routing keys = entity id (hash slot); consumers that need ordering process per-entity
@@ -204,7 +231,7 @@ Cloudflare ──► Next.js (page SSR, /api/* client routes)
         Go api /v1/...  [in-app GW chain]
          1. tenant resolution: subdomain (acme.alpha1.io) / header (internal) / API-key (external)
          2. authn: session cookie (web) · service token (internal) · API key (tenant machines)
-         3. authz: Cerbos decision (role on resource) — console routes use platform realm
+         3. authz: Casbin decision (role on resource, domain = tenant) — console routes use the platform realm
          4. rate limit: per-IP (edge) + per-user (Redis INCR) + per-tenant quota
          5. entitlement gate: does the tenant's plan include this route/module? (Flipt + TEN)
          6. idempotency: X-Idempotency-Key → Redis SETNX (TTL 24h, scope = method+path+key)
@@ -258,7 +285,7 @@ Trader (funded): TD "Request payout" → PAY request (eligibility check: KYC ok,
 **Flow D — Tenant onboarding (CON).**
 ```
 CON: create tenant (TEN) → plan + entitlements (Flipt flags) → white-label (domain, logo)
-  → DNS CNAME → Cloudflare (ops) → AUTH org provisioned (Better Auth org)
+  → DNS CNAME → Cloudflare (ops) → AUTH org provisioned (ZITADEL organization + project/application, `tenants.idp_org_id`)
   → invite first admin (email) → tenant "ready" checklist (ADM-39 on the tenant side)
   → CON usage metering starts (BIL foundation)
 ```
@@ -281,6 +308,13 @@ CON: create tenant (TEN) → plan + entitlements (Flipt flags) → white-label (
    writes; signed URLs expire ≤ 1 h.
 7. **Caching:** every Redis key is namespaced `t:{tenant_id}:...` — enforced by the
    cache client (same pattern as the DB guard).
+8. **Second layer (open, D3):** Postgres RLS is the only way to make a *forgotten*
+   predicate fail closed instead of leaking — the DB returns zero rows instead of all
+   rows. Adopting it costs 2–4 % on indexed queries and demands transaction-scoped
+   `set_config('app.tenant_id', …, true)` under PgBouncer transaction mode (ADR-8),
+   `FORCE ROW LEVEL SECURITY` (the owner bypasses policies otherwise) and a
+   `(tenant_id, …)` index on every policy table. Decision + mechanics:
+   `docs/41-auth-ten-open-source-evaluation.md` §5, register row **D3**.
 
 ## 8. Module dependency graph
 

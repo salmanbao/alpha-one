@@ -41,7 +41,7 @@ Requirement coverage: `ADM-05` (V1.0) + `01,02,03,04,06..41` (V2.0; the payout/K
    │  · subdomain console.alphaone.example (SEPARATE from TD — PRD
    │    non-negotiable: own auth realm, separate session storage)
    │  · staff roles only (firm:*) — a trader identity cannot render ADM
-   │    (AUTH realm split + Cerbos: no policy grants firm:* to user:*)
+   │    (AUTH realm split + Casbin: no policy grants firm:* to user:*)
    │  · RSC data pages + client islands (queue tables, composer, detail
    │    panes); live queue updates via SSE (the same relay pattern as TD,
    │    scoped to staff topics)
@@ -142,7 +142,7 @@ plus:
 |---|---|---|
 | `CONFLICT` | 409 on any action button | toast + auto row-refresh (someone else acted) |
 | `stepup.expired` | 403 `auth.mfa_required` after 5 min | 2FA dialog reopens (object preserved) |
-| `forbidden.role` | 403 Cerbos denial | "you need {role}" + link to settings (ADM-17 V2) |
+| `forbidden.role` | 403 Casbin denial | "you need {role}" + link to settings (ADM-17 V2) |
 | `export.busy` | 429 concurrent export cap | queue position shown (V2) |
 
 ## 7. API endpoints
@@ -190,7 +190,7 @@ URL is the workflow handoff tool), localStorage for layout prefs only.
 ## 10. Security & compliance
 
 - **Realm separation (PRD non-negotiable):** console subdomain, separate
-  Better Auth org + Cerbos realm — a trader's session cookie is useless
+  ZITADEL org + audience separation + our Casbin realm — a trader's token is useless
   against `/v1/admin/*` (the GW rejects cross-realm tokens structurally, 02
   §3.4).
 - **2FA on all state-changing actions** (§3.3) — including role grants
@@ -245,7 +245,7 @@ react-hook-form/zod, SSE, Sentry, pnpm monorepo.
 | Module | How |
 |---|---|
 | **GW** | all calls under `/v1/admin/*`; realm-scoped auth; rate limits (staff tier higher than trader tier) |
-| **AUTH** | staff login (Better Auth console realm), roles (Cerbos firm:*), step-up 2FA, identity admin |
+| **AUTH** | staff login (the **tenant** ZITADEL application/audience, org-scoped), roles (Casbin `dom = tenant_id`), step-up 2FA, identity admin over `tenant_memberships` + the ZITADEL user (`user.suspend`/`user.unsuspend`, `tenant.identity.*` keys) |
 | **LCC** | account list/detail, state timeline, action triggers (pause/halt commands — LCC enforces) |
 | **PAY** | the payout queue is ADM's highest-stakes screen (11 §7 admin API) |
 | **KYC/RSK** | manual review + risk case queues (13/10 §7) |
@@ -259,7 +259,7 @@ react-hook-form/zod, SSE, Sentry, pnpm monorepo.
 
 ## 15. Integration — external tools
 
-Better Auth (console realm), Sentry, Cloudflare, (V2) FullCalendar, R2
+ZITADEL (console application/audience), Sentry, Cloudflare, (V2) FullCalendar, R2
 (exports).
 
 ## 16. Implementation blueprint

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.member_invited.v1.json",
+  "title": "Alpha One \u2014 event tenant.member_invited v1",
+  "description": "V1 catalog event `tenant.member_invited` (v1, AUTH-03; V1 for the SSO cutover tenant per decision P3). Envelope per EVT-03. Consumers: NOT (invite email), CON.",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tenant.member_invited"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "invitation_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "email_hash": {
+              "type": "string"
+            },
+            "role": {
+              "type": "string"
+            },
+            "invited_by": {
+              "type": "string"
+            },
+            "expires_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tenant_id_ref",
+            "invitation_id",
+            "role",
+            "expires_at"
+          ]
+        }
+      }
+    }
+  ]
+}

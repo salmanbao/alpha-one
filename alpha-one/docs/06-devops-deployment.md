@@ -52,6 +52,7 @@ envs' files fails CI.
 | workers | 2 | 4 GB | consumers + schedulers |
 | docs-worker | 1 | 2 GB | Puppeteer is hungry |
 | web | 1.5 | 2 GB | Next.js SSR |
+| zitadel (IdP, ADR-13) | 1 | 1 GB | Go binary + its own PG **database** on the platform cluster (ADR-10); health `/debug/healthz` |
 | db (PG) | 6 | 24 GB | `shared_buffers` 6 GB, `work_mem` bounded |
 | redis | 1 | 8 GB | maxmemory 6 GB, `allkeys-lru` on the `cache:*` DB only (see 2.6) |
 | hook0/flipt/observability | 1 | 2 GB | — |
@@ -82,6 +83,11 @@ Host headroom: 16 GB + 1 TB free disk reserved. `nofile` 65536 on db.
   DDL where possible; `CONCURRENTLY` indexes with a lock-wait guard).
 - Every migration has a companion note in the PR (what it touches, rollback path).
 - `migrate version` is reported in `/readyz`; deploy is blocked on drift.
+- **ZITADEL schema (ADR-13)**: the IdP runs its own migrations on start-up in its own
+  database (`zitadel`); they are **not** golang-migrate files and are one-way
+  (event-sourced). Therefore: version-pin the image, rehearse the upgrade on staging
+  against a restored prod dump, and never run `zitadel` and `migrate` concurrently —
+  deploy order is `migrate → zitadel → api → workers/web`.
 
 ### 2.4 Backups & DR (OPS-07, OPS-38, ADR-10)
 
@@ -89,8 +95,9 @@ Host headroom: 16 GB + 1 TB free disk reserved. `nofile` 65536 on db.
 |---|---|---|
 | PG WAL | `archive_command` → rsync to 2nd Hetzner box (S3-compatible object store), continuous | **RPO ≤ 5 min** |
 | PG base backup | `pg_basebackup` nightly 03:00 UTC → same remote, encrypted at rest (SSE + age on key) | verified, not assumed |
-| **Backup integrity** (OPS-38) | monthly **restore drill**: base + WAL → scratch instance on staging host → run integrity suite (row counts on 12 key tables, ledger balance check, audit chain spot-check) → report filed in CON; drill failure = P1 incident | **RTO ≤ 2 h** (documented runbook + rehearsed) |
+| **Backup integrity** (OPS-38) | monthly **restore drill**: base + WAL → scratch instance on staging host → run integrity suite (row counts on 12 key tables, ledger balance check, audit chain spot-check, **`identity_idp_links` integrity (link ↔ identity, one live link per org) + one login smoke-test**) → report filed in CON; drill failure = P1 incident | **RTO ≤ 2 h** (documented runbook + rehearsed) |
 | R2 | versioning enabled on the tenant-docs bucket; cross-region replication off in V1 (single region, nightly object manifest backup to the remote box) | docs restorable to last night |
+| **ZITADEL database** (ADR-13) | same `pg_basebackup` + WAL ritual as the platform DB (same cluster, separate database); the master key and the DB dump are stored **separately** (a dump alone cannot decrypt IdP secrets) | login service restorable ≤ RTO; key stored per docs/28 §5 |
 | Redis | AOF `everysec` (OPS-26) + `maxmemory-policy noeviction` on sessions/streams DBs, `allkeys-lru` only on the cache DB | streams rebuildable from `events` table (Redis is transport, not truth) |
 | Config/secrets | repo (SOPS) is the source of truth; age keys on 2 offline locations + 1 host | rotation = PR |
 | Compose/state | declarative; `docker compose config` reproducible from git sha | redeploy = pull + up |
@@ -148,6 +155,38 @@ Workers own all cron (no `pg_cron`, no host crontab): each job declares
 rollover (EVL), sync gap scanner (BRG), reconciliation (LED/PAY), read-model
 refresh (ANA), outbox pruning (EVT), backup integrity check, retention purges
 (AUD/KYC docs), usage metering flush (TEN), relay watchdog.
+
+### 3.5 Auth availability posture (review G45)
+
+No new SLO machinery is built in V1 (formal SLOs are V2 `OPS-40`,
+`GET /v1/console/ops/slos`), but the identity stack gets an **explicit posture** rather than
+an implicit one, because every other module depends on it:
+
+| Objective | V1 target | Why this is the honest number |
+|---|---|---|
+| Login success ratio (hosted login + `/session`) | ≥ 99.5 % monthly | single-box posture (06 §1); ZITADEL shares the box and the Postgres, so there is no independent availability to promise |
+| `/session` latency | p95 < 300 ms (excl. hosted login) | one JWKS-verified token + two indexed reads |
+| Authenticated-request continuity when the IdP is down | existing access tokens keep validating for the JWKS cache lifetime (24 h) | documented behaviour (docs/02 §3.3), not luck: the API does not call the IdP per request |
+| Revocation propagation (suspend/remove → denied) | p95 ≤ 60 s, worst case ≤ 15 min | `idp-sync` 10 s poll + retry budget bounded by the access-token lifetime (docs/43 §6) |
+| `idp-sync` lag | p95 ≤ 30 s; `IdpSyncStalled` pages at 5 min | docs/43 §5 alerting |
+| Staff MFA enforcement | 100 % of staff-role requests carry an `amr` assertion | enforced in our API (`auth.mfa_required`), not by policy alone |
+
+The **login path is the availability outlier by design**: when the IdP is down, logins stop
+and the runbook says so (docs/02 §3.3), while the trading/ledger paths keep serving. That
+asymmetry is recorded here so it is a decision, not a surprise.
+
+### 3.6 Ops runbooks (V1) (review G43)
+
+The identity-adjacent procedures that have no API in V1 are written down so they are
+rehearsable, not tribal knowledge:
+
+| Runbook | Steps (short form) |
+|---|---|
+| **Staff onboarding (V1)** | create the user in the `alpha1-platform` ZITADEL org → enrol TOTP/WebAuthn (org `force_mfa=true`) → insert the `identities` row (`realm='platform'`) → grant the Casbin role from `contracts/permissions/roles.yaml` (seed SQL via `scripts/verify_roles.py --seed`) → verify with a `/v1/console/auth/login` → audit entry |
+| **Staff offboarding (V1)** | revoke Casbin bindings → suspend + `RevokeAllMyRefreshTokens` → session delete + deny-set → keep the identity row for the audit trail |
+| **Quarterly access review (G39)** | export ZITADEL IAM members/grants + `identity_idp_links` holder list → diff against `roles.yaml` expectations → record the diff and the sign-off in the compliance register |
+| **IdP break-glass** | sealed credential from the ops vault (one of exactly two `IAM_OWNER` holders, G39) → admin plane only reachable inside the network / Cloudflare Access → rotate on use, notify, post-incident review |
+| **Deny-set / session kill drill** | with `docker stop zitadel` and with Redis flushed: prove kill latency and fail-closed behaviour (docs/99 gate 10, docs/35 §5.1) |
 
 ## 4. Events
 
@@ -240,7 +279,8 @@ comfortable at 10× V1 targets. When to scale (written thresholds, not vibes):
 | **golang-migrate** | migrations |
 | **SOPS + age** | secrets (ADR-3) |
 | **GHCR + GitHub Actions** | registry + CI/CD (PRD signed) |
-| **PgBouncer** | connection pooling (ADR-8) |
+| **PgBouncer** | connection pooling (ADR-8) | 
+| **ZITADEL** | identity provider (ADR-13): OIDC hosted login, MFA, SAML/OIDC SSO, SCIM 2.0 (user schema); AGPL-3.0, self-hosted, unmodified — licence gate in docs/41 §8.2 |
 | **Prometheus + Grafana** | V1 metrics/dashboards (Loki + OTel V2 register) |
 | **Uptime Kuma** | external uptime (OPS-31) |
 | **Trivy** | image scanning |

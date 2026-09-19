@@ -12,10 +12,15 @@
 
 **V1 (3 — binding):**
 - **Console auth realm (CON-01):** the `platform:*` role family in a
-  separate Better Auth org/realm (AUTH-12/16): `platform:owner`
-  (everything, incl. tenant suspension), `platform:ops` (health, jobs,
-  incidents), `platform:support` (read-assist, tenant contact registry),
-  `platform:finance` (platform financials, CON-19 V2 early-read).
+  separate ZITADEL application/audience (AUTH-12/16). The catalog is owned by
+  `contracts/permissions/roles.yaml` (docs/02 §3.1; unified in review G30):
+  `platform:super_admin` (everything, incl. tenant suspension/termination),
+  `platform:ops` (health, jobs, incidents, session revocation),
+  `platform:support` (tenant contact registry + console read visibility; **cross-tenant
+  read-assist is V2, CON-27** — V1 has no tenant-realm read path, AUTH-16),
+  `platform:finance` (platform financials, CON-19 V2 early-read),
+  `platform:readonly` (read-only visibility). The earlier name `platform:owner`
+  is an alias for `platform:super_admin`.
 - **Console shell (CON-29):** the app shell on `console.alphaone.example`
   (Next.js `web/con`), module navigation, global tenant search (V1: id/name
   only), session management (CON-30).
@@ -62,9 +67,10 @@ Requirement coverage: `CON-01,29,30` (V1.0) + `02..23,25,27,28,31..33` (V2.0) + 
  GW /v1/console/* → Go console APIs:
    · TEN (03): provisioning saga trigger, entitlements, suspension
    · OPS state (06): health, jobs, deploys, relay lag, backup status
-   · CON (05): platform audit view (cross-tenant, owner-role)
+   · CON (05): platform audit view (cross-tenant, `platform:super_admin`)
    · ANA (19): platform KPIs (cross-tenant = the ANA-28 V3 pattern,
-     available to platform:owner from V2 — the platform's own analytics)
+     available to platform:super_admin from V2 behind the reserved
+     `platform.analytics.read` key)
    · RSK: cross-tenant abuse signals (V2 CON-13)
    · BIL (V3): subscriptions
    · Flipt (flags), UptimeKuma (external checks) — read surfaces
@@ -82,8 +88,8 @@ the platform's own compliance posture models the tenants').
 
 | Screen | Content |
 |---|---|
-| **Login + session** | Better Auth platform org; 2FA mandatory for all platform roles (no exceptions — these accounts can suspend tenants); session list + revoke (CON-30) |
-| **Home** | platform health glance: relay lag, provider health (MetaApi/Veriff/NOWPayments/Postmark up/degraded — from 08/04 health endpoints), open CRITICALs (CON), last deploy + version (OPS-24), backup last-success + RPO (06) |
+| **Login + session** | ZITADEL console application (separate audience); 2FA mandatory for all platform roles (no exceptions — these accounts can suspend tenants); session list + revoke (CON-30) |
+| **Home** | platform health glance: relay lag, **IdP event sync (last event, lag, DLQ depth — docs/43 §5)**, provider health (MetaApi/Veriff/NOWPayments/Postmark up/degraded — from 08/04 health endpoints), open CRITICALs (CON), last deploy + version (OPS-24), backup last-success + RPO (06) |
 | **Tenants (V1 minimum)** | list (id, name, status, created, funded-account count) + detail (the TEN record: config, entitlements display, provisioning saga state if in-flight) — read-only in V1; the wizard lands with V2 CON-03 (V1 provisioning is the TEN API + the saga visible here, FunderBlu's onboarding happens during Phase 1 anyway) |
 | **Search (V1)** | tenant id/name (CON-02 early); global entity search (accounts/traders across tenants) = V2 CON-17 |
 
@@ -118,14 +124,19 @@ blast radius).
 
 The only cross-realm entry: `view-as {tenant, identity}` from a tenant
 detail → opens the TD/ADM **in a clearly-badged read-only session**
-(banner: "You are viewing as X — platform:owner {name}"). Rules: ≤ 15 min
-per session, renewable (each renewal re-2FA'd), **read-only** (the
-impersonation session's GW token carries a `readonly` claim — any
-state-changing route 403s, structurally), every request audited with the
-real operator id, and a hard deny-list: **payout approve, credential
-reveal, and settings write are never available in any impersonation
+(banner: "You are viewing as X — platform:super_admin {name}"). Rules: ≤ 15 min
+per session, renewable (each renewal re-2FA'd), **read-only**, every request
+audited with the real operator id, and a hard deny-list: **payout approve,
+credential reveal, and settings write are never available in any impersonation
 session, any role** (the platform can see; the platform does not act as a
 trader or tenant staff).
+
+Read-only is enforced **server-side from the impersonation session record**, not
+from a token claim (review G31, docs/44 §7): tokens carry *context* facts only
+(`sub`, audience, `amr`, `auth_time`, session id, the impersonation reference) and
+never roles, permission keys or an authorization verdict — any state-changing
+route 403s because `authorizer.Check` refuses the impersonation subject, not
+because a claim says so.
 
 ### 3.4 Cross-tenant observability (V2)
 
@@ -220,8 +231,8 @@ Namespace `CON`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/console/auth/login` | none (public console login) — CON-01 | none | optional | `auth.invalid_credentials`, `auth.totp_required` |
-| `POST /v1/console/auth/logout` | Super Admin console session — CON-01 | self-action | optional | standard |
+| `POST /v1/console/auth/login` | none (public console login) — CON-01 | `none` — pre-auth by definition | optional | `auth.invalid_credentials`, `auth.totp_required` |
+| `POST /v1/console/auth/logout` | Super Admin console session — CON-01 | `self` | optional | standard |
 | `POST /v1/console/sessions/{session_id}/revoke` | Super Admin (a different one) — CON-30 | `console.session.revoke` # CON-30 | required | `console.session_not_found`, `console.cannot_revoke_self` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/con.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
@@ -353,12 +364,12 @@ CREATE TABLE console_announcements (             -- V2 CON-14
 | **Flipt** (flags, register) | CHOSEN — the CON-31 override surface is Flipt's admin API behind our 2FA/two-op wrapper |
 | **Uptime Kuma** (register) | CHOSEN — external checks feed the health screen (its API); internal health = the providers' own endpoints |
 | Portainer/Grafana as the console | Rejected: system-ops tools for the DevOps role; the console is the **business-ops** surface (tenants, sagas, controls) — Grafana stays in Grafana, linked from CON-08 |
-| Keycloak (V3 SSO, register) | CON auth stays Better Auth in V1/V2; V3 SSO for platform operators is a CON-01 extension |
+| ZITADEL SSO (register) | Platform operators can federate to FunderBlu's own IdP through the same ZITADEL instance (`AUTH-24` is V1 by decision D2); no second IdP product |
 
 ## 13. Technology stack
 
-Next.js 15 (web/con), TypeScript, Tailwind, shadcn/ui, SSE, Better Auth
-(platform org), Cerbos (platform:* policies), Flipt, Postgres (the small
+Next.js 15 (web/con), TypeScript, Tailwind, shadcn/ui, SSE, ZITADEL (console
+application/audience), Casbin (platform:* policies), Flipt, Postgres (the small
 console tables + read access), Uptime Kuma API, Prometheus/Grafana
 (linked), Sentry.
 
@@ -367,7 +378,7 @@ console tables + read access), Uptime Kuma API, Prometheus/Grafana
 | Module | How |
 |---|---|
 | **TEN** | the provisioning saga (03 §3.1) is driven + watched here; entitlements (CON-05); suspension/termination (CON-06) |
-| **AUTH** | the platform realm (02 §3.4); 2FA/step-up; anomaly scoring (the strictest tier) |
+| **AUTH** | the platform realm (02 §3.4); 2FA/step-up; anomaly scoring (the strictest tier); platform identity administration (`platform.identity.admin` — staff onboarding/offboarding, forced MFA reset AUTH-28, break-glass) and the tenant-provisioning saga actions (`platform.tenant.provision`, docs/03 §3.5) |
 | **OPS** | health (relay, backup, deploy), jobs (CON-21), security overview inputs (certs, hardening state — OPS-13/35) |
 | **AUD** | the platform audit view (CON-09); every console action mirrored; the termination data-handoff |
 | **ANA** | platform KPIs + metering (CON-10) + cross-tenant queue overview (CON-25) |
@@ -381,14 +392,14 @@ console tables + read access), Uptime Kuma API, Prometheus/Grafana
 
 ## 15. Integration — external tools
 
-Better Auth, Cerbos, Flipt, Uptime Kuma, Prometheus/Grafana (linked
+ZITADEL, Casbin, Flipt, Uptime Kuma, Prometheus/Grafana (linked
 dashboards), Sentry, (V3) Keycloak/SSO.
 
 ## 16. Implementation blueprint
 
 | Step | Owner | Est | Depends | Exit criteria |
 |---|---|---|---|---|
-| 1. Platform realm (Better Auth org, platform:* roles, Cerbos policies, 2FA-mandatory) + session management (list/revoke) | BE-1 | 2 d | AUTH | a platform operator logs in on the console subdomain; a trader/tenant-staff session is structurally rejected (tested both ways) |
+| 1. Platform realm (ZITADEL console application/audience, platform:* roles, Casbin policies, 2FA-mandatory) + session management (list/revoke) | BE-1 | 2 d | AUTH | a platform operator logs in on the console subdomain; a trader/tenant-staff token is structurally rejected (tested both ways) |
 | 2. Shell + home screen (health, providers, criticals, deploy, backup) + tenant list/detail (read) | FE-2 + BE-1 | 4 d | 1, OPS health endpoints, TEN read APIs | the wall screen renders live on staging; every number has an as_of |
 | 3. Tenant halt control (rung 1): arming (2FA), state table, "keeps working/stops" dialog, release with note, audit | BE-1 + FE-2 | 2.5 d | 2, LCC-33, TEN | halt on staging tenant: purchases/payouts/requests stop, broker sync + trading continue (the test matrix), release + audit chain complete |
 | 4. Two-operator approval wiring (A arms → B approves, self-approval 403) — built for tenant halt now, the template for V2 | BE-1 | 1.5 d | 3 | self-approval rejected; approval expiry works; the CON-32 flow is reusable (code review) |

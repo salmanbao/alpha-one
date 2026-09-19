@@ -29,6 +29,7 @@ paths:
       operationId: post_v1_trader_kyc_sessions
       x-phase: V1
       x-v1-baseline: contracts/api/kyc.md
+      x-permission: self
       x-idempotency: required
       x-auth: Trader — implied by KYC-01 session creation + TD-02 self-serve flow
       x-v1-errors:
@@ -65,6 +66,7 @@ paths:
       operationId: post_v1_webhooks_kyc_provider
       x-phase: V1
       x-v1-baseline: contracts/api/kyc.md
+      x-permission: none
       x-idempotency: required — dedupe by provider event id
       x-auth: provider signature (EVT-10 shared verification utilities) — KYC-05
       x-v1-errors:
@@ -104,6 +106,7 @@ paths:
       operationId: get_v1_trader_kyc_status
       x-phase: V1
       x-v1-baseline: contracts/api/kyc.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader (self) — implied by KYC-06 "status is explicit and queryable"
       security:
@@ -131,6 +134,7 @@ paths:
       operationId: post_v1_trader_kyc_documents
       x-phase: V1
       x-v1-baseline: contracts/api/kyc.md
+      x-permission: self
       x-idempotency: required
       x-auth: 'Trader — KYC-12 (V1.1 manual fallback upload: ID + proof of address)'
       x-v1-errors:

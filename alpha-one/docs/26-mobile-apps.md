@@ -37,7 +37,7 @@ native apps, **biometric login (MOB-04)**, **mobile KYC capture
   way).
 - **Biometric login (MOB-04)** = the standard pattern: device
   Keychain/Keystore holds a local key that decrypts a **short-lived
-  device token** (the Better Auth device-credential flow, V2) — the
+  device token** (a ZITADEL-issued refresh token bound to the device, V2) — the
   biometric unlocks the token, the token authenticates to the GW like
   any session; **re-login on token expiry** (7 d) with the full
   password + 2FA; a device loss = the session revoke (the AUTH §3.3
@@ -69,7 +69,7 @@ Requirement coverage: `MOB-01,02,03,04,05,06,07` (V2) + `MOB-08` (V3).
 
 ```
  React Native app (one codebase, iOS+Android)
-   · auth: Better Auth device-credential flow (the biometric-unlocked
+   · auth: ZITADEL token flow (the biometric-unlocked
      token, §1) · the same GW, the same tenant subdomain (the app
      resolves the tenant from the login — a trader's session is
      tenant-bound like the web)
@@ -283,7 +283,7 @@ CREATE TABLE push_tokens (                         -- NOT-owned
 
 React Native + TypeScript, the `web/shared` design tokens (ported
 components), TradingView (chart, per §12), FCM/APNs, the Veriff
-mobile SDK, Better Auth (device credentials), the GW (no new API —
+mobile SDK, ZITADEL (device credentials via OIDC), the GW (no new API —
 the version middleware is the only server change), Sentry (the RN
 SDK — crash reporting with the tenant + device context, the PII
 rules of 16 §10 apply to crash breadcrumbs: no financial values in

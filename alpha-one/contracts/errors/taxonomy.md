@@ -28,6 +28,9 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) | "Please check your details and try again." | AUTH (impl: AUTH-01, AUTH-17) |
 | `auth.email_taken` | 409 | Email already registered on this tenant | "An account with this email already exists." | AUTH (impl: AUTH-01) — enumeration-safety treatment — TODO — needs owner decision |
 | `auth.account_suspended` | 403 | User suspended; sessions and tokens already invalidated | "Your account has been suspended." | AUTH (impl: AUTH-20) |
+| `auth.membership_suspended` | 403 | Membership at this tenant is suspended (identity itself is fine) | "Your access to this firm is suspended." | AUTH (impl: AUTH-20, docs/02 §4 GW step 3.5c) |
+| `auth.realm_mismatch` | 403 | Login from the other realm for an existing identity (staff ↔ trader); operator decides | "This account cannot sign in here." | AUTH (impl: AUTH-16, docs/44 §6.1) |
+| `auth.tenant_mismatch` | 403 | Token `aud`/org names another tenant's application than the tenant resolved from the request domain | "This account cannot sign in here." | AUTH (impl: AUTH-04/07, docs/02 §3.2, decision D19) |
 | `auth.totp_required` | 401 | Staff login missing 2FA code | "Enter your two-factor code." | AUTH (impl: AUTH-09) |
 | `auth.totp_invalid` | 401 | Wrong TOTP code | "That two-factor code is not valid." | AUTH (impl: AUTH-09) |
 | `auth.reset_token_invalid` | 400 | Unknown/expired/used single-use reset link | "This reset link is no longer valid." | AUTH (impl: AUTH-05) |
@@ -161,6 +164,13 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.api_key_scope_missing` | 403 | Key lacks scope for route |
 | `auth.email_already_exists` | 409 | Registration conflict |
 | `auth.invitation_invalid` | 422 | Expired/used/revoked invite (V2) |
+| `auth.token_invalid` | 401 | Bearer token missing/malformed/expired/unverifiable (unknown kid, issuer or audience) |
+| `auth.mfa_required` | 401 | Staff action without an MFA assertion in the token (`amr`) |
+| `auth.mfa_not_enrolled` | 403 | Staff identity has no verified factor yet |
+| `auth.mfa_not_required` | 403 | MFA enrolment attempted by a non-staff role |
+| `auth.mfa_already_enrolled` | 409 | MFA enrolment attempted when a verified factor exists |
+| `auth.backup_code_invalid` | 401 | Backup code wrong, already used or unknown |
+| `auth.email_change_requires_verification` | 409 | Email change pending verification (V2) |
 
 ### TEN (extended)
 
@@ -176,6 +186,8 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `tenant.branding_invalid` | 422 | Asset/size/CSS-safety check failed |
 | `tenant.kyb_required` | 403 | Staff can't activate without KYB (V1 gate) |
 | `tenant.plan_insufficient` | 403 | Route/module not in tenant's entitlements |
+| `tenant.deactivated` | 403 | Tenant deactivated; export-only surface inside the recovery window |
+| `tenant.pending_deletion` | 403 | Tenant scheduled for deletion; settlement-only surface |
 
 ### GW+EVT (extended)
 

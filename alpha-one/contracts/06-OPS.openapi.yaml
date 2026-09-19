@@ -17,6 +17,30 @@ tags:
 - name: console
   description: Platform console (CON) surface
 paths:
+  /v1/console/ops/slos:
+    get:
+      tags:
+      - console
+      summary: but the identity stack gets an **explicit posture** rather than
+      operationId: get_v1_console_ops_slos
+      x-phase: extended
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
   /v1/console/ops/health:
     get:
       tags:
@@ -101,30 +125,6 @@ paths:
       - console
       summary: 'V2 OPS-23: Hetzner spend plus provider usage from the BRG-47 foundation'
       operationId: get_v1_console_ops_costs
-      x-phase: extended
-      security:
-      - sessionAuth: []
-      responses:
-        '200':
-          description: Success (see module doc for the canonical shape)
-          content:
-            application/json:
-              schema:
-                $ref: shared/openapi.yaml#/components/schemas/JsonObject
-        default:
-          $ref: shared/openapi.yaml#/components/responses/Error
-        '401':
-          $ref: shared/openapi.yaml#/components/responses/Unauthorized
-        '403':
-          $ref: shared/openapi.yaml#/components/responses/Forbidden
-        '404':
-          $ref: shared/openapi.yaml#/components/responses/NotFound
-  /v1/console/ops/slos:
-    get:
-      tags:
-      - console
-      summary: 'V2 OPS-40: SLO definitions and current compliance'
-      operationId: get_v1_console_ops_slos
       x-phase: extended
       security:
       - sessionAuth: []

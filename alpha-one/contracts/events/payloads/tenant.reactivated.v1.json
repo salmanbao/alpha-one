@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.reactivated.v1.json",
+  "title": "Alpha One \u2014 event tenant.reactivated v1",
+  "description": "V1 catalog event `tenant.reactivated` (v1). Envelope per EVT-03. Consumers: GW, NOT, AUD, AUTH (sessions still require a fresh login).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tenant.reactivated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "actor": {
+              "type": "string"
+            },
+            "reactivated_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tenant_id_ref",
+            "reactivated_at"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -96,7 +96,7 @@ Response 200:
 Errors:
 - `tenant.not_found` 404 # implied by TEN-15
 
-Effects (per TEN-15): logins stop, new orders stop, payouts stop immediately; data preserved. Cascade mechanism (events vs synchronous calls) — TODO — needs owner decision.
+Effects (per TEN-15): logins stop, new orders stop, payouts stop immediately; data preserved. Cascade mechanism (resolved by the docs/03 §5.1/§5.2 design): the state flip is transactional, the `tenant.suspended` event drives GW deny-set + session termination + notification fan-out, and the per-state capability matrix in §5.1 is the binding definition of what each surface does.
 
 ### POST /v1/tenants/{tenant_id}/terminate
 Auth: Super Admin — TEN-01
@@ -116,7 +116,7 @@ Response 200:
 
 Errors:
 - `tenant.not_found` 404 # implied by TEN-01
-- Downstream effects of terminate on live accounts/payments: TODO — needs owner decision
+- Downstream effects of terminate: resolved 2026-09-19 — docs/03 §5.2 saga (settlement-only path for in-flight money, identities deactivated, financial/audit rows retained anonymised).
 
 ### GET /v1/tenants/subdomain-check
 Auth: Super Admin — TEN-42
@@ -174,12 +174,12 @@ Response 200:
 Errors:
 - `tenant.not_found` 404 # implied by TEN-11
 
-Secrecy: values are encrypted at rest (TEN-12); never returned in logs or API responses (TEN-12). GET returning masked values — TODO — needs owner decision (the sheet forbids returning secrets; the read-back UX is unspecified).
+Secrecy: values are encrypted at rest (TEN-12); never returned in logs or API responses (TEN-12). Read-back: masked per docs/03 §3.7 (`••••1234` fingerprint + `configured: true`), decryption only inside the integration worker behind an audited accessor.
 
 ### GET /v1/tenants/{tenant_id}/integrations
 Auth: Tenant Admin — TEN-11
 Tenant: from domain (GW-02)
-Permission: `tenant.integration.read` # derived from TEN-11 management need; read-back masking rules — TODO — needs owner decision
+Permission: `tenant.integration.read` # derived from TEN-11 management need; masking rules in docs/03 §3.7
 Idempotency: n/a
 
 Response 200:
@@ -192,12 +192,25 @@ Errors:
 
 ## Internal contracts (no HTTP)
 - TEN-03 tenant-scoped repository access: every repository query is injected with the caller's tenant id. No HTTP surface.
-- TEN-18 storage scoping: object storage keys are prefixed by tenant id (Cloudflare R2). Key format — TODO — needs owner decision (prefix pattern not specified beyond "tenant id prefix").
+- TEN-18 storage scoping: object storage keys are prefixed by tenant id (Cloudflare R2). Key format: `tenants/{tenant_id}/{kind}/{ulid}.{ext}` (matches the branding example in docs/03 §8); the prefix is asserted by a storage-layer guard on every write and by the RLS-equivalent test (docs/35 I-17 class).
+
+## Identity side of a tenant (ADR-13, docs/03 §3.5/§3.8)
+- The provisioning saga creates the ZITADEL organization and stores `tenants.idp_org_id`
+  (+ `idp_org_domain = {slug}.alpha1.io`); the org carries the tenant's login policy,
+  password policy, lockout policy, branding and (when contracted) its external IdP.
+- Tenant users log in on `login.alpha1.io` scoped to their org in V1; the tenant's own
+  domains serve the app/API only (docs/03 §3.8, decision D8).
+- Suspension/deactivation cascade to the IdP: `tenant.suspended` kills the org's sessions
+  (deny-set + ZITADEL session termination) and blocks new logins; termination deactivates
+  every identity in the org (docs/03 §5.2).
+- New permission keys for this surface: `platform.tenant.provision`, `tenant.sso.read`,
+  `tenant.sso.configure`, `tenant.scim.manage`, `tenant.identity.read` (registry
+  §Identity-management keys).
 
 ## Open contract questions
-- TODO — needs owner decision: tenant list endpoint for console (TEN-01 says "create, view, edit, suspend, terminate" — pagination/filter contract unspecified).
-- TODO — needs owner decision: what terminate does to running accounts, open payouts, stored data (TEN-01 does not define cascade).
-- TODO — needs owner decision: entitlement change propagation latency and enforcement point (TEN-08 says immediate; mechanism unspecified).
-- TODO — needs owner decision: whether tenant suspension also blocks the trader portal read-only or fully blocks all routes (TEN-15 names logins, orders, payouts).
-- TODO — needs owner decision: integration config GET masking format (TEN-12 forbids returning secrets but the admin UI needs some read model).
-- TODO — needs owner decision: custom domain support beyond subdomains (Out Of Scope says manual Cloudflare setup; API surface TBD).
+- Tenant list endpoint: the console surface `GET /v1/console/tenants` (docs/03 §7.2, extended) owns pagination/filtering; the V1 baseline exposes get-by-id only. Pagination follows the shared convention (`contracts/shared/openapi.yaml`).
+- **Resolved 2026-09-19 (review G7):** termination is the saga in docs/03 §5.2 — traffic stops, export, identities deactivated in the IdP, R2 archived, PII anonymised, financial/audit rows retained, `deleted` tombstone at the end. Open payouts must settle first (settlement-only state in the §5.1 matrix).
+- Entitlement propagation (resolved 2026-09-19): entitlements are cached per tenant (`t:{tenant}:entitlements`, TTL 5 min) and invalidated by `tenant.entitlement_changed`; enforcement is GW middleware step 6 (docs/04 §3, `tenant.not_entitled`). V1 is immediate because the write path invalidates the cache synchronously.
+- **Resolved 2026-09-19 (review G7):** the state → capability matrix in docs/03 §5.1 is binding: `suspended` blocks login, traffic, API keys, webhooks and payouts; only the platform staff surface may act (reasons/audit), and settlement-only paths continue for in-flight money.
+- **Resolved 2026-09-19 (review G13):** integration config GET returns per-field masks (`••••1234` of a fingerprint, plus `configured: true`) and never decrypts; decryption happens only in the integration worker behind an audited accessor (`tenant.integration.revealed`). Field-by-field inventory: docs/03 §3.7.
+- **Resolved 2026-09-19 (review G8/G19):** subdomains are immutable in V1 (`{slug}.alpha1.io`, reserved list + normalisation rules in docs/03 §3.2); custom domains (TEN-05, V2) are added through CON with a Cloudflare DNS record and the same edge rewrite pattern — no vanity login host in V1 (decision D8).

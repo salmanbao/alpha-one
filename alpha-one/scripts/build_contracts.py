@@ -338,7 +338,7 @@ SHARED = {
         "securitySchemes": {
             "sessionAuth": {
                 "type": "http", "scheme": "bearer",
-                "description": "Better Auth (BVR-14) session token (short-lived access + rotating refresh, server-side revocation, AUTH-07). V1: the tenant is resolved from the request domain/subdomain only (GW-02, TEN-02); extended (V2+): header for internal calls, API-key binding.",
+                "description": "ZITADEL access token (short-lived JWT issued by the identity provider, ADR-13; verified over JWKS with the audience of the caller's realm, rotating refresh, server-side revocation via our deny-set + auth_sessions projection, AUTH-07). V1: the tenant is resolved from the request domain/subdomain only (GW-02, TEN-02); extended (V2+): header for internal calls, API-key binding.",
             },
             "apiKeyAuth": {
                 "type": "apiKey", "in": "header", "name": "Authorization",

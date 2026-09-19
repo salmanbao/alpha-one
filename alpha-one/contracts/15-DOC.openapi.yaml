@@ -27,6 +27,7 @@ paths:
       operationId: get_v1_trader_documents
       x-phase: V1
       x-v1-baseline: contracts/api/doc.md
+      x-permission: document.read
       x-idempotency: n/a
       x-auth: Trader (self) — DOC-06
       security:
@@ -54,6 +55,7 @@ paths:
       operationId: get_v1_trader_documents_document_id
       x-phase: V1
       x-v1-baseline: contracts/api/doc.md
+      x-permission: document.read
       x-idempotency: n/a
       x-auth: Trader (owner) — DOC-06
       x-v1-errors:

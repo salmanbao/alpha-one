@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.activated.v1.json",
+  "title": "Alpha One \u2014 event tenant.activated v1",
+  "description": "V1 catalog event `tenant.activated` (v1). Envelope per EVT-03. Consumers: GW (allow traffic), NOT (owner), AUD, ANA.",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tenant.activated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "activated_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            },
+            "activated_by": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tenant_id_ref",
+            "activated_at"
+          ]
+        }
+      }
+    }
+  ]
+}
