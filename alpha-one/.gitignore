@@ -1,0 +1,5 @@
+# Generated static docs site (python3 scripts/build_docs_site.py)
+docs-site/
+
+# Python
+__pycache__/
