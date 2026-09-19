@@ -17,4 +17,4 @@ Out Of Scope constraints: fixed role-based dashboards (no widget editor), fixed 
 
 ## Open contract questions
 - TODO — needs owner decision: whether ADM needs any endpoints of its own in V1 (the sheet implies none — every screen is a consumer).
-- TODO — needs owner decision: staff role definitions for admin panel access (AUTH-12 custom staff roles exist as a model, but no V1 row binds roles to admin screens).
+- ~~TODO — needs owner decision: staff role definitions for admin panel access~~ **Resolved 2026-09-19 (D14, docs/44 §4):** the role catalog is `contracts/permissions/roles.yaml` — 7 tenant roles (`firm:owner`/`admin`/`risk`/`compliance`/`finance`/`support`, `user:trader`); every admin screen is gated by the underlying module route's permission key (route → key → roles map: `contracts/permissions/matrix.md` §3). The consolidated specification is `docs/46-authorization-model.md`. Custom staff roles (AUTH-12/14) remain a V2 extension.

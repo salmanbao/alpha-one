@@ -261,10 +261,20 @@ docs/34 §9 alongside the five above:
     403 `authz.step_up_required`, and the hosted re-auth (`prompt=login&max_age=300`) then
     succeeds (docs/02 §3.2, decision D23).
 
+**Gates added by the sixth-pass consolidation (docs/46, 2026-09-19)** — recorded in docs/34 §9:
+
+15. **Authorization views are render-fresh** — `contracts/permissions/matrix.md` (the role ×
+    key matrix, the key → holders detail, the V1 route → permission → authorized-roles map)
+    regenerates byte-identical from `contracts/permissions/roles.yaml` + the registry V1
+    table + the `x-phase: V1` operations via `scripts/verify_roles.py --write-matrix`; the
+    check mode fails the build on drift (docs/46 §11).
+
 The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12) and
 the fourth-pass artifact is `docs/44-auth-multitenancy-review.md` (G21–G33, decisions
 D13–D18) and the fifth-pass artifact is `docs/45-auth-contract-hardening.md` (G34–G45,
-decisions D19–D24); like docs/42 these change V1 design detail only — **no PRD workbook
+decisions D19–D24) and the sixth-pass artifact is `docs/46-authorization-model.md` (the
+consolidated authorization specification, findings A1–A4); like docs/42 these change V1
+design detail only — **no PRD workbook
 row was changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)

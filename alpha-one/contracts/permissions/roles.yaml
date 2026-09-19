@@ -116,7 +116,7 @@
     "platform.identity.admin": { "scope": "platform", "roles": ["platform:super_admin"] },
     "platform.tenant.provision": { "scope": "platform", "roles": ["platform:super_admin"] },
     "platform.session.revoke": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops"] },
-    "console.session.revoke": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops"], "note": "surface ships with CON-30 / AUTH-27 (V2 per docs/02 §4.1)" }
+    "console.session.revoke": { "scope": "platform", "roles": ["platform:super_admin", "platform:ops"], "note": "V1 surface exists: CON-30 console-session revocation (POST /v1/console/sessions/{id}/revoke, self-guard console.cannot_revoke_self); AUTH-27 cross-identity forced logout is the V2 extension (docs/02 §4.1)" }
   },
   "trader_self_actions": {
     "rule": "Declared keys with scope `own` — AUTH-13's 'declared keys' is satisfied and the ABAC own-data matcher enforces the resource check. No key is required for actions that have no resource beyond the caller's own session (login, logout, password change, MFA enrolment).",
