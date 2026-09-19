@@ -83,7 +83,7 @@ the platform's own compliance posture models the tenants').
 | Screen | Content |
 |---|---|
 | **Login + session** | ZITADEL console application (separate audience); 2FA mandatory for all platform roles (no exceptions — these accounts can suspend tenants); session list + revoke (CON-30) |
-| **Home** | platform health glance: relay lag, provider health (MetaApi/Veriff/NOWPayments/Postmark up/degraded — from 08/04 health endpoints), open CRITICALs (CON), last deploy + version (OPS-24), backup last-success + RPO (06) |
+| **Home** | platform health glance: relay lag, **IdP event sync (last event, lag, DLQ depth — docs/43 §5)**, provider health (MetaApi/Veriff/NOWPayments/Postmark up/degraded — from 08/04 health endpoints), open CRITICALs (CON), last deploy + version (OPS-24), backup last-success + RPO (06) |
 | **Tenants (V1 minimum)** | list (id, name, status, created, funded-account count) + detail (the TEN record: config, entitlements display, provisioning saga state if in-flight) — read-only in V1; the wizard lands with V2 CON-03 (V1 provisioning is the TEN API + the saga visible here, FunderBlu's onboarding happens during Phase 1 anyway) |
 | **Search (V1)** | tenant id/name (CON-02 early); global entity search (accounts/traders across tenants) = V2 CON-17 |
 

@@ -132,8 +132,12 @@ def build_proposals(data: dict) -> str:
 
 
 def is_open(q: dict) -> bool:
-    """A row is open when the answer cell is empty or the literal 'Open'."""
-    ans = (q.get("answer") or "").strip()
+    """A row is open when the answer cell is empty or the literal 'Open'.
+
+    Leading markdown emphasis is stripped first: design-review rows record a default
+    as ``**Open — default recorded:** …``, which must still count as open.
+    """
+    ans = (q.get("answer") or "").strip().lstrip("*_ ").strip()
     return not ans or ans.lower().startswith("open")
 
 

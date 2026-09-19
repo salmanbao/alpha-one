@@ -284,3 +284,9 @@ the merge anchor; the merge procedure itself is V2).
 
 These are recorded in `docs/37` §Design-review questions (D6–D9) so they carry an
 owner and a deadline like every other open row.
+
+The **deprovisioning follow-up** raised by the third pass lives in
+`docs/43-idp-deprovisioning.md` with decisions **D10–D12**: token-lifetime enforcement
+(15 min, written to the instance OIDC settings), the `idp-sync` propagation mechanism
+(pull consumer over the event log, reconciliation as the safety net), and the
+self-service deletion posture (withhold; closure through us).

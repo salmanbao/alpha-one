@@ -211,8 +211,10 @@ refresh tokens; `api` keeps a **Redis deny-set** (jti/session-id, 24 h TTL) and 
 intact (binding):** rotating refresh, server-side revocation, and *reuse of a rotated
 refresh token → revoke all sessions of the identity + CRITICAL audit* — reuse detection
 is implemented by us (ZITADEL's `RevokeAllMyRefreshTokens` + session v2 `DeleteSession`
-do the killing). Sliding idle 30 min / absolute 24 h are per-org ZITADEL session
-lifetimes (tenant-configurable V2, `AUTH-34`). Trader lists/revokes sessions in TD via
+do the killing). Sliding idle 30 min / absolute 30 d are our session policy, enforced by
+the instance OIDC settings (docs/43 §6) plus the `auth_sessions` row; per-org overrides
+are `AUTH-34` (V2) and the ZITADEL login-UI session is a separate per-org policy. Trader
+lists/revokes sessions in TD via
 `GET /v1/auth/sessions` and `DELETE /v1/auth/sessions/{id}` (both project ZITADEL's
 session APIs).
 
@@ -247,11 +249,17 @@ MFA on traders too, which is `AUTH-10`/V2. The V1 mechanics:
 min 10 / max 128, complexity, no reuse of last 5 (ZITADEL history), self-service change
 (`AUTH-40`) requires the current password + (staff) 2FA.
 
-**Token and session parameters (review G12).** Access token 15 min; refresh rotated on
-every use; absolute session lifetime 30 days; idle timeout 30 min; JWT clock skew ±60 s;
-JWKS cached 24 h with an immediate refetch on an unknown `kid`; deny-set TTL = access
-token TTL; per-identity concurrent sessions: **open (D6, docs/37)**, default 10 with
-oldest-evicted.
+**Token and session parameters (review G12; enforced per decision D10, docs/43 §6).**
+Access and ID tokens **15 min**; refresh rotated on every use, idle timeout 30 min,
+absolute lifetime 30 d; JWT clock skew ±60 s; JWKS cached 24 h with an immediate refetch
+on an unknown `kid`; deny-set TTL = access-token TTL (session-keyed entries outlive the
+refresh idle window); per-identity concurrent sessions: **open (D6, docs/37)**, default 10
+with oldest-evicted. These are **not** ZITADEL's defaults — the instance ships 12 h
+access/ID tokens — so provisioning writes them through the instance OIDC-settings
+endpoint (`/admin/v1/settings/oidc`, update = method `PUT`, all four fields required,
+seconds precision) and a Phase-0 gate reads them back (docs/99 gate 6). The 15-minute
+access token is the backstop that bounds deprovisioning exposure when the IdP event
+pipeline and its alerting are both dead (docs/43 §6).
 
 **Breached-password check — a documented deviation (review G3, docs/42 §3.3).**
 ZITADEL owns password set/reset and exposes **no HIBP hook and no pre-change action**, so
@@ -273,6 +281,7 @@ fully and is rejected for V1 (docs/41 §4.1).
 | ZITADEL Postgres DSN | the IdP's own database | with the platform DSN |
 | Console + tenant OIDC client secrets | token exchange per realm | 180 d |
 | Provisioning machine user (JWT key / PAT) | tenant saga creates orgs/projects/policies | 90 d, dual-key overlap |
+| `idp-sync` machine user (PAT, `IAM_OWNER_VIEWER`) | read-only event-log poll for deprovisioning propagation (docs/43 §3) | 90 d, dual-key overlap |
 | SCIM bearer token (per SSO tenant) | directory provisioning | 90 d, re-issue + re-register in the tenant's IdP |
 | Actions v2 target signing key | verifies webhooks we receive | 180 d |
 | SMTP credentials | disabled unless a tenant's SSO forces IdP-sent mail | 180 d |
@@ -294,6 +303,21 @@ rollback plan is **restore the pre-upgrade dump**, never "downgrade the binary".
 | Org provisioning fails mid-saga | Tenant stuck in `provisioning_failed` | saga compensation (docs/03 §3.5) + CON resume action |
 | IdP compromise | attacker can mint tokens for any org | runbook: rotate master key + client secrets, revoke all sessions (`RevokeAllMyRefreshTokens` per user + bulk sessions API), invalidate the local JWKS cache, force re-authentication, notifications per docs/28 §7 |
 | SCIM token leak | attacker can create/deactivate users in one org | rotate the token, audit the SCIM-written users, re-verify memberships (TEN-32) |
+| IdP event sync stalled (worker down, PAT expired, API errors) | deprovisioning stops propagating; memberships stay `active` until the cursor catches up | `IdpSyncStalled` / `IdpSyncLag` / `IdpSyncDown` alerts + CON health row + cursor catch-up runbook; residual exposure bounded by the 15-min access token (docs/43 §5–§6) |
+
+**Deprovisioning propagation (decision D11, docs/43).** IdP-side deprovisioning reaches
+`tenant_memberships` through a **pull consumer, not a webhook**: `idp-sync` polls
+ZITADEL's event log (`admin/v1/events/_search`, sequence cursor, 10 s) into a durable
+inbox and applies the same suspension path as `AUTH-20` (status change + session
+kill + deny-set + outbox row). Actions v2 event executions are **rejected as the
+transport**: a failed call loses the event permanently (upstream #10268 — no retry) and
+event-condition executions can break the instance (upstream #12225). Covered events and
+their effects, retry/DLQ/alerting and the reconciliation job are specified in docs/43
+§3–§5, §7; two rules are binding — IdP-derived events **may only reduce access, never
+grant it**, and nightly reconciliation is the *safety net*, not the mechanism.
+Self-service account deletion is disabled by posture (no `user.self.delete`-capable role
+grants: `ORG_USER_SELF_MANAGER`, `SELF_MANAGEMENT_GLOBAL`) and watched by a role-grant
+alert (decision **D12**, docs/43 §8).
 
 **Observability** (docs/29 alert table): `authz.token_verify_failed` (rate),
 `authz.jwks_fetch_failed`, login p95 and success ratio per org, provisioning-saga
@@ -325,15 +349,17 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 event id (EVT-05). Login/session events whose *origin* is ZITADEL are ingested through
 the Actions v2 event trigger (docs/02 §3.1) — if the Phase-0 spike cannot capture a
 given one, the row is derived locally (our `/v1/auth/session` and deny-set writes) and
-the field set stays the same.
+the field set stays the same. Deprovisioning events whose origin is ZITADEL do **not**
+use the Actions v2 trigger — they are pulled from the event log by `idp-sync`
+(decision D11, docs/43 §3).
 
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
 | `user.registered` | AUTH-01 | NOT-01 (welcome), AUD, ANA |
 | `user.login_success` | AUTH-04 (session materialisation) | AUD, ANA, RSK (anomaly baseline) |
 | `user.login_failure` | ZITADEL via Actions v2 | AUD, RSK (anomaly), NOT (security notice) |
-| `user.suspended` | AUTH-20 / AUTH-43 | NOT, GW (immediate session kill), AUD |
-| `user.activated` | AUTH-43 (unsuspend) | NOT, AUD |
+| `user.suspended` | AUTH-20 / AUTH-43 / idp-sync (IdP-driven, docs/43) | NOT, GW (immediate session kill), AUD |
+| `user.activated` | AUTH-43 (unsuspend) / idp-sync | NOT, AUD |
 | `user.session_revoked` | AUTH (logout AUTH-39, suspension AUTH-20) | AUD — admin-initiated revocation is AUTH-27 (V2) |
 | `user.password_changed` | AUTH-05 / AUTH-40 | session invalidator (all other sessions), AUD |
 | `tenant.created` | TEN-01 | AUD, CON |
@@ -456,6 +482,7 @@ HTTP-method prefix so the contract generator does not mistake them for our API):
 | MFA / passkeys | `/v2/users/{id}/totp`, `/v2/users/me/auth_factors`, WebAuthn registration APIs | `AUTH-09/10/26` factors |
 | SSO / SAML | `/v2/orgs/me/idps`, SAML metadata + ACS endpoints, `/v2/settings/login/idps` | `AUTH-24` federation (per-org IdP) |
 | SCIM 2.0 | `/scim/v2/Users` (user schema only — no Groups) | `AUTH-25` provisioning |
+| Admin + Event API | `/admin/v1/settings/oidc` (token lifetimes), `/admin/v1/events/_search` and `/admin/v1/events/types/_search` (event log — machine user) | `AUTH-07` lifetime enforcement, deprovisioning propagation (docs/43) |
 | Actions v2 | targets + executions (`/v2/actions/…`), signed webhooks on `user.*`, `session.*` | `AUTH-19/22` login history + audit feed |
 
 ### 7.1 V1 baseline — `auth` (authoritative: `contracts/api/auth.md`)
@@ -780,18 +807,19 @@ FingerprintJS deferred (PRD default).
 
 | Step | Owner | Est | Depends | Exit criteria |
 |---|---|---|---|---|
-| 1. Deploy ZITADEL (Compose + own DB) and harden it: TLS host, SMTP off, backups in the ADR-10 ritual, AGPL legal review closed | BE-1 | 3 d | OPS env | `/debug/healthz` green; console reachable; login works for a scratch org |
+| 1. Deploy ZITADEL (Compose + own DB) and harden it: TLS host, SMTP off, backups in the ADR-10 ritual, AGPL legal review closed, **instance OIDC token lifetimes set (900 s access/ID) and read back** | BE-1 | 3 d | OPS env | `/debug/healthz` green; console reachable; login works for a scratch org; the OIDC settings read back at 900 s (docs/43 §6, docs/99 gate 6) |
 | 2. Tenant provisioning hooks: create org + project/application, per-org password/lockout/session policies + branding defaults, write `tenants.idp_org_id` (idempotent, compensatable) | BE-1 | 3 d | 1, TEN step | re-running the saga step is a no-op; a second saga run never duplicates an org |
 | 3. Token path: hosted-login hand-off from the web tier (PKCE, org scope), JWKS verification middleware (issuer + audience per realm), `POST /v1/auth/session`, `auth_sessions` projection + Redis deny-set, logout with `DeleteSession` + end-session | BE-1 | 5 d | 2 | TD + ADM login on a staging subdomain; a revoked session is refused < 1 s; console-audience token refused by tenant routes (AUTH-16) |
 | 4. Authorization: Casbin model (`g(r.sub, p.sub, r.dom)`), policy table + loader/reload, role catalog, the `authorizer.Check` interface, denial logging | BE-1 | 4 d | 2 | fixture tests: trader can't read another's trades; ≥ 30 permission keys resolved by role; a policy change reloads without redeploy |
 | 5. 2FA enforcement + backup codes: staff first-login enrolment flow (hosted), `amr`/`auth_time` rule in the API, `/v1/auth/2fa/backup-codes` + `/backup-code`, admin reset path (AUTH-28) | BE-2 | 4 d | 3 | staff login without a factor is refused by the API; backup code redeems once; reset flow audited |
-| 6. Suspension/activation: status mirror to ZITADEL (deactivate/reactivate, session termination) + event fan-out + platform-realm separation test | BE-1 | 2 d | 3, 4 | suspended user's live session dies < 1 s; unsuspend restores with audit |
+| 6. Suspension/activation: status mirror to ZITADEL (deactivate/reactivate, session termination) + event fan-out + platform-realm separation test + **`idp-sync` pull consumer** (event log → inbox → membership, docs/43 §3) | BE-1 | 4 d | 3, 4 | suspended user's live session dies < 1 s; unsuspend restores with audit; a deactivation performed **in the ZITADEL console** lands in `tenant_memberships` in < 30 s, and re-polling the same page changes nothing (idempotence) |
 | 7. API-key primitives (create/revoke/hash/scopes) | BE-2 | 2 d | 3 | key works end-to-end against one read route |
 | 8. RLS layer: policies + `FORCE ROW LEVEL SECURITY` + transaction-scoped `set_config` in the DB wrapper + negative tests (D3) | BE-1 | 3 d | 2 | isolation suite green under both layers; no-context query returns zero rows |
-| 9. Audit + login history feed: Actions v2 event webhooks → `audit_events`, anomaly counters, security headers | BE-2 | 3 d | 5 | AUD-23 sensitive-access audit visible; login history rows appear |
+| 9. Audit + login history feed: Actions v2 event webhooks → `audit_events`, anomaly counters, security headers (if event executions prove unreliable — upstream #10268/#12225 — the same `idp-sync` poller ingests the login events from the event log, docs/43 §2) | BE-2 | 3 d | 5 | AUD-23 sensitive-access audit visible; login history rows appear |
 | 10. SSO + SCIM for the cutover tenant (AUTH-24/25): org IdP config, metadata exchange, attribute→role mapping on our side, SCIM user provisioning token + deactivation path | BE-1 + BE-2 | 5 d | 3, 4 | the tenant's staff sign in through their IdP; SCIM create/deactivate lands as our membership rows |
 | 11. V2: social login, step-up API surface, IP allowlists, session policy config, email-change + closure flows | BE-2 | 8 d | 10 | — |
 | 12. V3: passkeys, duplicate-identity merge, trusted devices, advanced federation | BE-1 | 10 d | V2 base | — |
+| 13. Deprovisioning hardening (docs/43 §5–§8): `idp-sync` alerts + DLQ triage + CON health row, nightly direction-aware reconciliation with boot check, kill-the-worker drill, self-delete role-grant alert | BE-1 + DevOps | 3 d | 6 | the drill pages inside 5 min and the catch-up applies the missed deactivations exactly once; the nightly drift report is empty on a clean day (docs/43 §7) |
 
 **Risks:** ZITADEL upgrade/migration ops (mitigation: pin the version, rehearse the
 upgrade on staging, it shares the ADR-10 backup ritual); hosted-login UX divergence
@@ -799,6 +827,10 @@ from our design system (mitigation: per-org branding + the planned custom
 `.well-known/alpha1-config` entry point, custom UI only if a tenant pays for it);
 `amr`/`auth_time` claim shape (mitigation: spike in step 5 before enforcing);
 AGPL interpretation (mitigation: unmodified upstream, Actions-only customisation,
-legal review closed at step 1); identity-store drift (mitigation: nightly
-reconciliation job + TEN-32 access review); SCIM user-only limitation (mitigation:
+legal review closed at step 1); identity-store drift (mitigation: the `idp-sync`
+consumer is the **mechanism** and nightly direction-aware reconciliation the **safety
+net** — docs/43 §3/§7 — plus the V2 TEN-32 access review; the 15-min access token bounds
+the residual); Actions v2 event-execution maturity (mitigation: deprovisioning never
+depends on it — upstream #10268 has no retry and #12225 can break the instance,
+docs/43 §2); SCIM user-only limitation (mitigation:
 role assignment stays in ADM, documented in docs/41 §8.1).

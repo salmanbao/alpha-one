@@ -406,7 +406,7 @@ relay lock is PG-side.
 Go (`api` middleware package, `relay` service, `workers` consumers), Redis 7
 (streams + idempotency + rate limits), Postgres (outbox/events), Hook0,
 Flipt (maintenance flag), Cloudflare (edge), Prometheus (relay lag, DLQ depth,
-rate-limit hits), Sentry (consumer crashes), Uptime Kuma (probe `/readyz`).
+IdP-sync lag/stall, rate-limit hits), Sentry (consumer crashes), Uptime Kuma (probe `/readyz`).
 
 ## 14. Integration — internal modules (glue)
 

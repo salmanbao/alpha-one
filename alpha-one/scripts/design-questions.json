@@ -131,6 +131,36 @@
       "owner": "FunderBlu COO, Tech Lead",
       "deadline": "Phase 0 exit (DPO review)",
       "answer": "**Open — default recorded:** accept and document. We store no more PII in the IdP than email + display name (KYC profile and documents stay in our stores), the erasure procedure deletes the user and our rows, and the residual event entries are recorded as a known limitation with a DPO review at Phase 0 exit. Compensating control if the DPO refuses: pseudo-anonymous login names (`usr_{ulid}@login.alpha1.io`) with the notification email held only in our database."
+    },
+    {
+      "id": "D10",
+      "source_doc": "43",
+      "section": "Auth & Identity",
+      "question": "Access/refresh token lifetimes and rotation (restates the open PRD workbook question as a build decision): ZITADEL's instance default is 12 h access tokens, so the 15-min figure in docs/02 §3.2 is documented but not enforced — what do we set, and where?",
+      "raised_by": "Design review (docs/43 §6)",
+      "owner": "BE-1, Tech Lead",
+      "deadline": "Phase 0 exit (gate 6)",
+      "answer": "**Answered 2026-09-19 — access/ID 15 min, refresh idle 30 min, absolute 30 d, rotation on every use with reuse detection.** Written at provisioning through the instance OIDC-settings endpoint (`/admin/v1/settings/oidc`, update = method `PUT`, all four fields required, seconds precision) and read back at Phase 0 (docs/99 gate 6). This is the bound that holds when the deprovisioning pipeline *and* its alerting are both down (docs/43 §6)."
+    },
+    {
+      "id": "D11",
+      "source_doc": "43",
+      "section": "Auth & Identity",
+      "question": "How does an IdP-side deprovisioning (tenant SCIM deactivation, ZITADEL-console user removal, or user self-deletion) reach `tenant_memberships` before anyone notices — given that nightly reconciliation does not exist yet and Actions v2 event executions have no retry?",
+      "raised_by": "Design review (docs/43)",
+      "owner": "BE-1",
+      "deadline": "Phase 0 exit (gate 7)",
+      "answer": "**Answered 2026-09-19 — a pull consumer (`idp-sync`), not a webhook.** The worker polls ZITADEL's event log (`admin/v1/events/_search`, sequence cursor, 10 s) through a durable inbox and applies the AUTH-20 suspension path; covered event types, retry/DLQ/alerting and the nightly direction-aware reconciliation (safety net, never the mechanism) are specified in docs/43 §3–§7. Actions v2 event executions are rejected as the transport: no retry (upstream #10268) and instance-breaking event conditions (upstream #12225)."
+    },
+    {
+      "id": "D12",
+      "source_doc": "43",
+      "section": "Security & Compliance",
+      "question": "Self-service account deletion: ZITADEL lets a user irreversibly delete their own account (`user.self.delete`, reached via `ORG_USER_SELF_MANAGER` / `SELF_MANAGEMENT_GLOBAL`, from the console or the API). Do we grant it in V1 and accept that nothing in our stack can intercept it?",
+      "raised_by": "Design review (docs/43 §8)",
+      "owner": "FunderBlu COO (DPO), Tech Lead",
+      "deadline": "Phase 0 exit (gate 8)",
+      "answer": "**Open — default recorded:** no self-delete-capable role grants in V1 and no self-service delete surface; closure runs through staff (V1 runbook → V2 `AUTH-35` flow) with business checks, a payout hold and the actor recorded as `system:account-closure`. Enforced by detection: an alert on `user.grant.added` containing `ORG_USER_SELF_MANAGER` and on `instance.member.added` containing `SELF_MANAGEMENT_GLOBAL`. The cost — no self-service erasure until V2 — is the DPO's call at gate 8 (docs/43 §8); the `defaults.yaml` role-permission override is a recorded Phase-0 option, not a default."
     }
   ]
 }

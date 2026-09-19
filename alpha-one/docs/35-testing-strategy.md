@@ -125,6 +125,14 @@ with `auth.token_invalid`-class errors and a status notice; restore + verify log
 JWKS endpoint blocked → cached keys serve, alert fires; ZITADEL upgrade rehearsal on a
 restored prod dump → smoke login + provisioning dry-run.
 
+**Deprovisioning propagation** (docs/43): deactivate a user **in the ZITADEL console**
+and assert the membership flips and the live session dies within one poll interval + 1 s;
+kill the `idp-sync` worker → `IdpSyncStalled` pages inside 5 min → restart → the catch-up
+applies the missed deactivations exactly once (inbox dedupe, cursor unchanged on
+failure); force a mid-page apply failure and assert the cursor does **not** advance;
+re-poll a page and assert no duplicate effects; OIDC-settings read-back equals 900 s in
+the same suite (docs/43 §6).
+
 ## 6. Security testing (docs/28 §11–12)
 
 - **Every PR:** `gitleaks`, dep-scan, SAST (golangci-lint,

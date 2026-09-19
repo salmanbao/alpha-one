@@ -380,3 +380,31 @@ findings that change behaviour here:
    now a cutover choice, not a forced reset (docs/25 §3.5, decision D7).
 6. **V1 identity/tenant events were uncatalogued** — 13 payload schemas added
    (`contracts/events/payloads/`, `contracts/events/catalog.md`, docs/31).
+
+### 10.2 Deprovisioning follow-up (docs/43, 2026-09-19)
+
+The third pass asked a build question the first two did not: *how does an IdP-side
+deprovisioning reach `tenant_memberships` before someone notices?* Findings that change
+the design here:
+
+1. **Actions v2 event executions cannot carry it** — a failed call loses the event with
+   no retry (upstream #10268, open, v3-era, *To-be-closed*) and event-condition
+   executions can break the instance's APIs and login (upstream #12225, open). The
+   mechanism is therefore a **pull consumer over the event store**
+   (`admin/v1/events/_search` + sequence cursor + durable inbox), with a webhook
+   admissible only as a later fast path (docs/43 §2–§3).
+2. **Token lifetimes were documented, not enforced** — ZITADEL ships 12 h access tokens;
+   the 15-min figure in docs/02 §3.2 requires the instance OIDC settings to be written at
+   provisioning (docs/43 §6, decision D10). This is the bound that survives a total
+   pipeline + alerting failure.
+3. **Reconciliation was mislabelled as the mitigation** — it is the safety net behind a
+   real-time mechanism, and it is not built yet (docs/43 §1/§7).
+4. **Self-service deletion is a live capability** (ZITADEL's `user.self.delete` via
+   `ORG_USER_SELF_MANAGER` / `SELF_MANAGEMENT_GLOBAL`, both console and API paths) —
+   V1 posture is to withhold it and route closure through us, with a role-grant alert as
+   the enforcement (docs/43 §8, decision D12).
+
+Precedent check (docs/43 §10): Stripe, Okta, Google Workspace, Entra Connect, Entra
+provisioning quarantine and the IGA vendors all pair push with a pull/reconcile path —
+we are following the norm; our vendor's zero-retry push is the reason the puller is the
+transport rather than a nicety.

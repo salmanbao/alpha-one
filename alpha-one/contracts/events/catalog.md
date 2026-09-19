@@ -64,8 +64,8 @@ payloads never carry the address itself.
 | user.registered | v1 | AUTH (AUTH-01) | NOT-01 (welcome), AUD, ANA-01 | `payloads/user.registered.v1.json` |
 | user.login_success | v1 | AUTH / ZITADEL | AUD, ANA-01, RSK (anomaly baseline) | `payloads/user.login_success.v1.json` |
 | user.login_failure | v1 | ZITADEL (Actions v2) | AUD, RSK (anomaly scoring), NOT (security notice on threshold) | `payloads/user.login_failure.v1.json` |
-| user.suspended | v1 | AUTH (AUTH-20) | NOT-01, GW (session kill), AUD | `payloads/user.suspended.v1.json` |
-| user.activated | v1 | AUTH (AUTH-43) | NOT-01, AUD | `payloads/user.activated.v1.json` |
+| user.suspended | v1 | AUTH (AUTH-20) / idp-sync (IdP-driven, docs/43) | NOT-01, GW (session kill), AUD | `payloads/user.suspended.v1.json` |
+| user.activated | v1 | AUTH (AUTH-43) / idp-sync | NOT-01, AUD | `payloads/user.activated.v1.json` |
 | user.session_revoked | v1 | AUTH (AUTH-39 logout, AUTH-20 suspension; AUTH-27 admin in V2) | AUD | `payloads/user.session_revoked.v1.json` |
 | user.password_changed | v1 | AUTH (AUTH-05, AUTH-40) | session invalidator, AUD | `payloads/user.password_changed.v1.json` |
 

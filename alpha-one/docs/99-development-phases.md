@@ -222,6 +222,22 @@ The second-pass review artifact is `docs/42-auth-ten-gap-analysis.md` (G1–G20)
 requirement-coverage impact is limited to V1 design detail — **no PRD workbook row was
 changed** (the promotions were already recorded in docs/37).
 
+**Phase-0 gates added by the deprovisioning design (docs/43, 2026-09-19)** — recorded in
+docs/34 §9 alongside the five above:
+
+6. **Token-lifetime enforcement** — the instance OIDC settings are set to 900 s
+   access/ID and read back, and the access token's session claim is identified so
+   session termination can be keyed on it (docs/02 §3.2, docs/43 §6). Without this the
+   pipeline's worst-case bound is 12 h, not 15 min.
+7. **`idp-sync` end-to-end** — poll the event log from a sequence cursor on the pinned
+   version, diff the live event-type list against docs/43 §4, prove duplicate
+   suppression, and run the kill-the-worker drill (page < 5 min, catch-up exact).
+8. **Self-delete posture** — no `user.self.delete`-capable role grants present, or a
+   written DPO acceptance on file (decision D12, docs/43 §8).
+
+The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12);
+like docs/42 it changes V1 design detail only — **no PRD workbook row was changed**.
+
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)
 
 **Goal:** the end-to-end money loop on synthetic data.

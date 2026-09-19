@@ -108,11 +108,13 @@ constantly).
 | Doc | Contents |
 |---|---|
 | [36-prd-feature-proposals](docs/36-prd-feature-proposals.md) | The 14 `PROP-*` proposals (all unreviewed) + the release roadmap with its gates and counts |
-| [37-prd-open-questions](docs/37-prd-open-questions.md) | All 205 workbook questions by module — 8 answered (binding), 197 open, each with owner + deadline — plus the 9 **answered** design-review questions (**D1–D5**, **P1–P4**) raised by the AUTH/TEN evaluation |
+| [37-prd-open-questions](docs/37-prd-open-questions.md) | All 205 workbook questions by module — 8 answered (binding), 197 open, each with owner + deadline — plus the 16 design-review questions (**D1–D5**, **P1–P4**, **D10–D11** answered; **D6–D9**, **D12** open with recorded defaults) raised by the AUTH/TEN evaluations and the deprovisioning review |
 | [38-prd-out-of-scope](docs/38-prd-out-of-scope.md) | The 266 deliberate exclusions by module — the "do not build this" register |
 | [39-prd-change-log](docs/39-prd-change-log.md) | The workbook's 67-row change log, the 7 backlog-audit findings, and the 13 controlled vocabularies |
 | [40-uploads-coverage](docs/40-uploads-coverage.md) | Source traceability: every `uploads/` file, where it landed, and what stayed open |
 | [41-auth-ten-open-source-evaluation](docs/41-auth-ten-open-source-evaluation.md) | AUTH + TEN: every candidate open-source identity/authorization/multi-tenancy solution scored against the PRD rows, the mandated picks re-examined, and the nine decisions they produced (ZITADEL + Casbin + Postgres RLS) |
+| [42-auth-ten-gap-analysis](docs/42-auth-ten-gap-analysis.md) | Second-pass AUTH/TEN review: 20 findings (G1–G20) against the ZITADEL/Casbin/RLS decisions, all closed in-pass — the artifact behind the `docs/02` §3.x resolutions and the contract-pack fixes |
+| [43-idp-deprovisioning](docs/43-idp-deprovisioning.md) | Third-pass design: near-real-time IdP deprovisioning (`idp-sync` pull consumer + durable inbox over the event log), delivery-failure handling, the 15-min token-lifetime bound, reconciliation as the safety net, the self-service deletion posture, and the industry precedent (decisions D10–D12) |
 
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The

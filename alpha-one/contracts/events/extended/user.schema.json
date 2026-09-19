@@ -113,7 +113,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-20 / AUTH-43. Consumers: NOT, GW (immediate session kill), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-20 / AUTH-43 / idp-sync (IdP-driven, docs/43). Consumers: NOT, GW (immediate session kill), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -133,7 +133,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-43 (unsuspend). Consumers: NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-43 (unsuspend) / idp-sync. Consumers: NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }

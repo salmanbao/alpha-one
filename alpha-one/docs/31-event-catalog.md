@@ -34,8 +34,8 @@
 | `user.registered` | 02 (AUTH) | AUTH-01 | NOT-01 (welcome), AUD, ANA | V1 |
 | `user.login_success` | 02 (AUTH) | AUTH-04 (session materialisation) | AUD, ANA, RSK (anomaly baseline) | V1 |
 | `user.login_failure` | 02 (AUTH) | ZITADEL via Actions v2 | AUD, RSK (anomaly), NOT (security notice) | V1 |
-| `user.suspended` | 02 (AUTH) | AUTH-20 / AUTH-43 | NOT, GW (immediate session kill), AUD | V1 |
-| `user.activated` | 02 (AUTH) | AUTH-43 (unsuspend) | NOT, AUD | V1 |
+| `user.suspended` | 02 (AUTH) | AUTH-20 / AUTH-43 / idp-sync (IdP-driven, docs/43) | NOT, GW (immediate session kill), AUD | V1 |
+| `user.activated` | 02 (AUTH) | AUTH-43 (unsuspend) / idp-sync | NOT, AUD | V1 |
 | `user.session_revoked` | 02 (AUTH) | AUTH (logout AUTH-39, suspension AUTH-20) | AUD — admin-initiated revocation is AUTH-27 (V2) | V1 |
 | `user.password_changed` | 02 (AUTH) | AUTH-05 / AUTH-40 | session invalidator (all other sessions), AUD | V1 |
 | `user.role_changed` | 02 (AUTH) | membership role edited | cache-invalidator (authz), AUD | ext |

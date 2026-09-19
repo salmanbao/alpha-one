@@ -170,6 +170,7 @@ dedicated PDP (Cerbos, Apache-2.0) becomes worth its process.
    · ledger applier
    · evaluation trigger
    · audit applier
+   · idp-sync (IdP deprovisioning, docs/43)
 ```
 
 ### 4.2 Envelope (binding — see `contracts/shared/event-envelope.json`)
@@ -209,6 +210,7 @@ Rules:
 | consumer → side effect | **idempotent** | idempotency keys derived from `event_id`; consumers check-then-act under row locks |
 | consumer failure | retry w/ exponential backoff (5 attempts) → DLQ | workers supervisor; DLQ alerting to NOT + CON |
 | replay | manual, from PG `events` by (topic, seq range) | CON screen + `relayer replay` CLI |
+| ZITADEL event log → `idp-sync` | **at-least-once** (cursor + inbox dedupe) | poll `admin/v1/events/_search` from `idp_sync_cursors.last_sequence`; a stalled cursor alerts (docs/43 §5) |
 
 **Ordering:** no global ordering guarantee. Per-entity ordering is preserved by
 routing keys = entity id (hash slot); consumers that need ordering process per-entity
