@@ -357,7 +357,7 @@ event (AUD-23: staff viewing a trader's KYC documents or payout wallet).
   rows → R2, checksummed). V2 = true hash chain (`entry_hash =
   sha256(prev_entry_hash || canonical(row))`, per-tenant chain, AUD-14) +
   verification job (AUD-24) + breach-evidence export (AUD-25). The chain design
-  follows the distilled rules in [49 — LED/AUD open-source evaluation](49-ledger-audit-open-source-evaluation.md)
+  follows the distilled rules in [49 — LED/AUD open-source evaluation](49-chain-review-ledger-audit-oss.md)
   §6: **per-tenant stream** (not one global chain), a transaction-scoped
   **advisory lock per stream** so concurrent appends cannot fork the chain, a
   **versioned canonical string** covering every immutable field (content itself
@@ -404,7 +404,7 @@ event (AUD-23: staff viewing a trader's KYC documents or payout wallet).
 
 | Option | Verdict |
 |---|---|
-| **Postgres journal** (our design) | **CHOSEN V1** — PRD: Postgres is system of record; at ~500 entries/day every purpose-built alternative is ops weight (full scoring: [49](49-ledger-audit-open-source-evaluation.md) §4) |
+| **Postgres journal** (our design) | **CHOSEN V1** — PRD: Postgres is system of record; at ~500 entries/day every purpose-built alternative is ops weight (full scoring: [49](49-chain-review-ledger-audit-oss.md) §4) |
 | TigerBeetle | V2+ upgrade path if payout throughput 10× (register: consideration); open-source engine, engine-level double-entry, self-hosted — the same posture we already run |
 | **Formance Ledger** (MIT core + Numscript) | **Consider-later (the same 10× review point as TigerBeetle)** — self-hostable programmable ledger, one instance hosts many isolated ledgers; rejected for V1 as a second storage+API stack for trivial volume; its posting-template (Numscript) model is the reference for our `reason_code` posting flows |
 | Midaz (Lerian) | Watch — Go, multi-asset double-entry, but **source-available (not OSI)**; fails the docs/34 license posture today |
