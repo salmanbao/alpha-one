@@ -27,10 +27,12 @@ paths:
       operationId: post_v1_auth_session
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: required
       x-auth: ZITADEL access token (bearer, tenant audience) — AUTH-04/07
       x-v1-errors:
       - auth.token_invalid
+      - auth.tenant_mismatch
       - auth.account_suspended
       - auth.tenant_suspended
       - auth.mfa_required
@@ -65,6 +67,7 @@ paths:
       operationId: post_v1_auth_password
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: optional
       x-auth: any logged-in user — AUTH-40
       x-v1-errors:
@@ -101,6 +104,7 @@ paths:
       operationId: post_v1_auth_2fa_backup_codes
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: required
       x-auth: Staff at first-login enrolment — AUTH-09/11 (V1 per D5)
       x-v1-errors:
@@ -136,7 +140,7 @@ paths:
       operationId: post_v1_auth_2fa_backup_code
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
-      x-permission: mfa_satisfied
+      x-permission: self
       x-idempotency: required
       x-auth: Staff without a working factor — AUTH-11
       x-v1-errors:
@@ -172,6 +176,7 @@ paths:
       operationId: get_v1_auth_mfa_status
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: any logged-in user — AUTH-09
       security:
@@ -199,6 +204,7 @@ paths:
       operationId: post_v1_auth_mfa_enrollment
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: required
       x-auth: staff (any role) — AUTH-09
       x-v1-errors:
@@ -235,6 +241,7 @@ paths:
       operationId: post_v1_auth_logout
       x-phase: V1
       x-v1-baseline: contracts/api/auth.md
+      x-permission: self
       x-idempotency: optional
       x-auth: any user — AUTH-39
       security:

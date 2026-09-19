@@ -227,10 +227,10 @@ Namespace `KYC`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/trader/kyc/sessions` | Trader — implied by KYC-01 session creation + TD-02 self-serve flow | self-action | required | `kyc.country_restricted`, `kyc.already_in_progress` |
-| `POST /v1/webhooks/kyc/{provider}` | provider signature (EVT-10 shared verification utilities) — KYC-05 | none (signature-authenticated) | required — dedupe by provider event id | `webhook.signature_invalid` |
-| `GET /v1/trader/kyc/status` | Trader (self) — implied by KYC-06 "status is explicit and queryable" | self-action | n/a | standard |
-| `POST /v1/trader/kyc/documents` | Trader — KYC-12 (V1.1 manual fallback upload: ID + proof of address) | self-action | required | `kyc.upload_failed` |
+| `POST /v1/trader/kyc/sessions` | Trader — implied by KYC-01 session creation + TD-02 self-serve flow | `self` | required | `kyc.country_restricted`, `kyc.already_in_progress` |
+| `POST /v1/webhooks/kyc/{provider}` | provider signature (EVT-10 shared verification utilities) — KYC-05 | `none` — signature-authenticated | required — dedupe by provider event id | `webhook.signature_invalid` |
+| `GET /v1/trader/kyc/status` | Trader (self) — implied by KYC-06 "status is explicit and queryable" | `self` | n/a | standard |
+| `POST /v1/trader/kyc/documents` | Trader — KYC-12 (V1.1 manual fallback upload: ID + proof of address) | `self` | required | `kyc.upload_failed` |
 | `GET /v1/admin/kyc/manual-queue` | Tenant Admin — KYC-11 (V1.1 fallback when provider unavailable or flags a case) | `kyc.review` # KYC-11 | n/a | standard |
 | `POST /v1/admin/kyc/{kyc_verification_id}/decision` | Tenant Admin — KYC-11 (V1.1) | `kyc.review` # KYC-11 | required | `kyc.case_not_reviewable` |
 | `PUT /v1/admin/kyc/restricted-countries` | Tenant Admin — KYC-13 (V1.1) | `kyc.restrictions.write` # KYC-13 | required | standard |

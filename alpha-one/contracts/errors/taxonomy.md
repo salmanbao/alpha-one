@@ -30,6 +30,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.account_suspended` | 403 | User suspended; sessions and tokens already invalidated | "Your account has been suspended." | AUTH (impl: AUTH-20) |
 | `auth.membership_suspended` | 403 | Membership at this tenant is suspended (identity itself is fine) | "Your access to this firm is suspended." | AUTH (impl: AUTH-20, docs/02 §4 GW step 3.5c) |
 | `auth.realm_mismatch` | 403 | Login from the other realm for an existing identity (staff ↔ trader); operator decides | "This account cannot sign in here." | AUTH (impl: AUTH-16, docs/44 §6.1) |
+| `auth.tenant_mismatch` | 403 | Token `aud`/org names another tenant's application than the tenant resolved from the request domain | "This account cannot sign in here." | AUTH (impl: AUTH-04/07, docs/02 §3.2, decision D19) |
 | `auth.totp_required` | 401 | Staff login missing 2FA code | "Enter your two-factor code." | AUTH (impl: AUTH-09) |
 | `auth.totp_invalid` | 401 | Wrong TOTP code | "That two-factor code is not valid." | AUTH (impl: AUTH-09) |
 | `auth.reset_token_invalid` | 400 | Unknown/expired/used single-use reset link | "This reset link is no longer valid." | AUTH (impl: AUTH-05) |

@@ -29,9 +29,9 @@ paths:
       operationId: get_v1_trader_catalog
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: none
       x-idempotency: n/a
-      x-auth: none required (public browsing) — TODO — needs owner decision; story TD-09 implies pre-login
-        browsing
+      x-auth: none required (public browsing) — story TD-09 pre-login browsing
       x-v1-errors:
       - catalog.challenge_not_found
       security:
@@ -59,8 +59,9 @@ paths:
       operationId: post_v1_trader_checkout_sessions
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: self
       x-idempotency: required
-      x-auth: Trader — TODO — needs owner decision (login timing)
+      x-auth: Trader (self) — login timing fixed at freeze
       x-v1-errors:
       - catalog.challenge_not_found
       - checkout.coupon_invalid
@@ -96,6 +97,7 @@ paths:
       operationId: delete_v1_checkout_sessions_id
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: self
       x-idempotency: required
       x-auth: Trader (session owner) — CHK-44 (V1.0)
       x-v1-errors:
@@ -132,6 +134,7 @@ paths:
       operationId: post_v1_webhooks_payments_provider
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: none
       x-idempotency: required — dedupe by provider event id
       x-auth: provider signature (EVT-10 shared verification utilities)
       x-v1-errors:
@@ -171,6 +174,7 @@ paths:
       operationId: post_v1_trader_orders_order_id_retry_payment
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: self
       x-idempotency: required
       x-auth: Trader — CHK-16 (V1.1)
       x-v1-errors:
@@ -213,6 +217,7 @@ paths:
       operationId: get_v1_trader_orders_order_id_receipt
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader (owner) — CHK-17 (V1.1)
       x-v1-errors:
@@ -249,6 +254,7 @@ paths:
       operationId: get_v1_trader_orders_order_id_invoice
       x-phase: V1
       x-v1-baseline: contracts/api/chk.md
+      x-permission: self
       x-idempotency: n/a
       x-auth: Trader (owner) — CHK-40 (V1.1)
       x-v1-errors:

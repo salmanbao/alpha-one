@@ -64,6 +64,11 @@ and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 k
   password change, MFA enrolment) require no key. (Closed 2026-09-19, D14.)
 - `tenant.impersonate`: **no such key in V1.** AUTH-16 is a separation contract — the console identity cannot act inside a tenant at all because no impersonation path exists. Enablement (TEN-16, CON-07, AUD-08) is V2.0 and would introduce the key with its audit format. See `api/auth.md` ("Impersonation (AUTH-16)").
 - Field-level permissions beyond route/action permissions are out of scope (Out Of Scope sheet).
+- **Every V1 endpoint declares its authorization in the contract** (`x-permission`): a registry
+  key, or an explicit keyless marker — `self` (the caller acting on their own data; the own-data
+  matcher still runs) or `none` (unauthenticated / signature-authenticated, e.g. provider
+  webhooks). `scripts/verify_roles.py` fails the build when a V1 operation declares nothing or
+  declares an unbound key, and lists bound keys no route uses (review G41).
 
 ## Open contract questions
 - Resolved 2026-09-19 (D14): role-to-permission binding table → `contracts/permissions/roles.yaml`.
@@ -188,7 +193,7 @@ use them.
 | `tenant.identity.invite` | AUTH | Invite a staff member into the tenant (AUTH-03, V2). |
 | `tenant.identity.role_change` | AUTH | Change a member's role; audited (`user.role_changed`). (AUTH-12/14) |
 | `tenant.identity.remove` | AUTH | Remove a member from the tenant; deactivates the IdP user when no memberships remain. |
-| `tenant.sso.read` | AUTH | View the org's SSO/IdP configuration and group→role map. (AUTH-24) |
+| `tenant.sso.read` | AUTH | View the org's SSO/IdP configuration. (AUTH-24) — group→role mapping is **out of V1** (decision D22): the surface shows the SSO config only |
 | `tenant.sso.configure` | AUTH | Register/update/remove the tenant's SAML/OIDC IdP (metadata, certificates, mapping). (AUTH-24, P3) |
 | `tenant.scim.manage` | AUTH | Issue/rotate the SCIM bearer token and inspect SCIM-provisioned users. (AUTH-25, P3) |
 | `platform.identity.admin` | AUTH | Platform-staff identity administration: create/deactivate console users, force MFA reset (AUTH-28), break-glass. (AUTH-16, AUTH-28) |

@@ -16,7 +16,8 @@
   `contracts/permissions/roles.yaml` (docs/02 §3.1; unified in review G30):
   `platform:super_admin` (everything, incl. tenant suspension/termination),
   `platform:ops` (health, jobs, incidents, session revocation),
-  `platform:support` (read-assist, tenant contact registry),
+  `platform:support` (tenant contact registry + console read visibility; **cross-tenant
+  read-assist is V2, CON-27** — V1 has no tenant-realm read path, AUTH-16),
   `platform:finance` (platform financials, CON-19 V2 early-read),
   `platform:readonly` (read-only visibility). The earlier name `platform:owner`
   is an alias for `platform:super_admin`.
@@ -230,8 +231,8 @@ Namespace `CON`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/console/auth/login` | none (public console login) — CON-01 | none | optional | `auth.invalid_credentials`, `auth.totp_required` |
-| `POST /v1/console/auth/logout` | Super Admin console session — CON-01 | self-action | optional | standard |
+| `POST /v1/console/auth/login` | none (public console login) — CON-01 | `none` — pre-auth by definition | optional | `auth.invalid_credentials`, `auth.totp_required` |
+| `POST /v1/console/auth/logout` | Super Admin console session — CON-01 | `self` | optional | standard |
 | `POST /v1/console/sessions/{session_id}/revoke` | Super Admin (a different one) — CON-30 | `console.session.revoke` # CON-30 | required | `console.session_not_found`, `console.cannot_revoke_self` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/con.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).

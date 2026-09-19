@@ -41,13 +41,14 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (312 codes — 72 V1 baseline, 240 extended — across 25 modules)
+## 2. The registry (313 codes — 73 V1 baseline, 240 extended — across 25 modules)
 
 ### 02 — AUTH
 
 | Code | HTTP | Meaning (from doc 02 §6) | Tier |
 |---|---|---|---|
-| `auth.realm_mismatch` | 403 | A login from the other realm for an existing `identity_key` (staff ↔ trader) — refused instead of flipping `identities.realm` (review G25, docs/44 §6.1) —... | V1 |
+| `auth.realm_mismatch` | 403 | A login from the other realm for an existing identity (staff ↔ trader) — refused instead of flipping `identities.realm` (review G25, docs/44 §6.1) — "This... | V1 |
+| `auth.tenant_mismatch` | 403 | Token `aud`/org does not match the tenant resolved from the request domain — a tenant-A token on tenant-B's host (review G34, decision D19) — "This account... | V1 |
 | `auth.membership_suspended` | 403 | The identity is fine but its membership at this tenant is suspended (GW step 3.5c, docs/44 §7) — "Your access to this firm is suspended." | V1 |
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) — "Please check your details and try again." | V1 |
 | `auth.email_taken` | 409 | Email already registered on this tenant — "An account with this email already exists." | V1 |

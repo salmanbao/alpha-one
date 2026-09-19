@@ -156,8 +156,8 @@ Namespace `DOC`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `GET /v1/trader/documents` | Trader (self) — DOC-06 | self-read | n/a | standard |
-| `GET /v1/trader/documents/{document_id}` | Trader (owner) — DOC-06 | self-read | n/a | `document.not_found` |
+| `GET /v1/trader/documents` | Trader (self) — DOC-06 | `document.read` (own scope) | n/a | standard |
+| `GET /v1/trader/documents/{document_id}` | Trader (owner) — DOC-06 | `document.read` (own scope) | n/a | `document.not_found` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/doc.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
 

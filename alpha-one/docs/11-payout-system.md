@@ -171,7 +171,9 @@ each with field-encrypted details (wallet address / account ref). Rules:
 
 ADM payout queue (PAY-08): columns — trader, account, amount, rail, age,
 eligibility re-check (live badge), **risk context** (open cases — RSK-35 V2;
-V1: case flag), action buttons. Approve = 2FA (step-up, AUTH §3.1) + optional
+V1: case flag), action buttons. Approve = hosted re-auth step-up
+(`prompt=login&max_age=300`; the API enforces `auth_time` ≤ 5 min and returns
+`authz.step_up_required` when stale — docs/02 §3.2, decision D23) + optional
 note; reject = **reason required** (taxonomy: `insufficient_kyc`, `risk_review`,
 `balance_mismatch`, `suspicious_method`, `other:{note}`). Batch export
 (PAY-44, V1-Plus: CSV of the queue for the COO's spreadsheet world). V2:
@@ -315,10 +317,10 @@ template registry, NOT):
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
 | `POST /v1/trader/payouts` | Trader (funded account owner) — PAY-01 | `payout.request` (self) # PAY-01 | required | `payout.ineligible`, `payout.risk_hold`, `payout.not_funded`, `payout.amount_exceeds_available`, `payout.method_not_confirmed`, `payout.invalid_address`, `payout.schedule_not_due` |
-| `GET /v1/trader/payouts` | Trader (self) — TD-10 (track payout status) | self-read | n/a | standard |
+| `GET /v1/trader/payouts` | Trader (self) — TD-10 (track payout status) | `self` — own payouts | n/a | standard |
 | `POST /v1/trader/payout-methods` | Trader — PAY-05 (V1.1) | `payout.method.write` (self) # PAY-05 | required | `payout.method_invalid` |
 | `GET /v1/admin/payouts/queue` | Finance Approver — PAY-08 | `payout.read_queue` # PAY-08 | n/a | standard |
-| `POST /v1/admin/payouts/{payout_id}/approve` | Finance Approver — PAY-09 | `payout.approve` # PAY-09 | required | `payout.not_pending_approval`, `payout.ineligible` |
+| `POST /v1/admin/payouts/{payout_id}/approve` | Finance Approver — PAY-09 | `payout.approve` # PAY-09 | required | `payout.not_pending_approval`, `payout.ineligible`, `authz.step_up_required` |
 | `POST /v1/admin/payouts/{payout_id}/reject` | Finance Approver — PAY-09 | `payout.approve` # PAY-09 | required | `payout.not_pending_approval`, `payout.reason_required` |
 | `POST /v1/admin/payouts/{payout_id}/execution` | COO — PAY-12 (Build Strategy: "Manual for V1" — sending money is manual; this endpoint records reality) | `payout.record_execution` # PAY-12 | required | `payout.not_approved`, `payout.execution_mismatch` |
 | `POST /v1/admin/payouts/export` | Finance user — PAY-44 (V1.1) | `payout.record_execution` (batch file feeds manual execution) # PAY-44; key — TODO — needs owner decision | optional | `payout.no_approved_payouts` |

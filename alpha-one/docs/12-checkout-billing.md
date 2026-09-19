@@ -227,13 +227,13 @@ Namespace `CHK`:
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `GET /v1/trader/catalog` | none required (public browsing) — TODO — needs owner decision; story TD-09 implies pre-login browsing | none | n/a | `catalog.challenge_not_found` |
-| `POST /v1/trader/checkout/sessions` | Trader — TODO — needs owner decision (login timing) | trader self-action | required | `catalog.challenge_not_found`, `checkout.coupon_invalid`, `checkout.session_expired` |
-| `DELETE /v1/checkout/sessions/{id}` | Trader (session owner) — CHK-44 (V1.0) | none — identity-scoped per Decision 2 (trader self-action; the row explicitly states "no permission key") | required | `checkout.session_not_found`, `checkout.session_not_cancellable` |
-| `POST /v1/webhooks/payments/{provider}` | provider signature (EVT-10 shared verification utilities) | none (signature-authenticated) | required — dedupe by provider event id | `webhook.signature_invalid` |
-| `POST /v1/trader/orders/{order_id}/retry-payment` | Trader — CHK-16 (V1.1) | trader self-action | required | `order.not_found`, `order.not_retryable` |
-| `GET /v1/trader/orders/{order_id}/receipt` | Trader (owner) — CHK-17 (V1.1) | trader self-action | n/a | `order.not_found`, `receipt.not_ready` |
-| `GET /v1/trader/orders/{order_id}/invoice` | Trader (owner) — CHK-40 (V1.1) | trader self-action | n/a | `order.not_found` |
+| `GET /v1/trader/catalog` | none required (public browsing) — story TD-09 pre-login browsing | `none` — public; tenant pricing/entitlements apply post-login | n/a | `catalog.challenge_not_found` |
+| `POST /v1/trader/checkout/sessions` | Trader (self) — login timing fixed at freeze | `self` — trader self-action | required | `catalog.challenge_not_found`, `checkout.coupon_invalid`, `checkout.session_expired` |
+| `DELETE /v1/checkout/sessions/{id}` | Trader (session owner) — CHK-44 (V1.0) | `self` — session owner (identity-scoped per Decision 2) | required | `checkout.session_not_found`, `checkout.session_not_cancellable` |
+| `POST /v1/webhooks/payments/{provider}` | provider signature (EVT-10 shared verification utilities) | `none` — signature-authenticated | required — dedupe by provider event id | `webhook.signature_invalid` |
+| `POST /v1/trader/orders/{order_id}/retry-payment` | Trader — CHK-16 (V1.1) | `self` — order owner | required | `order.not_found`, `order.not_retryable` |
+| `GET /v1/trader/orders/{order_id}/receipt` | Trader (owner) — CHK-17 (V1.1) | `self` — order owner | n/a | `order.not_found`, `receipt.not_ready` |
+| `GET /v1/trader/orders/{order_id}/invoice` | Trader (owner) — CHK-40 (V1.1) | `self` — order owner | n/a | `order.not_found` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/chk.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
 

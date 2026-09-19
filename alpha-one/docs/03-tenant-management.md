@@ -125,8 +125,8 @@ DOC). Admin preview in ADM (`ADM-19` settings pages). No JS theme injection.
 |---|---|---|---|
 | 1 | validate application (KYB basics, sanctions list check, jurisdiction) | — | `tenant.provisioning_failed` |
 | 2 | create `tenants` row (`status=provisioning`), slug unique | delete row | idempotent retry |
-| 3 | provision ZITADEL organization + project/application + owner membership (Admin API), store `idp_org_id`; per-org login policy, password policy, lockout and branding defaults, org domain = `{slug}.alpha1.io`, `mfa_init_skip_lifetime` set (staff-MFA nudge, docs/02 §3.2) | destroy org | retry ×2 |
-| 3a | (only when the tenant contracted SSO — AUTH-24/25) register the org's external IdP (SAML/OIDC metadata), attach it to the org, map directory groups → roles, issue the SCIM bearer token into the IdP | revoke token, remove IdP | retry; manual on metadata errors |
+| 3 | provision ZITADEL organization + **project/OIDC application for the tenant** + owner membership (Admin API), store `idp_org_id` **and `idp_client_id`** (that application's audience — review G34 / decision D19; its secret goes to the tenant secret store, never to `tenants`); per-org login policy, password policy, lockout and branding defaults, org domain = `{slug}.alpha1.io`, `mfa_init_skip_lifetime` set (staff-MFA nudge, docs/02 §3.2) | destroy org | retry ×2 |
+| 3a | (only when the tenant contracted SSO — AUTH-24/25) register the org's external IdP (SAML/OIDC metadata), attach it to the org, **assign the SSO users' roles ourselves** (ADM action at onboarding), issue the SCIM bearer token into the IdP. **No group→role mapping in V1 (review G37 / decision D22):** directory groups drive sign-in and provisioning only; the membership lifecycle is `user.human.added` → `invited`, first `/v1/auth/session` → `active` (docs/02 §3.2), and group→role mapping is a V2 capability (AUTH-24 extension) | revoke token, remove IdP | retry; manual on metadata errors |
 | 4 | branding defaults + legal defaults | delete rows | retry |
 | 5 | subdomain DNS (Cloudflare API: `CNAME {slug}.alpha1.io`) | delete record | retry; custom domain = V1.1 step |
 | 6 | default broker group ref (BRG-12) + default rule packs (EVL seed) | delete refs | retry |
@@ -166,6 +166,7 @@ revealed value is audited (`tenant.integration.revealed`).
 | Payout rail credentials (V2, PAY-05) | yes | encrypted + separate field key | masked | tenant-initiated | write + reveal |
 | SSO signing certificate / IdP metadata (V1 for the cutover tenant) | public cert + private only at the IdP | metadata stored as text; no private key on our side | full (public) | tenant-side | write |
 | SCIM bearer token we issue | yes (hash only, like API keys) | SHA-256 hash | shown once at issue | 90 d | write + issue |
+| ZITADEL OIDC client secret (per tenant application, G34/D19) | yes | in the tenant secret store (`integration_config`), referenced by `tenants.idp_client_secret_ref` | never shown after provisioning | 180 d, dual-secret overlap | rotate (saga action + CON resume) |
 
 Rules: secrets never appear in logs, error payloads, analytics or event payloads;
 `GET /v1/tenants/{tenant_id}/integrations` never decrypts (masking only) — decryption happens
@@ -404,6 +405,8 @@ CREATE TABLE tenants (
   slug          VARCHAR(63) UNIQUE NOT NULL,
   idp_org_id    TEXT UNIQUE,                      -- ZITADEL org (review G1); NULL until provisioned
   idp_org_domain TEXT,                            -- {slug}.alpha1.io, set as the org domain
+  idp_client_id TEXT UNIQUE,                      -- that org's OIDC application audience — token `aud` check (G34/D19)
+  idp_client_secret_ref TEXT,                     -- SOPS/KMS reference; the secret itself never lives in this row
   parent_id     ULID REFERENCES tenants(id),      -- ADR-2 door, NULL in V1
   firm_name     VARCHAR(255) NOT NULL,
   legal_entity_name VARCHAR(255), registration_number VARCHAR(100), tax_id VARCHAR(100),
@@ -564,7 +567,7 @@ alerts).
 
 | Module | How |
 |---|---|
-| **AUTH** | provisioning step 3 creates the ZITADEL organization + project/application + owner membership and writes `idp_org_id`; `tenant.suspended` kills its sessions (our deny-set + ZITADEL session termination); console realm separates platform staff |
+| **AUTH** | provisioning step 3 creates the ZITADEL organization + project/application + owner membership and writes `idp_org_id` + `idp_client_id` (step 3a adds the external IdP + SCIM token when contracted — no group→role mapping in V1, G37/D22); `tenant.suspended` kills its sessions (our deny-set + ZITADEL session termination); console realm separates platform staff |
 | **GW** | tenant resolution source; quota & entitlement gate reads TEN rows; `suspended` → immediate 403 |
 | **BRG** | `settings.trading.broker_group` selects the MetaApi server group (BRG-12); account caps enforced here |
 | **EVL** | provisioning seeds default rule packs; tenant custom rules live in EVL but capped by `max_custom_rules` |

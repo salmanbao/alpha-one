@@ -66,7 +66,7 @@
     },
     "platform:support": {
       "realm": "platform",
-      "description": "Read-assist and tenant contact registry (CON-01). No tenant-realm action (AUTH-16).",
+      "description": "Tenant contact registry + console read visibility. Cross-tenant read-assist is V2 (CON-27); no tenant-realm action in V1 (AUTH-16, review G42).",
       "inherits": ["platform:readonly"]
     },
     "platform:ops": {

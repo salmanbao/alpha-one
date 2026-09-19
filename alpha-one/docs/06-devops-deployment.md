@@ -156,6 +156,38 @@ rollover (EVL), sync gap scanner (BRG), reconciliation (LED/PAY), read-model
 refresh (ANA), outbox pruning (EVT), backup integrity check, retention purges
 (AUD/KYC docs), usage metering flush (TEN), relay watchdog.
 
+### 3.5 Auth availability posture (review G45)
+
+No new SLO machinery is built in V1 (formal SLOs are V2 `OPS-40`,
+`GET /v1/console/ops/slos`), but the identity stack gets an **explicit posture** rather than
+an implicit one, because every other module depends on it:
+
+| Objective | V1 target | Why this is the honest number |
+|---|---|---|
+| Login success ratio (hosted login + `/session`) | ≥ 99.5 % monthly | single-box posture (06 §1); ZITADEL shares the box and the Postgres, so there is no independent availability to promise |
+| `/session` latency | p95 < 300 ms (excl. hosted login) | one JWKS-verified token + two indexed reads |
+| Authenticated-request continuity when the IdP is down | existing access tokens keep validating for the JWKS cache lifetime (24 h) | documented behaviour (docs/02 §3.3), not luck: the API does not call the IdP per request |
+| Revocation propagation (suspend/remove → denied) | p95 ≤ 60 s, worst case ≤ 15 min | `idp-sync` 10 s poll + retry budget bounded by the access-token lifetime (docs/43 §6) |
+| `idp-sync` lag | p95 ≤ 30 s; `IdpSyncStalled` pages at 5 min | docs/43 §5 alerting |
+| Staff MFA enforcement | 100 % of staff-role requests carry an `amr` assertion | enforced in our API (`auth.mfa_required`), not by policy alone |
+
+The **login path is the availability outlier by design**: when the IdP is down, logins stop
+and the runbook says so (docs/02 §3.3), while the trading/ledger paths keep serving. That
+asymmetry is recorded here so it is a decision, not a surprise.
+
+### 3.6 Ops runbooks (V1) (review G43)
+
+The identity-adjacent procedures that have no API in V1 are written down so they are
+rehearsable, not tribal knowledge:
+
+| Runbook | Steps (short form) |
+|---|---|
+| **Staff onboarding (V1)** | create the user in the `alpha1-platform` ZITADEL org → enrol TOTP/WebAuthn (org `force_mfa=true`) → insert the `identities` row (`realm='platform'`) → grant the Casbin role from `contracts/permissions/roles.yaml` (seed SQL via `scripts/verify_roles.py --seed`) → verify with a `/v1/console/auth/login` → audit entry |
+| **Staff offboarding (V1)** | revoke Casbin bindings → suspend + `RevokeAllMyRefreshTokens` → session delete + deny-set → keep the identity row for the audit trail |
+| **Quarterly access review (G39)** | export ZITADEL IAM members/grants + `identity_idp_links` holder list → diff against `roles.yaml` expectations → record the diff and the sign-off in the compliance register |
+| **IdP break-glass** | sealed credential from the ops vault (one of exactly two `IAM_OWNER` holders, G39) → admin plane only reachable inside the network / Cloudflare Access → rotate on use, notify, post-incident review |
+| **Deny-set / session kill drill** | with `docker stop zitadel` and with Redis flushed: prove kill latency and fail-closed behaviour (docs/99 gate 10, docs/35 §5.1) |
+
 ## 4. Events
 
 OPS does not produce domain events. It produces **operational** signals:

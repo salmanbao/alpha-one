@@ -4,6 +4,8 @@ CREATE TABLE tenants (
   slug          VARCHAR(63) UNIQUE NOT NULL,
   idp_org_id    TEXT UNIQUE,                      -- ZITADEL org (review G1); NULL until provisioned
   idp_org_domain TEXT,                            -- {slug}.alpha1.io, set as the org domain
+  idp_client_id TEXT UNIQUE,                      -- that org's OIDC application audience — token `aud` check (G34/D19)
+  idp_client_secret_ref TEXT,                     -- SOPS/KMS reference; the secret itself never lives in this row
   parent_id     ULID REFERENCES tenants(id),      -- ADR-2 door, NULL in V1
   firm_name     VARCHAR(255) NOT NULL,
   legal_entity_name VARCHAR(255), registration_number VARCHAR(100), tax_id VARCHAR(100),

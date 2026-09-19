@@ -3,11 +3,11 @@
 CREATE TABLE identities (
   id            ULID PRIMARY KEY,
   idp_user_id   TEXT UNIQUE,                -- ZITADEL user id (sub); NULL until first login
-  identity_key  TEXT UNIQUE NOT NULL,       -- sha256(lower(trim(email))) — platform join key (G1/AUTH-36)
+  identity_key  TEXT UNIQUE NOT NULL,       -- sha256 of the FIRST verified email — immutable join key (G35/D20)
   idp_org_id    TEXT,                       -- the ZITADEL org that owns this user object
   realm         TEXT NOT NULL DEFAULT 'tenant'
                 CHECK (realm IN ('tenant','platform')),   -- AUTH-16 audience realm
-  email         CITEXT UNIQUE NOT NULL,
+  email         CITEXT UNIQUE NOT NULL,     -- cache of the current primary address; matching uses identity_emails
   email_verified BOOLEAN NOT NULL DEFAULT false,
   phone         TEXT, phone_verified BOOLEAN NOT NULL DEFAULT false,
   password_hash TEXT,                       -- argon2id; NULL for social-only (V3)
@@ -46,11 +46,28 @@ CREATE INDEX idx_idp_links_identity ON identity_idp_links(identity_id) WHERE sta
 -- `identities.idp_user_id` / `idp_org_id` above are a denormalised pointer to the most
 -- recently used link (join convenience), never the lookup key.
 
+-- every address an identity has ever verified (review G35 / D20). Matching for
+-- /session, idp-sync and the AUTH-36 merge reads email_hash; identity_key never moves.
+CREATE TABLE identity_emails (
+  id          ULID PRIMARY KEY,
+  identity_id ULID NOT NULL REFERENCES identities(id),
+  email_hash  TEXT UNIQUE NOT NULL,        -- sha256(lower(trim(email))) — the match key
+  email       CITEXT NOT NULL,
+  is_primary  BOOLEAN NOT NULL DEFAULT true,
+  verified_at TIMESTAMPTZ,                 -- set only on a verified address (G36/D21)
+  retired_at  TIMESTAMPTZ,                 -- row kept: a later login on the old address resolves here
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_identity_emails_identity ON identity_emails(identity_id);
+-- exactly one live primary per identity (partial unique index in the migration)
+
 CREATE TABLE tenant_memberships (
   id          ULID PRIMARY KEY,
   identity_id ULID NOT NULL REFERENCES identities(id),
   tenant_id   ULID NOT NULL REFERENCES tenants(id),
-  role        TEXT NOT NULL DEFAULT 'user:trader',
+  role        TEXT NOT NULL DEFAULT 'user:trader',   -- single role per membership; the role's
+                                                     -- effective key set (roles.yaml) is the grant
+  -- lifecycle (G37/D22): `user.human.added`/invite → invited; first successful /v1/auth/session → active
   status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended','invited')),
   display_name_override TEXT,
   joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

@@ -63,8 +63,9 @@ Requirement coverage: `AUTH-01,04,05,07,09,12,13,15,16,17,20,39,40,43` (V1.0) +
 ```
 
 **ZITADEL mapping (ADR-13).** One self-hosted instance on the same box (ADR-9, Compose),
-one **Organization per tenant** (`tenants.idp_org_id`), one **project + OIDC application**
-for the tenant realm and a second application pair for the console realm. ZITADEL owns:
+one **Organization per tenant** (`tenants.idp_org_id`), **one project + OIDC application
+per tenant org** whose client id is `tenants.idp_client_id` (review G34 / decision D19),
+and a single console application on the `alpha1-platform` org for the platform realm. ZITADEL owns:
 credentials (Argon2id), password policy per org, MFA factors (TOTP, WebAuthn), login
 policy (lockout, session lifetimes), SSO/SAML connections per org, SCIM users, and the
 event stream. We own: `identities` (our id ↔ `idp_user_id`), memberships, roles,
@@ -82,6 +83,15 @@ projection, and every domain event.
   application's audience; console traffic only the console application's. A platform
   operator has no membership row and no tenant-audience token, so "console acts inside
   a tenant" is structurally impossible; V1 adds no impersonation.
+- **One application per tenant, and the token says which (review G34, decision D19).**
+  Because each tenant org has its own OIDC application, the *tenant* application audience
+  is not a single value: the `api` requires the token's `aud` to equal the `idp_client_id`
+  of the tenant **resolved from the request domain** (§3.4), and — when the org claim is
+  present — that it names that tenant's org. A token minted for tenant A is therefore
+  refused on tenant B's host (`auth.tenant_mismatch`, §6.1) even though both are "tenant
+  realm", and the `auth_sessions` row is written with that tenant (§9), so a session can
+  never be replayed across hosts. Provisioning step 3 writes `idp_client_id`; the client
+  secret is a per-tenant SOPS entry, never a column (§10.2).
 - **Casbin is embedded (ADR-14).** `authorizer.Check(ctx, subject, action, resource)`
   is the only policy entry point; the model (`g(r.sub, p.sub, r.dom)`, domain =
   `tenant_id`) and the policy rows live with our code and schema, so an authz decision
@@ -128,11 +138,19 @@ platform model is therefore:
 | Staff granted access in another org | home-org user + **user grant** | second membership; the active tenant comes from the request domain, never from the token's org |
 | Platform staff | user in the `alpha1-platform` org | `identities.realm='platform'`, no tenant membership |
 
-`identity_key` (normalised email hash, `identities.identity_key`) is the platform's
-join key: it is what makes "one person = one identity" true even though the IdP
-stores one user per org, and it is the anchor `AUTH-36` (duplicate identity merge,
-V2) will use. The Phase-0 spike must confirm the org-scope behaviour on the pinned
-version and record the outcome; nothing above depends on the upstream fix landing.
+`identity_key` (normalised hash of the **first verified email**, `identities.identity_key`)
+is the platform's join key: it is what makes "one person = one identity" true even though
+the IdP stores one user per org, and it is the anchor `AUTH-36` (duplicate identity merge,
+V2) will use. **It never moves (review G35, decision D20):** the previous design rewrote
+`identity_key` on an email change (`AUTH-29`), which would have silently created a second
+identity for the same person and moved the merge anchor. Matching is done through
+**`identity_emails`** (§9) — one row per `(identity, email)`, `email_hash UNIQUE`, with
+`is_primary` / `verified_at` / `retired_at`: a change adds a row and flips `is_primary`
+(the old row is retained so a later login on the old address still resolves to the same
+person), and `/session`, `idp-sync` and the `AUTH-36` merge all match on
+`identity_emails.email_hash`. `identities.email` is a cache of the primary address. The
+Phase-0 spike must confirm the org-scope behaviour on the pinned version and record the
+outcome; nothing above depends on the upstream fix landing.
 
 **Identity ↔ IdP links (review G21, docs/44 §3 — decision D13, binding).** Because one
 person holds **one ZITADEL user per organization**, `identities` cannot carry a single
@@ -143,9 +161,22 @@ is only a denormalised pointer to the most recently used link.
 
 | Path | Resolution rule |
 |---|---|
-| `POST /v1/auth/session` | link lookup by token `sub` → identity; miss → `identity_key` match on the verified email → attach a link; miss → create identity + link. A link is written for **every** `(identity, org)` the person logs in from |
-| `idp-sync` (docs/43 §3) | `aggregate_id` → `identity_idp_links` → identity; unknown link → resolve by `identity_key` when the payload carries the email, otherwise **hold the cursor + alert** (never guess a tenant) |
+| `POST /v1/auth/session` | link lookup by token `sub` → identity; miss → `identity_emails` match on the **verified** email → attach a link; miss → create identity + link. A link is written for **every** `(identity, org)` the person logs in from |
+| `idp-sync` (docs/43 §3) | `aggregate_id` → `identity_idp_links` → identity; unknown link → resolve by `identity_emails` hash when the payload carries the email, otherwise **hold the cursor + alert** (never guess a tenant) |
 | Re-link after deletion (docs/43 §9) | deleted link → `state='retired'` (its `idp_user_id` is the audit alias); a returning user gets a new link and is never silently re-linked — staff approval, re-KYC |
+
+**Cross-org auto-link requires a verified email (review G36, decision D21).** Attaching a
+login to an *existing* identity is the one place where a wrong match grants access to
+someone else's data, so the rule is explicit and single-valued: auto-link happens only when
+the token carries `email_verified = true` **and** ZITADEL reports the user's email state as
+verified (checked through the user record, not the token alone). An unverified email at a
+second org creates a **separate identity + a merge task** for staff (`AUTH-36` tooling) —
+never a silent link. Every cross-org link (an existing identity gaining a link in a new
+org) writes a **CRITICAL audit event** and notifies the existing org's admins
+(`identity.link_added` → CON/NOT), because it is exactly the "identity poisoning" path an
+attacker would use; if the target identity already holds a link in another org, the login
+still succeeds for the new org but the contact details of the first org are never revealed
+to the second.
 
 **One realm per identity (review G25, binding).** `identities.realm` is set at first
 login and is a *working context*, not a personal trait: a person who must act as platform
@@ -221,6 +252,28 @@ the role prefix.
 
 <!-- roles:end -->
 
+**Platform realm governance (review G39, decision D24).** ZITADEL's admin plane —
+the Console, `admin/v1` and `management/v1` APIs — is **not reachable from the edge**:
+it lives on the internal network only, and operator machines reach it through Cloudflare
+Access (SSO + device posture), not through any public route of ours. Exactly **two named
+people hold `IAM_OWNER`** (or one owner plus a **sealed emergency credential** in the ops
+vault, break-glass pattern of docs/21 §3.3); both carry mandatory MFA (the org policy is
+`force_mfa = true`, G33). Every IAM role grant is part of the **quarterly access review**
+(the review exports IAM members/grants from the Admin API and diffs them against the
+runbook), and each grant/revocation is mirrored into our audit stream by `idp-sync`
+(`instance.member.added|changed|removed`) so an IdP-side grant cannot be silent. Actions v2
+is not part of this plane (execution regression, docs/43 §7).
+
+**Staff onboarding is a runbook in V1 (review G43).** There is no staff-management API
+(`AUTH-03` is V1.1; `tenant.identity.*` is V2), so the documented V1 path is: create the
+ZITADEL user in `alpha1-platform` → enrol MFA → insert the `identities` row
+(`realm='platform'`) + the Casbin role binding via the seeded migration/CLI
+(`scripts/verify_roles.py --seed` is the source of the INSERTs) → the identity appears in
+the next `/v1/console/auth/login`. Offboarding is the same list in reverse plus
+`platform.session.revoke`. Both steps write audit rows; the runbook lives in docs/06 §3.6
+(ops procedures), together with the quarterly access review and the break-glass drill
+(G39).
+
 **Roles (AUTH-12)** and the extended (post-V1) permission catalog (design
 level; the V1 key registry above is the binding subset):
 
@@ -259,9 +312,12 @@ Go policy layer):
 tier redirects to ZITADEL Hosted Login v2 (register or sign in), org-scoped for tenant
 traffic. ZITADEL returns the code; the web tier exchanges it (PKCE) and issues the `api`
 a bearer access token. Our `POST /v1/auth/session` (new) *materialises* the session:
-resolve the identity through `identity_idp_links` (falling back to `identity_key`, §3.1),
-resolve the tenant from the request domain and the
-user's membership, write the `auth_sessions` projection row, emit `user.login_success`
+resolve the identity through `identity_idp_links` (falling back to `identity_emails`, §3.1),
+**verify the token audience against the tenant resolved from the request domain**
+(`aud` == `tenants.idp_client_id`, org claim when present — G34/D19), resolve the user's
+membership (an `invited` row becomes `active` here — the `user.human.added` → `invited` →
+first `/session` → `active` lifecycle of G37/D22), write the `auth_sessions` projection row
+**bound to that tenant**, emit `user.login_success`
 (AUD/NOT/RSK). ZITADEL is the source of truth for *authentication* facts; our row is the
 source of truth for *authorization* facts. **Enumeration resistance** (`AUTH-33`, V2) is
 now ZITADEL's generic error surface plus ours on `/session`; throttling and lockout come
@@ -282,6 +338,27 @@ are `AUTH-34` (V2) and the ZITADEL login-UI session is a separate per-org policy
 lists/revokes sessions in TD via
 `GET /v1/auth/sessions` and `DELETE /v1/auth/sessions/{id}` (both project ZITADEL's
 session APIs).
+
+**Credential change kills the other sessions (review G40, default fix).** ZITADEL owns the
+password flow, so "change my password → my other devices are logged out" is not automatic:
+`idp-sync` (docs/43 §3) adds `user.human.password.changed` and MFA-factor events
+(`user.human.mfa.otp.added|removed`, WebAuthn equivalents) to its action map, and the action
+is **revoke every `auth_sessions` row of that identity except the session that performed the
+change** (session v2 `DeleteSession` + deny-set + `user.session_revoked` reason
+`credential_change`) with a CRITICAL audit row. The same map entry covers the staff
+`AUTH-28` forced-reset path. Without this, a stolen session survives exactly the action a
+user takes to defend themselves.
+
+**Step-up in V1 (review G38, decision D23).** `authz.step_up_required` (§6.1) already
+exists for the one V1 action class that needs it — `payout.approve` requires a factor
+assertion no older than 5 minutes (ABAC rule on the payout keys). V1 implements it without
+a new API surface: the web tier re-runs hosted login with `prompt=login&max_age=300`, the
+fresh token carries a new `auth_time`, and the `api` compares it against the action's
+`freshness` rule (session row `mfa_verified_at` is updated on every materialisation). A
+stale assertion returns **403 `authz.step_up_required`** with `details.max_age`; the client
+redirects to re-auth and retries. The API-owned step-up surface (challenge initiation,
+`AUTH-30`) remains V2 — V1 has exactly one policy rule, and it is enforced server-side, not
+in the UI.
 
 **2FA** (`AUTH-09` staff-mandatory — V1 scope widened by decision D5: *all* staff roles,
 enforced at first login, **backup codes included in V1**): TOTP (RFC 6238) enrolment and
@@ -490,7 +567,8 @@ From `contracts/errors/taxonomy.md` (the V1 execution sheet; module AUTH). These
 > `auth.backup_code_invalid` and `auth.account_suspended` (§7.0).
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
-| `auth.realm_mismatch` | 403 | A login from the other realm for an existing `identity_key` (staff ↔ trader) — refused instead of flipping `identities.realm` (review G25, docs/44 §6.1) | "This account cannot sign in here." |
+| `auth.realm_mismatch` | 403 | A login from the other realm for an existing identity (staff ↔ trader) — refused instead of flipping `identities.realm` (review G25, docs/44 §6.1) | "This account cannot sign in here." |
+| `auth.tenant_mismatch` | 403 | Token `aud`/org does not match the tenant resolved from the request domain — a tenant-A token on tenant-B's host (review G34, decision D19) | "This account cannot sign in here." |
 | `auth.membership_suspended` | 403 | The identity is fine but its membership at this tenant is suspended (GW step 3.5c, docs/44 §7) | "Your access to this firm is suspended." |
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) | "Please check your details and try again." |
 | `auth.email_taken` | 409 | Email already registered on this tenant | "An account with this email already exists." |
@@ -560,13 +638,13 @@ HTTP-method prefix so the contract generator does not mistake them for our API):
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/auth/session` | ZITADEL access token (bearer, tenant audience) — AUTH-04/07 | none — materialises the identity + memberships on first login | required | `auth.token_invalid`, `auth.account_suspended`, `auth.tenant_suspended`, `auth.mfa_required` |
-| `POST /v1/auth/password` | any logged-in user — AUTH-40 | self-action (no resource key; identity = caller) # AUTH-13 model | optional | `auth.invalid_credentials`, `auth.weak_password` |
-| `POST /v1/auth/2fa/backup-codes` | Staff at first-login enrolment — AUTH-09/11 (V1 per D5) | self-action | required | `auth.mfa_not_enrolled` |
-| `POST /v1/auth/2fa/backup-code` | Staff without a working factor — AUTH-11 | self-action (sets the session's `mfa_satisfied`) | required | `auth.backup_code_invalid` |
-| `GET /v1/auth/mfa/status` | any logged-in user — AUTH-09 | self-action | n/a | standard |
-| `POST /v1/auth/mfa/enrollment` | staff (any role) — AUTH-09 | self-action; refuses non-staff callers | required | `auth.mfa_not_required`, `auth.mfa_already_enrolled` |
-| `POST /v1/auth/logout` | any user — AUTH-39 | self-action | optional | standard |
+| `POST /v1/auth/session` | ZITADEL access token (bearer, tenant audience) — AUTH-04/07 | `self` — pre-session bearer token required; materialises the identity + memberships | required | `auth.token_invalid`, `auth.tenant_mismatch`, `auth.account_suspended`, `auth.tenant_suspended`, `auth.mfa_required` |
+| `POST /v1/auth/password` | any logged-in user — AUTH-40 | `self` — no registry key; identity = caller (AUTH-13 model) | optional | `auth.invalid_credentials`, `auth.weak_password` |
+| `POST /v1/auth/2fa/backup-codes` | Staff at first-login enrolment — AUTH-09/11 (V1 per D5) | `self` | required | `auth.mfa_not_enrolled` |
+| `POST /v1/auth/2fa/backup-code` | Staff without a working factor — AUTH-11 | `self` — sets the session's mfa_satisfied flag | required | `auth.backup_code_invalid` |
+| `GET /v1/auth/mfa/status` | any logged-in user — AUTH-09 | `self` | n/a | standard |
+| `POST /v1/auth/mfa/enrollment` | staff (any role) — AUTH-09 | `self` — refuses non-staff callers | required | `auth.mfa_not_required`, `auth.mfa_already_enrolled` |
+| `POST /v1/auth/logout` | any user — AUTH-39 | `self` | optional | standard |
 | `POST /v1/auth/users/{user_id}/suspend` | Tenant Admin — AUTH-20 | `user.suspend` # AUTH-13, key from AUTH-20 story | required | `auth.user_not_found`, `auth.cannot_suspend_self` |
 | `POST /v1/auth/users/{user_id}/unsuspend` | Tenant Admin — AUTH-43 | `user.unsuspend` # AUTH-13, key from AUTH-43 story | required | `auth.user_not_found`, `auth.user_not_suspended` |
 
@@ -594,14 +672,14 @@ stack unless stated (ZITADEL mechanics in §3.1–§3.3).
 | AUTH-26 (V3) | Passwordless | ZITADEL passkeys/WebAuthn per org; our role is enrolment UX + `amr` acceptance. |
 | AUTH-27 | Admin forced logout | `platform.session.revoke` / ADM action → ZITADEL session delete + deny-set + `user.session_revoked` (reason `admin_action`). |
 | AUTH-28 | Admin-assisted 2FA reset | Support action (2FA'd, CON-32 pattern) → ZITADEL MFA reset (email/OTP factor) + our backup-code re-issue; cooldown + audit. |
-| AUTH-29 | Email change | ZITADEL email-change flow (verify old + new) → on success we update `identities.email`/`identity_key` and emit `user.email_changed`; payout hold applies (payments-security rule). |
+| AUTH-29 | Email change | ZITADEL email-change flow (verify old + new) → on success we add/replace the `identity_emails` row, flip `is_primary`, update the `identities.email` cache — **`identity_key` is immutable (G35/D20)** — and emit `user.email_changed`; payout hold applies (payments-security rule). |
 | AUTH-30 | Step-up | `prompt=login,max_age` re-auth; our API checks `auth_time` freshness per §3.1 (payout approve, role change, bulk suspend). |
 | AUTH-31 | Terms acceptance log | `terms_acceptances` (identity, document, version, accepted_at, ip) written by `/v1/auth/session` on first login and by the re-consent gate (TEN-29). V1 writes the record for the current documents; the UX is V2. |
 | AUTH-32 | Registration abuse protection | ZITADEL rate/lockout + our signup checks (disposable-domain list, per-IP limit, Turnstile) applied on the registration form before handing off to ZITADEL. |
 | AUTH-33 | Enumeration resistance | ZITADEL's `ignore_unknown_usernames` + our generic `auth.token_invalid`/`auth.invalid_credentials`; the `/session` response never reveals whether an email exists. |
 | AUTH-34 | Session policy per tenant | ZITADEL application/session settings per org (lifetime, remember-me) with platform bounds; per-role split is ours (staff stricter). |
 | AUTH-35 | Self-serve closure | Gate on open positions/payouts/risk cases (same checks as §3.6 payout holds) → our soft-delete + ZITADEL user deactivation; 30-day retention notice; erasure per §10.4. |
-| AUTH-36 | Duplicate identity merge | Anchor is `identity_key` (§3.1): merge = re-point `tenant_memberships` + `auth_sessions` to the surviving `identities` row, deactivate the loser in ZITADEL, audit both ids. Requires 2FA'd staff + confirmation on both addresses. |
+| AUTH-36 | Duplicate identity merge | Anchor is `identity_emails.email_hash` (§3.1; merge candidates also surface when a second identity is created for an unverified address — G36): merge = re-point `tenant_memberships`, `auth_sessions`, `identity_idp_links` and `identity_emails` to the surviving `identities` row, deactivate the loser in ZITADEL, audit both ids. Requires 2FA'd staff + confirmation on both addresses. |
 | AUTH-37 | Trusted devices | ZITADEL U2F/MFA-check lifetime per device is the primitive; our list = ZITADEL-auth-factors read + a local revoke action; payout actions never trust a device (step-up always). |
 | AUTH-38 | Staff credential hygiene | ZITADEL per-org password policy for the staff group: expiry window + reuse block (history), enforced by the IdP; we alert before expiry. |
 
@@ -664,11 +742,11 @@ Console (platform realm): `GET /v1/console/tenants/{id}/members`,
 CREATE TABLE identities (
   id            ULID PRIMARY KEY,
   idp_user_id   TEXT UNIQUE,                -- ZITADEL user id (sub); NULL until first login
-  identity_key  TEXT UNIQUE NOT NULL,       -- sha256(lower(trim(email))) — platform join key (G1/AUTH-36)
+  identity_key  TEXT UNIQUE NOT NULL,       -- sha256 of the FIRST verified email — immutable join key (G35/D20)
   idp_org_id    TEXT,                       -- the ZITADEL org that owns this user object
   realm         TEXT NOT NULL DEFAULT 'tenant'
                 CHECK (realm IN ('tenant','platform')),   -- AUTH-16 audience realm
-  email         CITEXT UNIQUE NOT NULL,
+  email         CITEXT UNIQUE NOT NULL,     -- cache of the current primary address; matching uses identity_emails
   email_verified BOOLEAN NOT NULL DEFAULT false,
   phone         TEXT, phone_verified BOOLEAN NOT NULL DEFAULT false,
   password_hash TEXT,                       -- argon2id; NULL for social-only (V3)
@@ -707,11 +785,28 @@ CREATE INDEX idx_idp_links_identity ON identity_idp_links(identity_id) WHERE sta
 -- `identities.idp_user_id` / `idp_org_id` above are a denormalised pointer to the most
 -- recently used link (join convenience), never the lookup key.
 
+-- every address an identity has ever verified (review G35 / D20). Matching for
+-- /session, idp-sync and the AUTH-36 merge reads email_hash; identity_key never moves.
+CREATE TABLE identity_emails (
+  id          ULID PRIMARY KEY,
+  identity_id ULID NOT NULL REFERENCES identities(id),
+  email_hash  TEXT UNIQUE NOT NULL,        -- sha256(lower(trim(email))) — the match key
+  email       CITEXT NOT NULL,
+  is_primary  BOOLEAN NOT NULL DEFAULT true,
+  verified_at TIMESTAMPTZ,                 -- set only on a verified address (G36/D21)
+  retired_at  TIMESTAMPTZ,                 -- row kept: a later login on the old address resolves here
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_identity_emails_identity ON identity_emails(identity_id);
+-- exactly one live primary per identity (partial unique index in the migration)
+
 CREATE TABLE tenant_memberships (
   id          ULID PRIMARY KEY,
   identity_id ULID NOT NULL REFERENCES identities(id),
   tenant_id   ULID NOT NULL REFERENCES tenants(id),
-  role        TEXT NOT NULL DEFAULT 'user:trader',
+  role        TEXT NOT NULL DEFAULT 'user:trader',   -- single role per membership; the role's
+                                                     -- effective key set (roles.yaml) is the grant
+  -- lifecycle (G37/D22): `user.human.added`/invite → invited; first successful /v1/auth/session → active
   status      TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended','invited')),
   display_name_override TEXT,
   joined_at   TIMESTAMPTZ NOT NULL DEFAULT now(),

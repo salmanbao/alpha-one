@@ -35,6 +35,8 @@ ROOT = Path(__file__).resolve().parents[1]
 ROLES = ROOT / "contracts" / "permissions" / "roles.yaml"
 REGISTRY = ROOT / "contracts" / "permissions" / "registry.md"
 DOC = ROOT / "docs" / "02-identity-access.md"
+CONTRACTS = sorted((ROOT / "contracts").glob("*.openapi.yaml"))
+MARKERS = {"self", "none"}          # explicit keyless markers (docs/45 §G41)
 
 BEGIN = "<!-- roles:begin (generated from contracts/permissions/roles.yaml — do not edit by hand) -->"
 END = "<!-- roles:end -->"
@@ -115,6 +117,66 @@ def render(spec: dict) -> str:
     return "\n".join(lines)
 
 
+def check_contracts(bindings: dict) -> tuple[list[str], list[str]]:
+    """Every V1 operation declares a permission (key | self | none) — review G41.
+
+    Keys must be bound in roles.yaml (and therefore declared in the registry);
+    `self` = caller acting on their own data (the own-data matcher still runs),
+    `none` = unauthenticated or signature-authenticated (provider webhooks).
+    Post-V1 operations are scanned too, so a key that is *never* used by any route
+    is reported (a V1-bound key whose only routes are post-V1 is reported as info:
+    the binding is a Phase-N obligation, not a V1 hole).
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not CONTRACTS:
+        warnings.append("no contracts/*.openapi.yaml found - route-permission check skipped")
+        return errors, warnings
+    try:
+        import yaml  # type: ignore
+    except ImportError:
+        warnings.append("PyYAML unavailable - route-permission check skipped")
+        return errors, warnings
+    v1_used: dict[str, int] = {}
+    post_used: dict[str, int] = {}
+    n_v1 = 0
+    n_self = n_none = 0
+    for f in CONTRACTS:
+        doc = yaml.safe_load(f.read_text()) or {}
+        for path, item in (doc.get("paths") or {}).items():
+            for meth, op in item.items():
+                if meth not in ("get", "post", "put", "patch", "delete"):
+                    continue
+                perm = op.get("x-permission")
+                is_v1 = str(op.get("x-phase", "")).lower() == "v1"
+                where = f"{f.name} {meth.upper()} {path}"
+                if is_v1:
+                    n_v1 += 1
+                    if not perm:
+                        errors.append(f"{where}: V1 operation without x-permission")
+                        continue
+                    if perm in MARKERS:
+                        if perm == "self":
+                            n_self += 1
+                        else:
+                            n_none += 1
+                        continue
+                    v1_used[perm] = v1_used.get(perm, 0) + 1
+                    if perm not in bindings:
+                        errors.append(f"{where}: permission key '{perm}' is not bound in roles.yaml")
+                elif perm and perm not in MARKERS:
+                    post_used[perm] = post_used.get(perm, 0) + 1
+    unused = sorted(k for k in bindings if k not in v1_used and k not in post_used)
+    if unused:
+        print("  note: V1-bound keys with no V1 route (the post-V1 surface is not "
+              "contract-annotated yet, so these attach to extended routes): "
+              + ", ".join(unused))
+    n_keyed_ops = sum(v1_used.values())
+    print(f"  route coverage: {n_v1} V1 operations checked — {n_keyed_ops} with registry keys "
+          f"({len(v1_used)} distinct), {n_self} `self`, {n_none} `none`")
+    return errors, warnings
+
+
 def check_doc(spec: dict) -> list[str]:
     text = DOC.read_text()
     m = re.search(re.escape(BEGIN) + r".*?" + re.escape(END), text, re.S)
@@ -187,6 +249,9 @@ def main() -> int:
             errors.append(f"{role}: effective key set is not reproduced by its listed keys")
 
     errors += check_doc(spec)
+    contract_errors, contract_warnings = check_contracts(bindings)
+    errors += contract_errors
+    warnings += contract_warnings
 
     provisional = set(spec.get("provisional_bindings", {})) - {"$comment"}
     unbound = v1_keys - set(bindings)
@@ -204,7 +269,7 @@ def main() -> int:
 
     print(
         f"OK: roles.yaml consistent — {len(bindings)} bound V1 keys, {len(catalog)} roles, "
-        f"{len(keys)} registry keys, docs/02 render in sync."
+        f"{len(keys)} registry keys, docs/02 render in sync, every V1 route declares its permission."
     )
     for w in warnings:
         print(f"  warning: {w}")

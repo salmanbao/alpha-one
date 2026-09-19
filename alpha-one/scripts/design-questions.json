@@ -221,6 +221,66 @@
    "owner": "BE-1",
    "deadline": "Phase 0 exit",
    "answer": "**Answered 2026-09-19 \u2014 primitives only, internal consumers only.** V1 ships create/revoke/hash/scope helpers for service tokens and the future AUTH-21 surface; there is **no tenant-facing key endpoint** in V1, and the GW chain note now names the internal consumer instead of saying \"keys are V2\". Tenant machine integrations use TEN-11 integration secrets until AUTH-21 ships."
+  },
+  {
+   "id": "D19",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "The token did not prove which tenant it was for: `tenants` carried no OIDC client/application binding, docs/02 said \"one project + OIDC application\" instance-wide while docs/03's saga provisioned a project per org, and a token minted for tenant A was accepted on tenant B's host. Per-tenant audience + session binding, or one shared application with an org claim?",
+   "raised_by": "Fifth-pass review (docs/45 G34)",
+   "owner": "BE-1",
+   "deadline": "Phase 0 exit (gate 12)",
+   "answer": "**Answered 2026-09-19 \u2014 per-tenant application + binding (option A).** One ZITADEL project + OIDC application **per tenant org**; `tenants.idp_client_id` is stored (client secret in the tenant secret store, referenced by `tenants.idp_client_secret_ref`). Every `/session` requires `aud` == that tenant's client id and checks the org claim when present; the `auth_sessions` row is bound to the tenant resolved from the request domain, so a token presented on another tenant's host is refused with the new `auth.tenant_mismatch` (403). Provisioning step 3 writes the binding."
+  },
+  {
+   "id": "D20",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "`identity_key` was the mutable join key: `AUTH-29` rewrote it on email change, which silently creates a second identity for one person, moves the `AUTH-36` merge anchor and stops the old address resolving. Make the join key immutable with an email table, or keep one mutable key?",
+   "raised_by": "Fifth-pass review (docs/45 G35)",
+   "owner": "BE-1",
+   "deadline": "Phase 0 exit",
+   "answer": "**Answered 2026-09-19 \u2014 immutable key + email table (option A).** `identities.identity_key` = hash of the **first verified email** and never moves. New `identity_emails(identity_id, email_hash UNIQUE, email, is_primary, verified_at, retired_at)` is the match key for `/session`, `idp-sync` and `AUTH-36` merges; an email change adds a row and flips `is_primary`, and the old row is retained so a login on the old address still resolves to the same person (`identities.email` is only a cache)."
+  },
+  {
+   "id": "D21",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "Cross-org auto-link (an existing identity gaining a link in a new org) trusted an undefined \"verified email\" and had no abuse control \u2014 a matching address at a second org silently attached to the existing identity (identity poisoning). What gate applies?",
+   "raised_by": "Fifth-pass review (docs/45 G36)",
+   "owner": "BE-1",
+   "deadline": "Phase 0 exit",
+   "answer": "**Answered 2026-09-19 \u2014 verified-email gate + audited link (option A).** Auto-link requires a verified email (token `email_verified` **and** ZITADEL's user email state = verified). An unverified address creates a **separate identity + merge task** for staff. Every cross-org link writes a **CRITICAL** audit event and notifies the identity's existing org admins; the first org's contact details are never revealed to the second."
+  },
+  {
+   "id": "D22",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "SSO group\u2192role mapping was contradictory: decision P3 (AUTH-24/25 in V1) implied directory-driven roles, the provisioning saga said \"map directory groups \u2192 roles\", and the registry advertised a viewable map \u2014 while the ratified model assigns roles ourselves. And the `invited \u2192 active` membership transition was undocumented. Which V1 posture?",
+   "raised_by": "Fifth-pass review (docs/45 G37)",
+   "owner": "BE-1",
+   "deadline": "Phase 0 exit",
+   "answer": "**Answered 2026-09-19 \u2014 no group\u2192role mapping in V1 (option A).** SSO users are assigned roles by us at onboarding (later via platform/ADM actions); directory groups only drive sign-in/provisioning. docs/03 step 3a and the registry `tenant.sso.read` wording are corrected, and the membership lifecycle is documented: `user.human.added`/invite \u2192 `invited`, first successful `/v1/auth/session` \u2192 `active`."
+  },
+  {
+   "id": "D23",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "No V1 step-up existed although `payout.approve` requires a factor assertion < 5 min, the taxonomy already had `authz.step_up_required`, and the only planned step-up surface (AUTH-30) is V2. Where does V1 step-up live?",
+   "raised_by": "Fifth-pass review (docs/45 G38)",
+   "owner": "BE-1",
+   "deadline": "Phase 1 (payout approval)",
+   "answer": "**Answered 2026-09-19 \u2014 hosted re-auth, server-enforced (option A).** The web tier re-runs hosted login with `prompt=login&max_age=300`; the fresh token carries a new `auth_time` and the `api` enforces the \u2264 5 min freshness rule on the payout keys, returning `authz.step_up_required` (403, `details.max_age`) when stale. The API-owned step-up surface (challenge initiation, AUTH-30) remains V2; V1 has exactly one policy rule and it is enforced server-side, never in the UI."
+  },
+  {
+   "id": "D24",
+   "source_doc": "45",
+   "section": "Auth & Identity",
+   "question": "ZITADEL's own admin plane was ungoverned: who holds `IAM_OWNER`, whether the Console/Admin API is reachable from the edge, and what the IdP break-glass is were all unstated \u2014 while the authz model assumes the IdP is trusted. What governance applies?",
+   "raised_by": "Fifth-pass review (docs/45 G39)",
+   "owner": "DevOps + BE-1",
+   "deadline": "Phase 0 exit",
+   "answer": "**Answered 2026-09-19 \u2014 private plane, two owners, quarterly review (option A).** The admin plane (Console, `admin/v1`, `management/v1`) is not reachable from the edge: internal network only, operator access via Cloudflare Access. Exactly **two named `IAM_OWNER` holders** (or one owner plus a sealed emergency credential in the ops vault), both with mandatory MFA (the `alpha1-platform` org is `force_mfa=true`). Every IAM role grant is part of the quarterly access review and is mirrored into our audit stream by `idp-sync` (`instance.member.*`). Runbooks: docs/06 \u00a73.6; first execution is a Phase-0 checklist item (docs/34 \u00a79)."
   }
  ]
 }

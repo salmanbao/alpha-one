@@ -123,7 +123,8 @@ Phase-0 gate: enumerate the live list from the pinned version's
 | `user.grant.removed` / `.cascade.removed` / `.deactivated` | role removed → if **zero** roles remain, suspend the membership (fail-closed) + staff review item |
 | `user.grant.reactivated` | restart the review; no automatic role restore |
 | `user.human.added` / `user.human.selfregistered` | resolve/create the `identities` stub + membership in state `invited` — never `active` |
-| `user.human.email.changed` / `.verified`, `user.username.changed` | maintain `identities.email` / `identity_key`; the email-change payout hold stays an app rule (`AUTH-29`) |
+| `user.human.email.changed` / `.verified`, `user.username.changed` | maintain `identity_emails` + the `identities.email` cache; **`identity_key` never moves** (review G35 / decision D20); the email-change payout hold stays an app rule (`AUTH-29`) |
+| `user.human.password.changed` + the MFA-factor events (`user.human.mfa.*` — exact strings confirmed by the Phase-0 enumeration, gate 6) | **credential-change session kill (review G40, default fix):** revoke every `auth_sessions` row of the identity except the one that performed the change (`DeleteSession` + deny-set + `user.session_revoked` reason `credential_change`), CRITICAL audit — also covers the staff forced-reset path (`AUTH-28`). Without it, a stolen session survives the exact action a user takes to defend themselves |
 | `org.member.added` / `.changed` / `.removed` / `.cascade.removed`, `instance.member.*` | audit-only: they record who may change our mirror. `instance.member.added` with `SELF_MANAGEMENT_GLOBAL` also feeds the §8 detection rule |
 
 **Routing rules (review G32, docs/44 §8).** `resource_owner` = the platform org → the
@@ -273,7 +274,7 @@ A deleted user who returns gets a **new** ZITADEL user id, and our login path up
 would otherwise resolve to a new identity and a duplicate membership, the failure
 `G1`/`AUTH-36` exists for, now with a guaranteed trigger. Rule:
 
-1. no **active link** match → fall back to `identity_key` (the normalised-email hash join key);
+1. no **active link** match → fall back to `identity_emails.email_hash` (the immutable match key, review G35 / decision D20; `identity_key` remains as the legacy key and is never rewritten);
 2. if that identity carries a self-deletion/closure marker → **never silently re-link**:
    staff approval, re-KYC where applicable — the closed link stays `state='retired'` as
    the audit alias (the link table is what makes "old `idp_user_id` retained" real);
