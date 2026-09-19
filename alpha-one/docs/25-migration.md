@@ -76,11 +76,24 @@ FunderBlu legal's sign-off.
    4. CUTOVER (the T_date window, the 10-second deploy class from 06 §3):
       · DNS/branding flip (the tenant domain → Alpha One, the TEN
         custom-domain config, 03)
-      · traders log in to Alpha One (ZITADEL user import: the
-        Argon2id re-hash — passwords migrate as **reset-required**
-        (a forced reset at first login — the one-way hash means TTS's
-        hashes can't be imported as-is unless TTS used a compatible
-        KDF; the default posture: reset-required, the SSO of
+      · traders log in to Alpha One (ZITADEL user import — **corrected
+        2026-09-19, review G9**: ZITADEL *can* import existing password
+        hashes through the admin `ImportHumanUser`/bulk-import endpoints
+        (`hashedPassword`), provided the source algorithm is enabled in
+        `ZITADEL_SYSTEMDEFAULTS_PASSWORDHASHER_VERIFIERS` (bcrypt on by
+        default; argon2, scrypt, pbkdf2, md5-family, phpass, drupal7
+        available) — the hash is transparently re-hashed to bcrypt on the
+        next successful login. So the cutover has two postures and the
+        COO picks one at the cutover gate:
+        **A. import-and-keep** — traders keep their passwords (allowed
+        only if TTS's KDF is on that list and TTS supplies per-user
+        hashes in a verified export); **B. reset-required** (the
+        recommendation, and the default) — import identity attributes
+        only and set `passwordChangeRequired`, so every trader sets a
+        fresh password through ZITADEL's reset flow at first login.
+        TOTP seeds and passkey keys can be imported with the same
+        endpoint where TTS exposes them; anything not importable
+        becomes an enrolment prompt at first login (the SSO of
         convenience)
       · MT5: the MetaApi credential handoff completes (the trader's
         broker session now flows through our bridge — the account

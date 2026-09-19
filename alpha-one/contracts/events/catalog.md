@@ -51,6 +51,39 @@ Note: the "KYC result" NOT-05 template's per-event mapping (which of the five ev
 | payout.rejected | v1 | PAY-09 | NOT-01 (NOT-05 template: payout rejected), ANA-01 | `payloads/payout.rejected.v1.json` |
 | PayoutPaid | v1 | PAY-12 (execution recording, via outbox per EVT-01) — resolved 2026-09-16 (Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 | `payloads/PayoutPaid.v1.json` |
 
+## Identity events — producer: AUTH (ADR-13 model; V1 baseline)
+
+V1 identity events, payloads in `payloads/`. Login/session rows originate in ZITADEL and
+are ingested through the Actions v2 event trigger (docs/02 §3.1); if a trigger is not
+available in the pinned version, the row is derived locally at session materialisation
+with the same field set. `email_hash` carries `sha256(normalised email)` — event
+payloads never carry the address itself.
+
+| Event | Version | Producer | Consumers | Payload |
+|---|---|---|---|---|
+| user.registered | v1 | AUTH (AUTH-01) | NOT-01 (welcome), AUD, ANA-01 | `payloads/user.registered.v1.json` |
+| user.login_success | v1 | AUTH / ZITADEL | AUD, ANA-01, RSK (anomaly baseline) | `payloads/user.login_success.v1.json` |
+| user.login_failure | v1 | ZITADEL (Actions v2) | AUD, RSK (anomaly scoring), NOT (security notice on threshold) | `payloads/user.login_failure.v1.json` |
+| user.suspended | v1 | AUTH (AUTH-20) | NOT-01, GW (session kill), AUD | `payloads/user.suspended.v1.json` |
+| user.activated | v1 | AUTH (AUTH-43) | NOT-01, AUD | `payloads/user.activated.v1.json` |
+| user.session_revoked | v1 | AUTH (AUTH-39 logout, AUTH-20 suspension; AUTH-27 admin in V2) | AUD | `payloads/user.session_revoked.v1.json` |
+| user.password_changed | v1 | AUTH (AUTH-05, AUTH-40) | session invalidator, AUD | `payloads/user.password_changed.v1.json` |
+
+## Tenant events — producer: TEN (V1 baseline)
+
+| Event | Version | Producer | Consumers | Payload |
+|---|---|---|---|---|
+| tenant.created | v1 | TEN-01 | AUD, CON-01, NOT-01 (owner) | `payloads/tenant.created.v1.json` |
+| tenant.provisioning_step_completed | v1 | TEN (saga step; `status=failed` on the failure branch) | CON-01 (live view), NOT (staff) | `payloads/tenant.provisioning_step_completed.v1.json` |
+| tenant.activated | v1 | TEN (checklist complete) | GW (allow traffic), NOT-01, AUD, ANA-01 | `payloads/tenant.activated.v1.json` |
+| tenant.suspended | v1 | TEN-15 | AUTH (kill sessions), GW (deny), NOT-01, AUD — all within 1 s | `payloads/tenant.suspended.v1.json` |
+| tenant.reactivated | v1 | TEN-15 | GW, NOT-01, AUD, AUTH | `payloads/tenant.reactivated.v1.json` |
+| tenant.member_invited | v1 | AUTH-03 (V1 for the SSO cutover tenant, decision P3) | NOT-01 (invite email), CON-01 | `payloads/tenant.member_invited.v1.json` |
+
+Note: the extended (post-V1) identity/tenant topics (`user.role_changed`, `user.2fa_enrolled`,
+`api_key.*`, `identity.*`, `tenant.settings_changed`, `tenant.limit_exceeded`, …) stay in
+docs/31 §2 with the rest of the extended catalog.
+
 ## Notes
 
 - `checkout started / abandoned / completed` events (CHK-24 in earlier drafts) are NOT in the V1 Execution Sheet and are excluded from V1 scope. If the working session wants abandoned-cart analytics, that is a scope change.

@@ -161,6 +161,13 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.api_key_scope_missing` | 403 | Key lacks scope for route |
 | `auth.email_already_exists` | 409 | Registration conflict |
 | `auth.invitation_invalid` | 422 | Expired/used/revoked invite (V2) |
+| `auth.token_invalid` | 401 | Bearer token missing/malformed/expired/unverifiable (unknown kid, issuer or audience) |
+| `auth.mfa_required` | 401 | Staff action without an MFA assertion in the token (`amr`) |
+| `auth.mfa_not_enrolled` | 403 | Staff identity has no verified factor yet |
+| `auth.mfa_not_required` | 403 | MFA enrolment attempted by a non-staff role |
+| `auth.mfa_already_enrolled` | 409 | MFA enrolment attempted when a verified factor exists |
+| `auth.backup_code_invalid` | 401 | Backup code wrong, already used or unknown |
+| `auth.email_change_requires_verification` | 409 | Email change pending verification (V2) |
 
 ### TEN (extended)
 
@@ -176,6 +183,8 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `tenant.branding_invalid` | 422 | Asset/size/CSS-safety check failed |
 | `tenant.kyb_required` | 403 | Staff can't activate without KYB (V1 gate) |
 | `tenant.plan_insufficient` | 403 | Route/module not in tenant's entitlements |
+| `tenant.deactivated` | 403 | Tenant deactivated; export-only surface inside the recovery window |
+| `tenant.pending_deletion` | 403 | Tenant scheduled for deletion; settlement-only surface |
 
 ### GW+EVT (extended)
 

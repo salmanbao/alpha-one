@@ -20,7 +20,7 @@ Every key names its owning module and description with the Req ID that justifies
 | `tenant.terminate` | TEN | Terminate a tenant. (TEN-01) |
 | `tenant.entitlement.change` | TEN | Enable or disable modules per tenant; manual and immediate in V1. (TEN-08) |
 | `tenant.integration.write` | TEN | Store tenant integration config (broker credentials, payment keys, KYC settings, email sender). (TEN-11) |
-| `tenant.integration.read` | TEN | View masked integration config. (TEN-11; masking rules — TODO — needs owner decision, TEN-12) |
+| `tenant.integration.read` | TEN | View masked integration config — never decrypts (docs/03 §3.7, TEN-12). (TEN-11) |
 | `challenge.write` | EVL | Define challenges: type, sizes, pricing, phases, per-phase rules. (EVL-01) |
 | `ruleset.write` | EVL | Create and version rule sets; choose migration policy for in-flight accounts. (EVL-02, EVL-34) |
 | `account.read` | LCC | List and filter all trading accounts by status, phase, challenge, broker. (ADM-05) |
@@ -147,3 +147,25 @@ Every key names its owning module and description with the Req ID that justifies
 | `nps.manage` | CS | Send + analyze NPS surveys. (CS-01) |
 | `qbr.read` | CS | Generate + view QBR reports. (CS-07) |
 | `playbook.execute` | CS | Run onboarding/retention playbooks. (CS-04, CS-05) |
+
+---
+
+## Identity-management keys (review G16, 2026-09-19 — provisional)
+
+The ADR-13 identity model gives the tenant a surface that the V1 registry did not
+name: member administration, SSO registration and SCIM tokens. These keys are
+**provisional** (V1.1/V2 surfaces per docs/02 §7), each frozen with its phase
+(docs/99 §12) and bound to roles at freeze (AUTH-12 × AUTH-13 open question).
+
+| Permission key | Module owner | Description |
+|---|---|---|
+| `tenant.identity.read` | AUTH | List tenant members and their roles/status (ADM team screen). |
+| `tenant.identity.invite` | AUTH | Invite a staff member into the tenant (AUTH-03, V2). |
+| `tenant.identity.role_change` | AUTH | Change a member's role; audited (`user.role_changed`). (AUTH-12/14) |
+| `tenant.identity.remove` | AUTH | Remove a member from the tenant; deactivates the IdP user when no memberships remain. |
+| `tenant.sso.read` | AUTH | View the org's SSO/IdP configuration and group→role map. (AUTH-24) |
+| `tenant.sso.configure` | AUTH | Register/update/remove the tenant's SAML/OIDC IdP (metadata, certificates, mapping). (AUTH-24, P3) |
+| `tenant.scim.manage` | AUTH | Issue/rotate the SCIM bearer token and inspect SCIM-provisioned users. (AUTH-25, P3) |
+| `platform.identity.admin` | AUTH | Platform-staff identity administration: create/deactivate console users, force MFA reset (AUTH-28), break-glass. (AUTH-16, AUTH-28) |
+| `platform.tenant.provision` | TEN | Run/resume the tenant provisioning saga and destroy a tenant org in the IdP. (docs/03 §3.5) |
+| `platform.session.revoke` | AUTH | Revoke another identity's sessions (admin forced logout, AUTH-27). |

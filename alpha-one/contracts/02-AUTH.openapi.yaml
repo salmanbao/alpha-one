@@ -164,6 +164,69 @@ paths:
           $ref: shared/openapi.yaml#/components/responses/Forbidden
         '404':
           $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/auth/mfa/status:
+    get:
+      tags:
+      - core
+      summary: Identity & Access GET /v1/auth/mfa/status
+      operationId: get_v1_auth_mfa_status
+      x-phase: V1
+      x-v1-baseline: contracts/api/auth.md
+      x-idempotency: n/a
+      x-auth: any logged-in user — AUTH-09
+      security:
+      - sessionAuth: []
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
+  /v1/auth/mfa/enrollment:
+    post:
+      tags:
+      - core
+      summary: Identity & Access POST /v1/auth/mfa/enrollment
+      operationId: post_v1_auth_mfa_enrollment
+      x-phase: V1
+      x-v1-baseline: contracts/api/auth.md
+      x-idempotency: required
+      x-auth: staff (any role) — AUTH-09
+      x-v1-errors:
+      - auth.mfa_not_required
+      - auth.mfa_already_enrolled
+      security:
+      - sessionAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: shared/openapi.yaml#/components/schemas/JsonObject
+      responses:
+        '200':
+          description: Success (see module doc for the canonical shape)
+          content:
+            application/json:
+              schema:
+                $ref: shared/openapi.yaml#/components/schemas/JsonObject
+        default:
+          $ref: shared/openapi.yaml#/components/responses/Error
+        '401':
+          $ref: shared/openapi.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: shared/openapi.yaml#/components/responses/Forbidden
+        '404':
+          $ref: shared/openapi.yaml#/components/responses/NotFound
   /v1/auth/logout:
     post:
       tags:

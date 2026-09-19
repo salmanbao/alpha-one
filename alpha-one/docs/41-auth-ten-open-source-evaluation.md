@@ -343,3 +343,40 @@ Vendor and comparison sources consulted 2026-09-19 (all links verified in-sessio
   discipline, fail-closed) — [production pattern](https://theroadtoenterprise.com/blog/postgres-rls-multi-tenant-saas),
   [pooling failure modes](https://multi-tenant-saas.com/tenant-aware-data-routing-query-scoping/connection-pooling-in-multi-tenant-systems/pgbouncer-transaction-pooling-for-multi-tenant-saas/),
   [benchmarks and pitfalls](https://dev.to/software_mvp-factory/row-level-security-in-postgresql-multi-tenant-data-isolation-for-your-saas-without-a-query-change-57bb).
+
+## 10. Decision trail (2026-09-19) — where every answer landed
+
+The nine decisions are canonical in `scripts/design-questions.json` (rendered into
+`docs/37` §Design-review questions). This section records the *consequences*: which
+doc, contract or register was changed because of each answer, so a reviewer can audit
+the chain without re-reading the whole set.
+
+| Decision | Answer | Landed in |
+|---|---|---|
+| D1 / P1 | Replace Better Auth with **self-hosted ZITADEL** (Organization per tenant) | `docs/01` ADR-13 (+ `zitadel` deployable row), `docs/02` §1–§3 + §7.0/§7.1, `docs/03` §3.2/§3.5, `docs/34` BVR-14 + integration row, `contracts/api/auth.md` (rewritten), `contracts/errors/taxonomy.md`, generator `scripts/build_contracts.py` (security scheme), docs/41 §3.1/§6 |
+| D2 / P3 | SSO **and** SCIM in V1 for the cutover tenant (AUTH-24/25 promoted) | `docs/02` §1 (scope), §3.2 (IdP registration), §7.2; `docs/03` §3.5 step 3a; `contracts/api/tenant.md`; `docs/34` §3 rows + §9 checklist; docs/37 P3 answer |
+| D3 | **Postgres RLS** as the fail-closed second isolation layer | `docs/01` §7.8, `docs/02` §9, `docs/03` §9, `docs/35` invariant I-17, `docs/28` §3.3, docs/41 §5 |
+| D4 | **Casbin embedded** replaces Cerbos (BVR-23, ADR-14) | `docs/01` ADR-14 + GW step-3, `docs/02` §3.1, `docs/04` §2/§3, `docs/19`, `docs/34` BVR-23 + tool rows, `contracts/permissions/registry.md` |
+| D5 | Staff 2FA mandatory at first login, **backup codes in V1** (AUTH-11 promoted) | `docs/02` §3.2 (enrolment + `amr` gate), §7.1/§7.2, §8 (`auth_backup_codes`), `contracts/api/auth.md`, `docs/35` invariant I-19 |
+| P2 | IdP-hosted login + IdP-issued tokens at our API (no own refresh stack) | `docs/02` §3.2/§3.3, `docs/28` §6, `contracts/api/auth.md` (register/login/reset retired), `contracts/shared/openapi.yaml`, `contracts/README.md` |
+| P4 | Our Postgres is authoritative for membership/roles/permission keys | `docs/02` §3.1 (membership model), §9 (`identity_key`, `idp_org_id`), `docs/03` §3.5 step 3, `docs/21`, `contracts/permissions/registry.md` |
+
+### 10.1 Follow-up review (docs/42, 2026-09-19)
+
+The second-pass review (`docs/42-auth-ten-gap-analysis.md`) re-checked all 88 AUTH+TEN
+workbook rows against this stack and fixed the gaps that the decisions exposed. The
+findings that change behaviour here:
+
+1. **Org-scope regression (upstream #11869)** — the platform's identity model no longer
+   assumes a person belonging to one ZITADEL organization; users are created in the org
+   they register on and `identities.identity_key` joins them (docs/02 §3.1).
+2. **Staff-only MFA is not an IdP policy** (upstream #6316) — enforcement moved into the
+   API's `amr` check with new enrolment endpoints (docs/02 §3.2, §7.1).
+3. **HIBP cannot be enforced on hosted-login password flows** — documented deviation with
+   the residual gap owned by the Tech Lead (docs/02 §3.2).
+4. **No IdP-side event retention** (upstream #7811) — two-store erasure procedure and a
+   DPO review at Phase 0 exit (docs/02 §10.4, decision D9).
+5. **Password hashes are importable** (verifier configuration) — the migration posture is
+   now a cutover choice, not a forced reset (docs/25 §3.5, decision D7).
+6. **V1 identity/tenant events were uncatalogued** — 13 payload schemas added
+   (`contracts/events/payloads/`, `contracts/events/catalog.md`, docs/31).

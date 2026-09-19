@@ -6,7 +6,8 @@
 """
 import re, pathlib, collections
 
-DOCS = pathlib.Path("/home/user/alpha-one/docs")
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+DOCS = ROOT / "docs"
 
 MODULES = [
     ("02-identity-access.md",   "AUTH", "02"),
@@ -210,7 +211,7 @@ for (num, mod), rows in e.items():
         A(f"| `{code}` | {http or '—'} | {meaning or '—'} | {'V1' if v1 else 'ext'} |")
     A("")
 
-pathlib.Path("/home/user/alpha-one/docs/30-error-taxonomy.md").write_text(
+(DOCS / "30-error-taxonomy.md").write_text(
     "# 30 — Error Taxonomy (Master Registry)\n\n" + "\n".join(lines) + "\n")
 
 ev = build_events()
@@ -225,7 +226,7 @@ A("> **Generated aggregation** of the event tables in the 26 module docs (each")
 A("> doc's §4). This is the catalog the CI gate checks against (docs/04 §5.7,")
 A("> docs/28 §11): an event emitted but not cataloged, or a consumer that never")
 A("> handled it, fails the build. The V1 event schemas live in")
-A("> `contracts/events/payloads/` (envelope + 18 V1 events) and the extended")
+A(f"> `contracts/events/payloads/` (envelope + {len(list((ROOT / 'contracts' / 'events' / 'payloads').glob('*.v1.json'))) } V1 event schemas) and the extended")
 A("> set in `contracts/events/extended/`; this table is the")
 A("> producer/consumer map. `when`/`consumers` are condensed from the owning")
 A("> doc's row; the owning doc is the authority. Tier: **V1** = the V1")
@@ -260,7 +261,7 @@ for t, rows in topics.items():
         A(f"| `{ev_name}` | {num} ({mod}) | {when} | {cons} | {'V1' if v1 else 'ext'} |")
     A("")
 
-pathlib.Path("/home/user/alpha-one/docs/31-event-catalog.md").write_text(
+(DOCS / "31-event-catalog.md").write_text(
     "# 31 — Event Catalog (Master)\n\n" + "\n".join(lines) + "\n")
 
 # doc 32
@@ -311,7 +312,7 @@ for num, mod, fname, blocks in sch:
         A("```")
         A("")
 
-pathlib.Path("/home/user/alpha-one/docs/32-database-design.md").write_text(
+(DOCS / "32-database-design.md").write_text(
     "# 32 — Database Design (Master Schema)\n\n" + "\n".join(lines) + "\n")
 
 print(f"errors: {total_codes} codes / {len(e)} namespaces")

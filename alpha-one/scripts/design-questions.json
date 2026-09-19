@@ -91,6 +91,46 @@
       "owner": "Tech Lead, BE-1",
       "deadline": "Phase 0 exit",
       "answer": "**Answered 2026-09-19 — our Postgres is authoritative** for tenant membership, roles, custom roles and the `resource.action` permission registry. ZITADEL organizations are used for login scoping, per-org policies and SSO routing; ZITADEL user grants mirror our roles only so tokens can carry them (Actions v2 `preAccessToken`), and a reconciliation job reports drift (TEN-32 access review)."
+    },
+    {
+      "id": "D6",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "Per-identity concurrent session limit (AUTH-07): the contracts/api/auth.md open item. How many active sessions may one identity hold at once, and what happens on overflow?",
+      "raised_by": "Design review (docs/42 §8)",
+      "owner": "BE-1, Tech Lead",
+      "deadline": "Before contract freeze",
+      "answer": "**Open — default recorded:** 10 concurrent sessions per identity, oldest evicted (the newest login wins and the evicted session gets `auth.session_revoked` plus a `user.session_revoked` event with reason `concurrency_limit`). Raise only if trader feedback demands it; the running count lives in `auth_sessions` and is checked at `/v1/auth/session` time."
+    },
+    {
+      "id": "D7",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "TTS cutover password posture (docs/25 §3.5, AUTH-01/05/17): import existing password hashes into ZITADEL (traders keep passwords) or force a reset at first login?",
+      "raised_by": "Design review (docs/42 §8)",
+      "owner": "FunderBlu COO, BE-1",
+      "deadline": "Cutover gate (M2)",
+      "answer": "**Open — default recorded:** force reset (`passwordChangeRequired=true`, the docs/25 §3.5 posture B). Import-and-keep is technically available since ZITADEL accepts hashed passwords when the source algorithm is enabled in the password-hasher verifier list (verified 2026-09-19, review G9); the COO can switch to posture A at the gate if TTS supplies verified per-user hashes with a supported KDF."
+    },
+    {
+      "id": "D8",
+      "source_doc": "42",
+      "section": "Auth & Identity",
+      "question": "Tenant login hostname (docs/03 §3.8, TEN-05): does the tenant's own domain ever serve the login page in V1?",
+      "raised_by": "Design review (docs/42 §8)",
+      "owner": "Tech Lead, Sales owner",
+      "deadline": "Before Phase 0 exit",
+      "answer": "**Open — default recorded:** no. V1 logins happen on `login.alpha1.io` scoped to the tenant organization (per-org branding, policies and MFA settings); tenant domains serve the app and the API only, with a silent OIDC redirect back to the tenant host after login. The vanity login host (`login.firm.com`, edge rewrite preserving the org scope) ships with TEN-05 in V2 if tenants ask."
+    },
+    {
+      "id": "D9",
+      "source_doc": "42",
+      "section": "Security & Compliance",
+      "question": "GDPR erasure across two stores (docs/02 §10.4, AUTH-35): ZITADEL is event-sourced and does not de-identify past events (upstream issue #7811, open). Is the residual PII (email + display name in the IdP event stream) acceptable, or do we need a compensating control?",
+      "raised_by": "Design review (docs/42 §8)",
+      "owner": "FunderBlu COO, Tech Lead",
+      "deadline": "Phase 0 exit (DPO review)",
+      "answer": "**Open — default recorded:** accept and document. We store no more PII in the IdP than email + display name (KYC profile and documents stay in our stores), the erasure procedure deletes the user and our rows, and the residual event entries are recorded as a known limitation with a DPO review at Phase 0 exit. Compensating control if the DPO refuses: pseudo-anonymous login names (`usr_{ulid}@login.alpha1.io`) with the notification email held only in our database."
     }
   ]
 }

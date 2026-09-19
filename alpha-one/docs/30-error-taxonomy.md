@@ -41,7 +41,7 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (298 codes — 66 V1 baseline, 232 extended — across 25 modules)
+## 2. The registry (310 codes — 70 V1 baseline, 240 extended — across 25 modules)
 
 ### 02 — AUTH
 
@@ -72,6 +72,12 @@
 | `auth.api_key_scope_missing` | 403 | Key lacks scope for route | ext |
 | `auth.email_already_exists` | 409 | Registration conflict | ext |
 | `auth.invitation_invalid` | 422 | Expired/used/revoked invite (V2) | ext |
+| `auth.token_invalid` | 401 | Bearer token missing, malformed, expired, or unverifiable (unknown `kid`/issuer/audience) — **the API's replacement for the hosted-login codes** (ADR-13, P2) | ext |
+| `auth.mfa_not_enrolled` | 403 | Staff identity has no verified factor yet (distinct from a missing assertion on an enrolled user) | ext |
+| `auth.mfa_not_required` | 403 | `POST /v1/auth/mfa/enrollment` called by a non-staff role | ext |
+| `auth.mfa_already_enrolled` | 409 | `POST /v1/auth/mfa/enrollment` on an identity that already has a verified factor | ext |
+| `auth.backup_code_invalid` | 401 | Backup code wrong, already used, or unknown (AUTH-11) | ext |
+| `auth.email_change_requires_verification` | 409 | Email change pending verification (AUTH-29, V2) | ext |
 
 ### 03 — TEN
 
@@ -90,6 +96,8 @@
 | `tenant.branding_invalid` | 422 | Asset/size/CSS-safety check failed | ext |
 | `tenant.kyb_required` | 403 | Staff can't activate without KYB (V1 gate) | ext |
 | `tenant.plan_insufficient` | 403 | Route/module not in tenant's entitlements | ext |
+| `tenant.deactivated` | 403 | Tenant deactivated; export-only surface (recoverable inside the 30-day window, TEN-45) | ext |
+| `tenant.pending_deletion` | 403 | Tenant scheduled for deletion; settlement-only surface (§5.1) | ext |
 
 ### 04 — GW+EVT
 

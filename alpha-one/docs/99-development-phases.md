@@ -198,6 +198,30 @@ Appendix A lists every ID.
 "create a tenant, invite a user, log in, watch an event flow
 on the dashboard, run the restore drill live."
 
+**Phase-0 gates added by the docs/42 identity review (2026-09-19)** — all five are
+inside task 0.5/0.9 and must be *recorded* (docs/34 §9 checklist) before M0:
+
+1. **Org-scope behaviour check** — reproduce ZITADEL issue #11869 with a multi-org test
+   user on the pinned version; the result decides whether the `urn:…:org:id:` scope can
+   be used for staff-grant scenarios or only for home-org users (docs/02 §3.1).
+2. **Staff-MFA `amr` check** — confirm the hosted-login access token carries the TOTP
+   factor (`amr`/`auth_time`) and that `POST /v2/users/{id}/totp` binds the factor when
+   called with the *user's own* token (docs/02 §3.2). Failing this escalates to the
+   custom-login-UI trade-off (docs/41 §4.1) — a scope decision, not a silent workaround.
+3. **IdP backup/restore rehearsal** — restore the `zitadel` database into a scratch
+   instance, log in against it, and verify the master key is stored separately from the
+   dump (docs/06 §2.4).
+4. **Password-import dry run** — import a sample of TTS-shaped hashes through
+   `ImportHumanUser` to confirm the verifier configuration works before the cutover gate
+   commits to posture A or B (docs/25 §3.5, decision D7).
+5. **DPO review** — the residual-PII limitation in ZITADEL's event stream (upstream
+   #7811) is reviewed and either accepted in writing or mitigated (docs/02 §10.4,
+   decision D9).
+
+The second-pass review artifact is `docs/42-auth-ten-gap-analysis.md` (G1–G20); the
+requirement-coverage impact is limited to V1 design detail — **no PRD workbook row was
+changed** (the promotions were already recorded in docs/37).
+
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)
 
 **Goal:** the end-to-end money loop on synthetic data.

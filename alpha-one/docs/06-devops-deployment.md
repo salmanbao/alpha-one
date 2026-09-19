@@ -52,6 +52,7 @@ envs' files fails CI.
 | workers | 2 | 4 GB | consumers + schedulers |
 | docs-worker | 1 | 2 GB | Puppeteer is hungry |
 | web | 1.5 | 2 GB | Next.js SSR |
+| zitadel (IdP, ADR-13) | 1 | 1 GB | Go binary + its own PG **database** on the platform cluster (ADR-10); health `/debug/healthz` |
 | db (PG) | 6 | 24 GB | `shared_buffers` 6 GB, `work_mem` bounded |
 | redis | 1 | 8 GB | maxmemory 6 GB, `allkeys-lru` on the `cache:*` DB only (see 2.6) |
 | hook0/flipt/observability | 1 | 2 GB | — |
@@ -82,6 +83,11 @@ Host headroom: 16 GB + 1 TB free disk reserved. `nofile` 65536 on db.
   DDL where possible; `CONCURRENTLY` indexes with a lock-wait guard).
 - Every migration has a companion note in the PR (what it touches, rollback path).
 - `migrate version` is reported in `/readyz`; deploy is blocked on drift.
+- **ZITADEL schema (ADR-13)**: the IdP runs its own migrations on start-up in its own
+  database (`zitadel`); they are **not** golang-migrate files and are one-way
+  (event-sourced). Therefore: version-pin the image, rehearse the upgrade on staging
+  against a restored prod dump, and never run `zitadel` and `migrate` concurrently —
+  deploy order is `migrate → zitadel → api → workers/web`.
 
 ### 2.4 Backups & DR (OPS-07, OPS-38, ADR-10)
 
@@ -89,8 +95,9 @@ Host headroom: 16 GB + 1 TB free disk reserved. `nofile` 65536 on db.
 |---|---|---|
 | PG WAL | `archive_command` → rsync to 2nd Hetzner box (S3-compatible object store), continuous | **RPO ≤ 5 min** |
 | PG base backup | `pg_basebackup` nightly 03:00 UTC → same remote, encrypted at rest (SSE + age on key) | verified, not assumed |
-| **Backup integrity** (OPS-38) | monthly **restore drill**: base + WAL → scratch instance on staging host → run integrity suite (row counts on 12 key tables, ledger balance check, audit chain spot-check) → report filed in CON; drill failure = P1 incident | **RTO ≤ 2 h** (documented runbook + rehearsed) |
+| **Backup integrity** (OPS-38) | monthly **restore drill**: base + WAL → scratch instance on staging host → run integrity suite (row counts on 12 key tables, ledger balance check, audit chain spot-check, **`identities.idp_user_id` join integrity + one login smoke-test**) → report filed in CON; drill failure = P1 incident | **RTO ≤ 2 h** (documented runbook + rehearsed) |
 | R2 | versioning enabled on the tenant-docs bucket; cross-region replication off in V1 (single region, nightly object manifest backup to the remote box) | docs restorable to last night |
+| **ZITADEL database** (ADR-13) | same `pg_basebackup` + WAL ritual as the platform DB (same cluster, separate database); the master key and the DB dump are stored **separately** (a dump alone cannot decrypt IdP secrets) | login service restorable ≤ RTO; key stored per docs/28 §5 |
 | Redis | AOF `everysec` (OPS-26) + `maxmemory-policy noeviction` on sessions/streams DBs, `allkeys-lru` only on the cache DB | streams rebuildable from `events` table (Redis is transport, not truth) |
 | Config/secrets | repo (SOPS) is the source of truth; age keys on 2 offline locations + 1 host | rotation = PR |
 | Compose/state | declarative; `docker compose config` reproducible from git sha | redeploy = pull + up |
@@ -240,7 +247,8 @@ comfortable at 10× V1 targets. When to scale (written thresholds, not vibes):
 | **golang-migrate** | migrations |
 | **SOPS + age** | secrets (ADR-3) |
 | **GHCR + GitHub Actions** | registry + CI/CD (PRD signed) |
-| **PgBouncer** | connection pooling (ADR-8) |
+| **PgBouncer** | connection pooling (ADR-8) | 
+| **ZITADEL** | identity provider (ADR-13): OIDC hosted login, MFA, SAML/OIDC SSO, SCIM 2.0 (user schema); AGPL-3.0, self-hosted, unmodified — licence gate in docs/41 §8.2 |
 | **Prometheus + Grafana** | V1 metrics/dashboards (Loki + OTel V2 register) |
 | **Uptime Kuma** | external uptime (OPS-31) |
 | **Trivy** | image scanning |

@@ -475,7 +475,20 @@ the 32 doc's `audit_log` DDL (the
   TTL (the 24 Part A's 15-min, the
   13's 5-min)), the session's secret
   (the 02 §3.2, the ZITADEL application
-  and client secrets, the SOPS), the webhook's
+  and client secrets, the SOPS),
+  **the IdP class** (the 02 §3.3's
+  register: the `ZITADEL_MASTERKEY`
+  (the key-ceremony, the never-rotated),
+  the provisioning machine-user key
+  (the 90-d), the per-tenant SCIM
+  bearer tokens (the 90-d, the stored
+  hashed), the Actions-v2 target
+  signing key (the 180-d), the
+  IdP's own PG DSN (the separate
+  database, the §3.3's store —
+  dump and master key stored
+  **separately** so a stolen dump
+  alone decrypts nothing)), the webhook's
   secret (the 27 §3.2's two-secrets,
   the per-key), the Casbin policy
   (the 02 §3.1, the no-secret (the
@@ -552,7 +565,14 @@ the 32 doc's `audit_log` DDL (the
   the anomaly (the 02 §10.5, the score,
   the block/MFA), the API key (the
   02 §3.4, the sha256, the scope,
-  the 600/min), the HIBP check (ours).
+  the 600/min), the HIBP check (ours
+  — **with the V1 deviation**:
+  enforced on our own change/registration
+  paths only, because ZITADEL owns
+  hosted-login password set/reset and
+  exposes no pre-change hook, the
+  02 §3.2, the docs/42 §3.3's
+  accepted gap with the owner).
 - **The authorization:** Casbin
   embedded (ADR-14, the 01 §2, the register;
   RBAC with domains, `dom` = tenant id)

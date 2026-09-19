@@ -165,6 +165,18 @@ needed — §9), **REJECTED** (never adopt).
 | Onfido / Sumsub / in-house OCR | BVR-03 | no contract / out of scope | Veriff (signed) |
 | Brokeree (open question) | BVR-04 | coverage-vs-cost TBD | MetaApi (primary); Brokeree stays the named alternative |
 
+### 3.1 ZITADEL — version pin, known upstream limitations, exit path (review G10)
+
+| Aspect | Posture |
+|---|---|
+| Version | pin the image tag (never `latest`); upgrade = staged on staging against a restored prod dump, one-way event-sourced migrations (rollback = restore the dump) |
+| Upstream limitation | `urn:zitadel:iam:org:id:{id}` login scope currently rejects users whose *resource owner* differs from the requested org (issue #11869, since v4.12.3) → our design creates the user in the tenant org it registers on, and resolves the active tenant from the request domain (docs/02 §3.1) |
+| Upstream limitation | MFA enforcement is org/instance-level only (issue #6316) → staff-only MFA is enforced by our API's `amr` rule (docs/02 §3.2) |
+| Upstream limitation | no event de-identification / retention (issue #7811) → documented GDPR limitation, DPO review, two-store erasure procedure (docs/02 §10.4) |
+| Upstream limitation | SCIM covers the **User** schema only ("Group provisioning not supported") → roles keep flowing from our ADM surface; group→role mapping is done once at SSO registration |
+| Exit path | tokens are standard OIDC and users are portable (`ImportHumanUser` accepts hashed passwords, verified 2026-09-19) → swapping the IdP means re-importing users and re-pointing the two OIDC clients; no proprietary coupling beyond Actions v2 claims, which are documented in docs/02 §3.1 |
+| Licence | AGPL-3.0 (unmodified, self-hosted, no distribution) — legal review at Phase 0 exit (docs/41 §8.2) |
+
 ## 4. License policy
 
 - **Default-allow:** MIT, Apache-2.0, BSD (2/3-clause), MPL-2.0,
@@ -275,6 +287,10 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 - [ ] **Veriff keys confirm (week 1)** — owner FunderBlu COO. Webhooks included?
 - [ ] **ZITADEL deploy + spike (Phase 0)** — owner BE-1. Org-per-tenant provisioning, hosted-login hand-off from the web tier, token claims (`amr`/`auth_time` for the staff-MFA and step-up rules), Actions v2 event feed into AUD, AGPL legal review (ADR-13).
 - [ ] **Casbin spike (Phase 0/1)** — owner BE-2. Policy model (`g(r.sub, p.sub, r.dom)`), hierarchy/derived rules, test fixture set, Postgres policy loading + reload (ADR-14).
+- [ ] **ZITADEL org-scope behaviour check (Phase 0)** — owner BE-1. Reproduce issue #11869 on the pinned version with a multi-org test user (docs/42 §3.1); record the outcome in docs/02 §3.1 either way.
+- [ ] **Staff-MFA enforcement check (Phase 0)** — owner BE-1. Confirm `amr`/`auth_time` carry the TOTP factor on hosted login and that `POST /v2/users/{id}/totp` with a **user** token binds the factor (docs/02 §3.2); if not, escalate to the custom-login-UI trade-off.
+- [ ] **IdP backup/restore rehearsal (Phase 0)** — owner DevOps. Restore the `zitadel` database into a scratch instance and log in against it; verify the master key is stored separately from the dump.
+- [ ] **DPO review of the IdP event-store limitation (Phase 0 exit)** — owner FunderBlu COO + legal. Upstream #7811 leaves PII in the IdP event stream after deletion; accept or add a compensating control (docs/02 §10.4, decision D9 in docs/37).
 - [ ] **Drizzle adopt (Phase 0)** — owners BE-1 + DevOps. Else Prisma fallback (BVR-08).
 - [ ] **Sentry SDKs day 1** — owner DevOps. Every service from the first deploy.
 - [ ] **AGPL distribution checks** (Hook0, UnKey, Comp AI, Grafana, Loki) — at each adoption.

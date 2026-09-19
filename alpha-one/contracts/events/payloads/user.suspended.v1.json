@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.suspended.v1.json",
+  "title": "Alpha One \u2014 event user.suspended v1",
+  "description": "V1 catalog event `user.suspended` (v1). Envelope per EVT-03. Consumers: NOT (trader notice), GW (session kill), AUD (AUTH-20). Payload INFERRED.",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "user.suspended"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "identity_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "membership_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "reason_code": {
+              "type": "string",
+              "enum": [
+                "policy",
+                "abuse",
+                "risk",
+                "request",
+                "kyc",
+                "other"
+              ]
+            },
+            "reason_text": {
+              "type": "string"
+            },
+            "actor": {
+              "type": "string"
+            },
+            "suspended_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "identity_id",
+            "reason_code",
+            "suspended_at"
+          ]
+        }
+      }
+    }
+  ]
+}

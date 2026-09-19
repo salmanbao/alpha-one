@@ -64,6 +64,10 @@ generators). Each names its owner doc:
 | I-14 | 404-not-403 | cross-tenant/unauthorized reads return 404, never 403 or data | 04 §11 |
 | I-15 | dedupe/idempotency | double-delivery and double-submit collapse to one effect (NOT-13, GW-12) | 14/04 §11 |
 | I-16 | frozen snapshots | documents/decisions render from snapshots, never live tables (query-shape test) | 15 §11 |
+| I-17 | RLS fail-closed | with no tenant context set, every RLS-protected table returns 0 rows; a cross-tenant `INSERT` fails `WITH CHECK` (D3, TEN-36) | 02/03 §9 |
+| I-18 | realm separation | a console-audience token can never satisfy a tenant-route policy, and vice versa (AUTH-16) | 02 §3.1 |
+| I-19 | staff-MFA gate | every staff-role route denies a token without an MFA assertion (`amr`), with `auth.mfa_required` (D5, AUTH-09) | 02 §3.2 |
+| I-20 | tenant-state enforcement | the §5.1 state→capability matrix holds for every state x surface pair (table-driven test over the matrix) | 03 §5.1 |
 
 ## 4. Contract gates (code vs `contracts/`)
 
@@ -90,6 +94,36 @@ generators). Each names its owner doc:
 - **Soak:** 24-h soak at gate load before M2 (cutover) and M4 —
   connection leaks, slow Streams growth, and disk curves are the
   usual catches.
+
+## 5.1 Identity & tenancy test plan (review G14 — docs/42 §6.3)
+
+**Token verification matrix** (unit + integration, one case per cell):
+valid · expired (`exp`) · not-yet-valid (`nbf`) · wrong audience (tenant app ↔
+console app) · wrong issuer · signature unknown `kid` (must trigger one JWKS refetch,
+then fail) · token for a deleted IdP user · token whose `sid` is in the deny-set ·
+token whose identity is suspended (`auth.account_suspended`) · token for a suspended
+tenant (`auth.tenant_suspended`) · expired-but-refreshable path.
+
+**Sessions:** refresh rotation (single-use; replay of a rotated refresh token revokes
+the family), logout kills the ZITADEL session **and** writes the deny-set entry,
+`ListMyUserSessions` reconciliation, `auth_sessions` projection rebuilt from scratch
+gives the same result (projection is derivable).
+
+**MFA:** enrolment with a **user** token attaches the factor; enrolment with an admin
+token is refused; staff token without `amr` → 401 on every staff route; backup-code
+redeem is single-use; exhausted codes route to `AUTH-28`; TOTP replay within the same
+window is rejected.
+
+**Tenancy:** the §5.1 matrix table-driven over each state × surface; RLS negatives
+(I-17); tenant resolution order (custom domain → subdomain → internal header → API key);
+unknown host → `tenant.unknown_host` 404 (never 400); provisioning saga resumable from
+each step (kill the worker mid-step, resume, assert idempotence).
+
+**IdP failure drills** (staging, quarterly with the game-day, docs/27 Part C.1):
+stop `zitadel` mid-session → API keeps serving valid tokens, new logins fail cleanly
+with `auth.token_invalid`-class errors and a status notice; restore + verify login;
+JWKS endpoint blocked → cached keys serve, alert fires; ZITADEL upgrade rehearsal on a
+restored prod dump → smoke login + provisioning dry-run.
 
 ## 6. Security testing (docs/28 §11–12)
 

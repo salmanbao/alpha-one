@@ -367,7 +367,7 @@ console tables + read access), Uptime Kuma API, Prometheus/Grafana
 | Module | How |
 |---|---|
 | **TEN** | the provisioning saga (03 §3.1) is driven + watched here; entitlements (CON-05); suspension/termination (CON-06) |
-| **AUTH** | the platform realm (02 §3.4); 2FA/step-up; anomaly scoring (the strictest tier) |
+| **AUTH** | the platform realm (02 §3.4); 2FA/step-up; anomaly scoring (the strictest tier); platform identity administration (`platform.identity.admin` — staff onboarding/offboarding, forced MFA reset AUTH-28, break-glass) and the tenant-provisioning saga actions (`platform.tenant.provision`, docs/03 §3.5) |
 | **OPS** | health (relay, backup, deploy), jobs (CON-21), security overview inputs (certs, hardening state — OPS-13/35) |
 | **AUD** | the platform audit view (CON-09); every console action mirrored; the termination data-handoff |
 | **ANA** | platform KPIs + metering (CON-10) + cross-tenant queue overview (CON-25) |

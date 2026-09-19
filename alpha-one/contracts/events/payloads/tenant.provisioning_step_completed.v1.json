@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.provisioning_step_completed.v1.json",
+  "title": "Alpha One \u2014 event tenant.provisioning_step_completed v1",
+  "description": "V1 catalog event `tenant.provisioning_step_completed` (v1). Envelope per EVT-03. Consumers: CON (live view), NOT (staff on failure).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tenant.provisioning_step_completed"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "step": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "step_name": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "failed"
+              ]
+            },
+            "attempt": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "error_code": {
+              "type": "string"
+            },
+            "finished_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tenant_id_ref",
+            "step",
+            "status",
+            "finished_at"
+          ]
+        }
+      }
+    }
+  ]
+}

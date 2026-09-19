@@ -2,6 +2,8 @@
 CREATE TABLE tenants (
   id            ULID PRIMARY KEY,
   slug          VARCHAR(63) UNIQUE NOT NULL,
+  idp_org_id    TEXT UNIQUE,                      -- ZITADEL org (review G1); NULL until provisioned
+  idp_org_domain TEXT,                            -- {slug}.alpha1.io, set as the org domain
   parent_id     ULID REFERENCES tenants(id),      -- ADR-2 door, NULL in V1
   firm_name     VARCHAR(255) NOT NULL,
   legal_entity_name VARCHAR(255), registration_number VARCHAR(100), tax_id VARCHAR(100),

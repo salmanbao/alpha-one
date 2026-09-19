@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "alphaone://events/api_key",
-  "title": "Alpha One events (extended) \u2014 topic `api_key.*`",
-  "description": "Extended (post-V1) schemas for the `api_key.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
+  "$id": "alphaone://events/identity",
+  "title": "Alpha One events (extended) \u2014 topic `identity.*`",
+  "description": "Extended (post-V1) schemas for the `identity.*` event topic \u2014 the design-level set beyond the V1 execution-sheet baseline (contracts/events/catalog.md + payloads/). Envelope per EVT-03. Catalog + producer/consumer map: docs/31-event-catalog.md. Transport: Redis Streams at-least-once + idempotent consumers (docs/04 \u00a75); webhook egress via Hook0 (docs/04 \u00a75.6).",
   "$defs": {
     "EventEnvelope": {
       "type": "object",
@@ -39,7 +39,7 @@
         }
       }
     },
-    "api_key_created": {
+    "identity_provisioned": {
       "allOf": [
         {
           "$ref": "#/$defs/EventEnvelope"
@@ -48,12 +48,12 @@
           "type": "object",
           "properties": {
             "type": {
-              "const": "api_key.created"
+              "const": "identity.provisioned"
             },
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: key lifecycle. Consumers: AUD \u2014 never includes the key. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: IdP-side user created by the tenant saga or SCIM. Consumers: TEN (access review), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -62,7 +62,7 @@
   },
   "anyOf": [
     {
-      "$ref": "#/$defs/api_key_created"
+      "$ref": "#/$defs/identity_provisioned"
     }
   ]
 }

@@ -121,6 +121,16 @@ when staff don't need more. The **payout name match** (V2 PAY-07) compares the
 encrypted name against the wallet name via a hash-equality service (never
 decrypt-then-log).
 
+**Split of identity attributes after ADR-13 (review G20).** ZITADEL holds the *login*
+identity only: email (login name), display name, and the MFA factors. Everything that
+makes up the **verified identity record** above — full legal name, DOB, nationality,
+document type/number, provider case — stays in our KYC tables (`§9`, field-encrypted),
+because the IdP is not a PII store and its event stream retains deleted users
+(docs/02 §10.4). The two are joined by `identities.id` /
+`identities.identity_key`, never by email. Consequence for erasure: a KYC purge
+(docs/02 §10.4) must shred the KYC tables and only *deactivate + delete* the IdP user —
+the IdP copy never held the document data in the first place.
+
 ### 3.4 Country & age (KYC-13/14)
 
 - Self-declared country at session start (also from IP, advisory flag if

@@ -70,8 +70,21 @@ checks `max_active_accounts` before provisioning a broker account); over-limit �
 custom domain → subdomain (`{slug}.alpha1.io`) → internal `X-Tenant-Id` (service
 tokens only) → API-key-embedded (wins over headers). Negative lookups are cached
 (60 s) so unknown-subdomain probing doesn't hammer PG. Status check in the same
-call: `suspended` tenant → 403 for all its traffic (`GW-23`); `onboarding` tenant →
-trader-facing routes 403, staff routes OK.
+call: `suspended` tenant → 403 for all its traffic (`GW-23`); the per-state
+behaviour is the matrix in §5.1.
+
+**Subdomain rules (TEN-42, review G8).** Format: 3–30 chars, `[a-z0-9-]`, no leading
+or trailing hyphen, no double hyphen, must not be all-digits; the input is
+lower-cased and trimmed, and a non-ASCII/punycode attempt is an error (no
+transliteration — homograph protection). Reserved list (never creatable, checked in
+addition to `tenant.subdomain_taken`): `www, admin, api, app, console, login, id,
+auth, sso, status, docs, help, support, mail, email, cdn, static, assets, billing,
+pay, payments, bridge, engine, relay, test, staging, demo, beta, internal, alpha1,
+alphaone`. Availability is checked against `tenants.slug` **and** the reserved list
+in one call (`GET /v1/tenants/subdomain-check`), with DNS only consulted at
+provisioning. **V1: subdomains are immutable** — a change would break cookies, email
+links and webhooks, so `TEN-43` (V2) ships it as an explicit migration with a
+redirect window rather than an edit field.
 
 ### 3.3 Configuration surface (settings JSONB, curated keys)
 
@@ -112,7 +125,8 @@ DOC). Admin preview in ADM (`ADM-19` settings pages). No JS theme injection.
 |---|---|---|---|
 | 1 | validate application (KYB basics, sanctions list check, jurisdiction) | — | `tenant.provisioning_failed` |
 | 2 | create `tenants` row (`status=provisioning`), slug unique | delete row | idempotent retry |
-| 3 | provision ZITADEL organization + project/application + owner membership (Admin API), store `idp_org_id`; per-org login policy, password policy, lockout and branding defaults | destroy org | retry ×2 |
+| 3 | provision ZITADEL organization + project/application + owner membership (Admin API), store `idp_org_id`; per-org login policy, password policy, lockout and branding defaults, org domain = `{slug}.alpha1.io`, `mfa_init_skip_lifetime` set (staff-MFA nudge, docs/02 §3.2) | destroy org | retry ×2 |
+| 3a | (only when the tenant contracted SSO — AUTH-24/25) register the org's external IdP (SAML/OIDC metadata), attach it to the org, map directory groups → roles, issue the SCIM bearer token into the IdP | revoke token, remove IdP | retry; manual on metadata errors |
 | 4 | branding defaults + legal defaults | delete rows | retry |
 | 5 | subdomain DNS (Cloudflare API: `CNAME {slug}.alpha1.io`) | delete record | retry; custom domain = V1.1 step |
 | 6 | default broker group ref (BRG-12) + default rule packs (EVL seed) | delete refs | retry |
@@ -133,20 +147,75 @@ team invites (AUTH V2) → **run one full test challenge with a test trader** (g
 for `go_live`) → go-live review (CON staff sign-off) → `status=active`.
 Checklist state in `tenants.onboarding_state JSONB`; rendered in ADM.
 
+### 3.7 Integration secret inventory (TEN-11/TEN-12, review G13)
+
+Every tenant-supplied credential, whether it is a secret, and how it is handled.
+Storage = envelope encryption with a per-tenant DEK (docs/28 §5); `masked` fields
+return `••••1234` (last 4 of a fingerprint, never the value) on read; every read of a
+revealed value is audited (`tenant.integration.revealed`).
+
+| Field | Secret? | Storage | Read-back | Rotation | Audit |
+|---|---|---|---|---|---|
+| Broker API token / investor password (incl. MetaApi token) | yes | encrypted (`integration_config`) | masked | tenant-initiated; connection test on save (TEN-25, V2) | write + reveal |
+| Broker account login / server | no (sensitive) | plain, tenant-scoped | full to tenant admin | — | write |
+| Payment provider key + secret (Match2Pay/Interkasa/NOWPayments) | yes | encrypted | masked | tenant-initiated + 90 d reminder | write + reveal |
+| Payment webhook signing secret (per provider) | yes | encrypted | masked, never logged | rotate on leak runbook | write |
+| KYC provider key (Veriff) | yes | encrypted | masked | 180 d | write |
+| KYC provider webhook secret | yes | encrypted | masked | 180 d | write |
+| Email sender credentials (SMTP/API key) | yes | encrypted | masked | 180 d | write |
+| Payout rail credentials (V2, PAY-05) | yes | encrypted + separate field key | masked | tenant-initiated | write + reveal |
+| SSO signing certificate / IdP metadata (V1 for the cutover tenant) | public cert + private only at the IdP | metadata stored as text; no private key on our side | full (public) | tenant-side | write |
+| SCIM bearer token we issue | yes (hash only, like API keys) | SHA-256 hash | shown once at issue | 90 d | write + issue |
+
+Rules: secrets never appear in logs, error payloads, analytics or event payloads;
+`GET /v1/tenants/{tenant_id}/integrations` never decrypts (masking only) — decryption happens
+only in the integration worker through a scoped accessor that writes the audit row;
+a failed connection test is not a reason to log the credential; the tenant-settings
+JSONB never contains secrets (they live in `integration_config`, TEN-12).
+
+### 3.8 Tenant login hostname (review G19)
+
+V1: tenants log in at **`login.alpha1.io`** scoped to their org
+(`urn:zitadel:iam:org:id:{id}`), which yields per-org branding, password policy and MFA
+settings — the hosted-login page is themed with the tenant's logo/colours/product name.
+The tenant's own domains (`firm.com`, `firm.alpha1.io`) serve the **app** and the API;
+they never serve a login form in V1. Post-login the app performs a silent OIDC
+redirect back to the tenant host, so the browser's address bar is on the tenant domain
+for the session.
+
+V2 (with TEN-05 custom domains, and only if tenants ask): a **vanity login host**
+(`login.firm.com`) implemented at the edge as a rewrite to `login.alpha1.io` with the
+org scope preserved and the TLS cert issued for the tenant domain — the same
+edge-rewrite pattern as the app-side custom domain, no second login implementation.
+
 ## 4. Events
 
-| Event | Producer | Consumers |
+### 4.1 V1 baseline events — authoritative
+
+From `contracts/events/catalog.md`. Envelope EVT-03; payloads in
+`contracts/events/payloads/`. TEN is the producer for the tenant lifecycle; AUTH
+produces the member events.
+
+| Event | Producer (V1) | V1 consumers |
 |---|---|---|
-| `tenant.created` | TEN | AUD, CON |
-| `tenant.provisioning_step_completed/failed` | TEN (orchestrator) | CON (live view), NOT (staff) |
-| `tenant.activated` | TEN | GW (allow traffic), NOT (owner), AUD, ANA |
-| `tenant.suspended` | TEN | AUTH (kill sessions), GW (deny), NOT (owner), AUD — **all stop within 1 s** |
-| `tenant.reactivated` | TEN | GW, NOT, AUD |
-| `tenant.plan_changed` | TEN | Flipt sync, limits revalidate, AUD |
-| `tenant.settings_changed` | TEN | cache invalidator (`t:{id}:*`), AUD (before/after diff) |
-| `tenant.branding_changed` | TEN | web (cache bust), DOC/NOT (next render), AUD |
-| `tenant.deletion_scheduled` / `tenant.data_cleaned` | TEN | CON, AUD, MIG (blocks cutover) |
-| `tenant.limit_exceeded` (warning, non-blocking at 80%) | enforcers | NOT (owner), ANA |
+| `tenant.created` | TEN-01 | AUD, CON, NOT (owner) |
+| `tenant.provisioning_step_completed` / `_failed` | TEN (orchestrator, docs/03 §3.5) | CON (live view), NOT (staff) |
+| `tenant.activated` | TEN (checklist complete) | GW (allow traffic), NOT (owner), AUD, ANA |
+| `tenant.suspended` | TEN-15 | AUTH (kill sessions), GW (deny), NOT (owner), AUD — **all stop within 1 s** |
+| `tenant.reactivated` | TEN-15 | GW, NOT, AUD, AUTH (identities stay active; sessions require a new login) |
+| `tenant.member_invited` | AUTH-03 (V2 row, V1 SSO-tenant exception) | NOT, CON |
+
+### 4.2 Extended (post-V1) event model — design-level
+
+| Event | When | Consumers |
+|---|---|---|
+| `tenant.plan_changed` | plan/entitlement edit | Flipt sync, limits revalidate, AUD |
+| `tenant.settings_changed` | settings JSONB edited | cache invalidator (`t:{id}:*`), AUD (before/after diff) |
+| `tenant.branding_changed` | logo/colours/texts edited | web (cache bust), DOC/NOT (next render), AUD |
+| `tenant.deletion_scheduled` / `tenant.data_cleaned` | termination saga (§5.2) | CON, AUD, MIG (blocks cutover) |
+| `tenant.deactivated` / `tenant.reactivated_post_grace` | recovery window (TEN-45, V2) | GW, AUTH, NOT, AUD |
+| `tenant.limit_exceeded` | enforcer warning at 80%, hard stop at 100% | NOT (owner), ANA |
+| `tenant.entitlement_changed` | module on/off | GW (route gating), Flipt, AUD (TEN-08) |
 
 ## 5. Lifecycles
 
@@ -168,6 +237,42 @@ ACTIVE/ONBOARDING ──deactivate──► deactivated ──30d──► pendi
   tombstone (ids stay unique forever).
 - **Plan change**: entitlements/limits updated atomically; quota check re-run for
   the most constrained metric; event emitted. V1 = manual CON action; V3 = BIL-driven.
+
+### 5.1 State → capability matrix (review G7)
+
+What each state means for the surfaces that matter. `✓` allowed · `—` blocked
+(with the error in brackets) · `~` allowed but degraded/read-only.
+
+| State | Trader login/traffic | Staff (ADM) | API keys | Webhooks out | Bridge sync | Payments | Payouts |
+|---|---|---|---|---|---|---|---|
+| `pending_approval` | — (`tenant.not_found`) | — | — | — | — | — | — |
+| `provisioning` | — (`tenant.not_ready`) | — | — | — | — | — | — |
+| `provisioning_failed` | — (`tenant.not_ready`) | — | — | — | — | — | — |
+| `onboarding` | — (trader routes 403 `tenant.not_ready`) | ✓ | — | — | ✓ (dry-run only) | — | — |
+| `active` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `suspended` | — (`tenant.suspended`, sessions killed) | — (`tenant.suspended`) | — | — (queued, then DLQ after 24 h) | paused | — | — (held, per PAY policy) |
+| `deactivated` | — | ~ (export only) | — | — | — | — | — |
+| `pending_deletion` | — | ~ (export only) | — | — | — | settlement only | settlement only |
+| `archived` | — | — | — | — | — | — | — |
+| `deleted` | — | — | — | — | — | — | — |
+
+Every transition emits `tenant.*` (docs/31) and invalidates `t:{tenant}:*` caches;
+`suspended` must reflect in ≤ 1 s (GW deny-set + session kill, TEN-15).
+
+### 5.2 Termination and deletion (review G7)
+
+`POST /v1/tenants/{tenant_id}/terminate` (CON, `tenant.terminate`) is a **saga**, not a flag:
+stop traffic (state `suspended`) → export bundle for the tenant (TEN-33 shape, V2
+surface; V1 = manual archive of `tenants` + settings + document manifest) → suspend
+every identity in the ZITADEL org (`DeactivateUser`) → archive the R2 prefix to cold
+storage → anonymise PII in our tables (financial/audit rows retained per AUD policy)
+→ `pending_deletion` for the retention window → `deleted` tombstone (id never reused).
+The **IdP side** mirrors the identity deletion rules (docs/02 §10.4), including the
+accepted limitation on ZITADEL's event stream.
+
+`deactivated` is recoverable for **30 days** (TEN-45, V2): reactivation restores the
+state, DNS and branding from the archive; after that the tenant is only reachable via
+an ops restore of the pre-deletion dump.
 
 ## 6. Error taxonomy
 ### 6.1 V1 baseline codes — authoritative
@@ -198,6 +303,8 @@ Namespace `TEN` (global contract: [30-error-taxonomy](30-error-taxonomy.md)):
 | `tenant.branding_invalid` | 422 | Asset/size/CSS-safety check failed |
 | `tenant.kyb_required` | 403 | Staff can't activate without KYB (V1 gate) |
 | `tenant.plan_insufficient` | 403 | Route/module not in tenant's entitlements |
+| `tenant.deactivated` | 403 | Tenant deactivated; export-only surface (recoverable inside the 30-day window, TEN-45) |
+| `tenant.pending_deletion` | 403 | Tenant scheduled for deletion; settlement-only surface (§5.1) |
 
 ## 7. API endpoints
 ### 7.1 V1 baseline — `tenant` (authoritative: `contracts/api/tenant.md`)
@@ -212,9 +319,43 @@ Namespace `TEN` (global contract: [30-error-taxonomy](30-error-taxonomy.md)):
 | `GET /v1/tenants/subdomain-check` | Super Admin — TEN-42 | `tenant.create` (used during creation flow) # TEN-42 | n/a | standard |
 | `PUT /v1/tenants/{tenant_id}/entitlements` | Super Admin — TEN-08 | `tenant.entitlement.change` # AUTH-13, key derived from TEN-08 | required | `tenant.not_found`, `module.unknown` |
 | `PUT /v1/tenants/{tenant_id}/integrations` | Tenant Admin — TEN-11 | `tenant.integration.write` # AUTH-13, key derived from TEN-11 | required | `tenant.not_found` |
-| `GET /v1/tenants/{tenant_id}/integrations` | Tenant Admin — TEN-11 | `tenant.integration.read` # derived from TEN-11 management need; read-back masking rules — TODO — needs owner decision | n/a | `tenant.not_found` |
+| `GET /v1/tenants/{tenant_id}/integrations` | Tenant Admin — TEN-11 | `tenant.integration.read` # masked read-back, docs/03 §3.7 (review G13) | n/a | `tenant.not_found` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/tenant.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
+
+
+#### V2 row stubs — design intent per requirement (review G15)
+
+| Req | Feature | Design intent (V2 unless marked) |
+|---|---|---|
+| TEN-04 | Branding | V1 field set already exists (§3.4/§8 `branding` JSONB); V2 adds the editor UI, asset validation (TEN-44) and per-surface overrides. |
+| TEN-05 | Custom domain | `domain_mappings` row + CON verification wizard; edge rewrite (app + optional vanity login host, §3.8); TLS via Cloudflare for SaaS. |
+| TEN-06 / TEN-07 | Terminology + locale | Curated keys in `settings` (`terminology.*`, `locale: {currency, timezone, language}`) resolved once and served by `/v1/settings` + the tenant-context endpoint. |
+| TEN-09 | Module lifecycle | Entitlement rows gain a state (`installed|enabled|suspended|disabled`) with `tenant.entitlement_changed`; UI/API gate on `enabled`. |
+| TEN-10 | Feature flags | Flipt, per-tenant; flag changes audited as `tenant.settings_changed` (V1 already ships the flags, V2 adds the tenant-facing toggle). |
+| TEN-13 / TEN-29 | Legal pages + versioning/re-consent | Document versions stored with content hash; publishing a version writes `legal_versions` and sets the re-consent gate checked by `/v1/auth/session` (AUTH-31 log). |
+| TEN-14 | Email sender config | `settings.comms` + DNS records (SPF/DKIM) per tenant; sending domain verification status surfaced with TEN-26. |
+| TEN-16 | Impersonation | Consent + control UI (CON-07) + `tenant.impersonate` key + AUD-08 audit format; **not in V1** (AUTH-16 is separation-only, docs/02 §3.1). |
+| TEN-17 | Tenant context endpoint | `GET /v1/tenants/context` — single bootstrap payload (branding, entitlements, flags, terminology, locale) served from the `t:{tenant}:*` cache. |
+| TEN-19 | Tenant audit | Read surface over `audit_events` filtered to the tenant, plus the config-diff timeline (§3.3 `tenant.settings_changed` before/after). |
+| TEN-20 / TEN-22 / TEN-23 | Metering, quotas, alerts | `usage_events` (V1 table, §9) + enforcer counters; quotas in `limits`; 80 %/100 % thresholds emit `tenant.limit_exceeded` → NOT + CON. |
+| TEN-21 | Tenant health | Per-tenant rollups of error rate, broker-sync lag (BRG), queue lag and provisioning state; CON dashboard row per tenant. |
+| TEN-24 (V3) | Data residency | Out of scope until a second region exists (ADR-9 single box / ADR-10 single PG); row stays parked with the decision recorded in docs/41 §5. |
+| TEN-25 | Integration connection test | Per-integration probe from the worker (broker ping, payment provider auth check, KYC key check, SMTP handshake) with the result audited and stored per config version. |
+| TEN-26 | Domain verification + SSL | DNS record instructions + periodic verification job; certificate state from Cloudflare for SaaS; failures alert the tenant admin. |
+| TEN-27 / TEN-28 / TEN-39 | Effective-value view, config versioning/rollback, dry-run | `tenant_settings_versions` (append-only, diffs), resolver that walks platform → tenant → module defaults, and a dry-run endpoint that returns the resolved diff without writing. |
+| TEN-30 | Setup checklist | The §3.6 checklist with per-step completion stored in `tenants.onboarding_state` (already in V1) and V2 exposing progress + gating. |
+| TEN-31 | Notification channel policy | `settings.comms.channels` + a mandatory-channel list consumed by NOT (breach/payout always on). |
+| TEN-32 | Staff access review | Join of `tenant_memberships` + last-active + IdP MFA state; bulk-disable action; nightly drift report from the ZITADEL mirror (P4). |
+| TEN-33 / TEN-37 / TEN-38 | Offboarding export, portability, archival vs hard deletion | Export package spec (JSONL + CSV + media manifest) built by the MIG/ANA exporters; retention windows per data class; `archived` vs `deleted` distinction in the lifecycle (§5.2). |
+| TEN-34 | Config clone | Copy of the curated `settings`/`branding`/`terminology` between tenants with an explicit include list; never copies secrets or entitlements. |
+| TEN-35 | Entitlement impact preview | Pre-flight query counting active entities that depend on a module (commission accruals, competitions, scheduled content) before disabling. |
+| TEN-36 | Cross-tenant isolation testing | V1 deliverable in CI: docs/35 I-01/I-14 + I-17 (RLS) — the V2 row is the per-module expansion of the same suite. |
+| TEN-40 | Tenant-targeted incidents | Incident records with a tenant scope + status page segment; NOT delivers to the affected tenants only. |
+| TEN-41 | Tenant admin invite email | The provisioning saga's step 8 invite (§3.5) re-issued from CON with a fresh one-time link. |
+| TEN-43 | Subdomain change | Explicit migration job: new slug provisioned → redirect window from the old subdomain → cookies/session invalidated → audit (V1 keeps subdomains immutable, §3.2). |
+| TEN-44 | Branding asset validation | Type/size/dimension limits + SVG sanitisation on upload (§3.4); the V1 upload path already enforces type/size in docs/03 §7.2. |
+| TEN-45 | Deactivation recovery window | 30-day `deactivated` window with restore (or `pending_deletion` continuation) — mechanics in §5.2; the row adds the configurable window + CON surface. |
 
 ### 7.2 Extended (post-V1) surface — provisional
 
@@ -261,6 +402,8 @@ Full listing in `contracts/tenants.openapi.yaml`.
 CREATE TABLE tenants (
   id            ULID PRIMARY KEY,
   slug          VARCHAR(63) UNIQUE NOT NULL,
+  idp_org_id    TEXT UNIQUE,                      -- ZITADEL org (review G1); NULL until provisioned
+  idp_org_domain TEXT,                            -- {slug}.alpha1.io, set as the org domain
   parent_id     ULID REFERENCES tenants(id),      -- ADR-2 door, NULL in V1
   firm_name     VARCHAR(255) NOT NULL,
   legal_entity_name VARCHAR(255), registration_number VARCHAR(100), tax_id VARCHAR(100),
@@ -341,6 +484,13 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
 );
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
 ```
+
+**RLS (D3).** Every tenant-owned table in this module (`domain_mappings`,
+`tenant_entitlements`, `provisioning_jobs`, `usage_events`, and `integration_config`
+where it exists in the module that owns the field)
+carries `ENABLE`/`FORCE ROW LEVEL SECURITY` with the `current_setting('app.tenant_id', true)`
+policy, a `(tenant_id, …)` index, and `WITH CHECK` so a cross-tenant insert fails;
+`tenants` itself is guard-only (platform-owned) and excluded from the policy set.
 
 Cache: `t:{tenant}:config|branding|entitlements` in Redis (TTL 5 min / 1 h for
 branding) + in-mem LRU 60 s; invalidation via `tenant.*_changed` events + pub/sub

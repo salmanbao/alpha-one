@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "user.login_failure.v1.json",
+  "title": "Alpha One \u2014 event user.login_failure v1",
+  "description": "V1 catalog event `user.login_failure` (v1). Envelope per EVT-03. Consumers: AUD, RSK (anomaly scoring), NOT (security notice on threshold). Emitted by ZITADEL via the Actions v2 event trigger; carries no credential material.",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "user.login_failure"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "identity_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "bad_password",
+                "unknown_user",
+                "mfa_failed",
+                "locked",
+                "suspended",
+                "tenant_suspended"
+              ]
+            },
+            "attempt_count": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "ip": {
+              "type": "string"
+            },
+            "user_agent": {
+              "type": "string"
+            },
+            "occurred_at_ref": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "identity_id",
+            "reason",
+            "attempt_count",
+            "occurred_at_ref"
+          ]
+        }
+      }
+    }
+  ]
+}

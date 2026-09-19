@@ -53,7 +53,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: identity + tenant + source. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-01. Consumers: NOT-01 (welcome), AUD, ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -73,7 +73,27 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: failure carries attempt count, ip, ua. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-04 (session materialisation). Consumers: AUD, ANA, RSK (anomaly baseline). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_login_failure": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.login_failure"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: ZITADEL via Actions v2. Consumers: AUD, RSK (anomaly), NOT (security notice). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -93,13 +113,13 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH (on AUTH-20/43). Consumers: suspension reason code. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-20 / AUTH-43. Consumers: NOT, GW (immediate session kill), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
       ]
     },
-    "user_role_changed": {
+    "user_activated": {
       "allOf": [
         {
           "$ref": "#/$defs/EventEnvelope"
@@ -108,12 +128,12 @@
           "type": "object",
           "properties": {
             "type": {
-              "const": "user.role_changed"
+              "const": "user.activated"
             },
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: old+new role. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-43 (unsuspend). Consumers: NOT, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -133,7 +153,7 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: which session, by whom. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH (logout AUTH-39, suspension AUTH-20). Consumers: AUD \u2014 admin-initiated revocation is AUTH-27 (V2). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -153,7 +173,67 @@
             "payload": {
               "type": "object",
               "additionalProperties": true,
-              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH. Consumers: \u2014. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+              "description": "Per-event payload. Producer: 02 (AUTH). When: AUTH-05 / AUTH-40. Consumers: session invalidator (all other sessions), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_role_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.role_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: membership role edited. Consumers: cache-invalidator (authz), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_status_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.status_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: any identity status transition (from, to, reason). Consumers: GW, AUD, ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
+            }
+          }
+        }
+      ]
+    },
+    "user_email_changed": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/EventEnvelope"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "user.email_changed"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Per-event payload. Producer: 02 (AUTH). When: email change verified (AUTH-29, V2). Consumers: AUD, NOT (both addresses). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31)."
             }
           }
         }
@@ -168,16 +248,28 @@
       "$ref": "#/$defs/user_login_success"
     },
     {
+      "$ref": "#/$defs/user_login_failure"
+    },
+    {
       "$ref": "#/$defs/user_suspended"
     },
     {
-      "$ref": "#/$defs/user_role_changed"
+      "$ref": "#/$defs/user_activated"
     },
     {
       "$ref": "#/$defs/user_session_revoked"
     },
     {
       "$ref": "#/$defs/user_password_changed"
+    },
+    {
+      "$ref": "#/$defs/user_role_changed"
+    },
+    {
+      "$ref": "#/$defs/user_status_changed"
+    },
+    {
+      "$ref": "#/$defs/user_email_changed"
     }
   ]
 }

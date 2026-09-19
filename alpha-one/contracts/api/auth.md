@@ -68,6 +68,45 @@ Errors:
 - `auth.tenant_suspended` 403 — tenant suspended: logins stop # implied by TEN-15
 - `auth.mfa_required` 401 — staff role without an MFA assertion and no redeemed backup code # implied by AUTH-09/11
 
+### GET /v1/auth/mfa/status
+Auth: any logged-in user — AUTH-09
+Tenant: from domain (GW-02)
+Permission: self-action
+Idempotency: n/a
+
+Response 200:
+```json
+{ "required": true, "enrolled": false, "factors": [], "backup_codes_remaining": 0 }
+```
+
+`required` is true for every staff role (decision D5); the front end gates the app on
+`{required, enrolled}` and routes to enrolment. Trader roles return `required:false`
+(AUTH-10 is V2).
+
+### POST /v1/auth/mfa/enrollment
+Auth: staff role (any) — AUTH-09
+Tenant: from domain (GW-02)
+Permission: self-action (the API refuses non-staff callers)
+Idempotency: required
+
+Starts TOTP enrolment by calling ZITADEL `POST /v2/users/{id}/totp` **with the user's own
+access token** (an admin token does not bind the factor to the session); the response is
+the provisioning URI/secret shown once.
+
+Request:
+```json
+{}
+```
+
+Response 200:
+```json
+{ "otpauth_url": "otpauth://totp/...", "secret": "TODO", "requires_relogin": true }
+```
+
+Errors:
+- `auth.mfa_not_required` 403 — caller has no staff role # AUTH-09 scope
+- `auth.mfa_already_enrolled` 409 — a verified factor already exists # AUTH-09
+
 ### POST /v1/auth/2fa/backup-codes
 Auth: staff at first-login enrolment — AUTH-09/11 (V1 per decision D5)
 Tenant: from domain (GW-02)
@@ -140,7 +179,9 @@ Response 200:
 { "totp_secret_uri": "TODO" }
 ```
 
-Errors: TODO — needs owner decision (enrollment edge cases)
+Errors:
+- `auth.mfa_not_enrolled` 403 — backup codes requested before the factor is verified (enrolment incomplete)
+- `auth.token_invalid` 401 — caller token unverifiable
 
 ### POST /v1/auth/2fa/verify
 Auth: Tenant Admin / Staff — AUTH-09
@@ -219,7 +260,7 @@ Response 200:
 
 Errors:
 - `auth.user_not_found` 404 # implied by AUTH-20
-- `auth.cannot_suspend_self` 400 — TODO — needs owner decision (self-suspension rule not in sheet)
+- `auth.cannot_suspend_self` 400 — an admin cannot suspend their own account; binding in V1 (prevents locking a tenant out of its last admin), audited as a denied attempt
 
 ### POST /v1/auth/users/{user_id}/unsuspend
 Auth: Tenant Admin — AUTH-43
@@ -242,12 +283,37 @@ Errors:
 - `auth.user_not_suspended` 409 # implied by AUTH-43 ("previously suspended")
 
 ### Role / permission management
-AUTH-12 defines the role model (Super Admin, Tenant Admin, custom staff roles, Trader, API Consumer) and AUTH-13 the permission engine. CRUD endpoints for roles and role-permission bindings are implied but not specified: TODO — needs owner decision.
+AUTH-12 defines the role model (Super Admin, Tenant Admin, custom staff roles, Trader, API Consumer) and AUTH-13 the permission engine. V1 has **no role-CRUD HTTP surface**: roles are the fixed catalog in docs/02 §3.1, the Casbin policy table is the mechanism, and membership changes happen through the identity permissions (`tenant.identity.role_change`, `platform.identity.admin` — registry §Identity-management keys). Custom roles and their bindings are AUTH-14 (V2); the open row is the role×key binding table itself (docs/37 D6-adjacent, owner Tech Lead).
 
 ### Impersonation (AUTH-16)
 **No impersonation API exists in V1.** AUTH-16 is a separation contract, not an enablement one: the console identity *cannot act inside a tenant except through* audited impersonation — and because no impersonation path exists in V1, the console simply cannot act inside a tenant at all. This contract documents that restriction; it defines no endpoint for it.
 
 The enablement surface — impersonation consent + control UI (TEN-16, CON-07) and the impersonation audit record (AUD-08) — is V2.0 in the Master Backlog and out of V1 scope. The restriction holds vacuously in V1 and requires no audit format, consent model, or control UI. When V2 enablement lands, AUTH-16's contract will be amended; until then the console realm stays platform-scope (see `contracts/api/con.md`).
+
+### MFA status and enrolment (AUTH-09, D5)
+`GET /v1/auth/mfa/status` reports `{required, enrolled, factors[], backup_codes_remaining}`;
+`POST /v1/auth/mfa/enrollment` starts TOTP enrolment through ZITADEL's
+`POST /v2/users/{id}/totp` **with the user's own access token** and returns the
+one-time `otpauth://` URI (details and errors: docs/02 §3.2). Trader roles get
+`required:false` until AUTH-10 (V2).
+
+### Enterprise SSO and SCIM (AUTH-24 / AUTH-25, decisions D2/P3 — V1 for the cutover tenant)
+No new public API in V1: registration of the org's IdP (SAML/OIDC metadata, certificates,
+group→role map) and the issuance of the SCIM bearer token are performed by platform staff
+through the CON surface (`platform.tenant.provision` / `tenant.sso.configure`), and SCIM
+itself is served by ZITADEL at `{issuer}/scim/v2/` (User schema only — no Groups, verified
+2026-09-19). Our responsibilities: keep `tenant_memberships` authoritative (P4), map
+directory groups → our roles once at registration, audit every SCIM-written user
+(`identity.provisioned`), and reconcile nightly (TEN-32). Tenant-facing read-only views of
+the SSO config and the SCIM-created users are `tenant.sso.read` / `tenant.identity.read`
+(docs/02 §7.2).
+
+### Identity provisioning inside the tenant saga (docs/03 §3.5 step 3)
+`POST /v1/tenants` triggers the saga: create the ZITADEL organization (+ org domain
+`{slug}.alpha1.io`), the project/application pair (tenant + console audiences), the owner
+membership, and the per-org login/password/lockout/branding policies; store
+`tenants.idp_org_id`. Compensation destroys the org. The same machine user issues the
+SCIM token when the tenant contracted SSO (step 3a).
 
 ## Events emitted
 - `user.login_success` / `user.login_failure` (emitted by `/v1/auth/session` and fed by ZITADEL Actions v2 event webhooks), `user.session_revoked` (logout/forced logout), `user.2fa_enrolled` / `user.2fa_disarmed`, `user.suspended` / `user.activated`, `api_key.created` / `api_key.revoked` — shapes in docs/31 (EVT catalog). ZITADEL's own events remain the IdP-side source of record and are mirrored into `audit_events` (AUD-01).
@@ -256,8 +322,8 @@ The enablement surface — impersonation consent + control UI (TEN-16, CON-07) a
 - Resolved by ADR-13 / decision P2: registration shape and email verification are ZITADEL's org-scoped registration flow; our `/session` response shape is the canonical identity payload (see above).
 - Resolved by ADR-13: duplicate-registration / enumeration handling is ZITADEL's public error surface plus our generic `auth.token_invalid` on `/session`.
 - Resolved by P2: refresh rotation + reuse detection are ZITADEL's token semantics plus our deny-set; parameters come from the ZITADEL application/session settings (tenant-configurable V2, AUTH-34).
-- Still open (owner: BE-1): session concurrency limits per user.
-- Still open (owner: BE-1): CRUD surface for roles and role-permission bindings — the Casbin policy table is the mechanism; the ADM screen is V2 (AUTH-14).
+- Session concurrency: **decision row D6** (docs/37) — default 10 active sessions per identity, oldest evicted with `user.session_revoked` (reason `concurrency_limit`); the count is enforced at `/v1/auth/session`.
+- Roles/role-permission CRUD: the Casbin policy table is the mechanism, the ADM screen is V2 (AUTH-14/AUTH-03); the tenant-facing read surface is `tenant.identity.read` (registry §Identity-management keys) and the platform-staff surface is `platform.identity.admin`. No public endpoint in V1 beyond membership suspension (`user.suspend`/`user.unsuspend`).
 - Resolved by P4/ADR-14: token claims carry `sub`, audience/realm and MFA/`auth_time` facts; role/permission data is resolved by our API from `tenant_memberships` + Casbin, not from the token.
 - Resolved by D5: staff 2FA is enforced at first login with backup codes issued in the same flow; no grace period for staff roles.
-- Still open (owner: BE-1): auth-specific rate limits beyond ZITADEL's per-org login policy + GW-05.
+- Auth rate limits: ZITADEL's per-org lockout policy covers login attempts; our API-wide limits stay GW-05 (per-IP + per-key). `POST /v1/auth/2fa/backup-code` is additionally limited to 5 attempts / 15 min / identity (`auth.backup_code_invalid` on excess, audited).

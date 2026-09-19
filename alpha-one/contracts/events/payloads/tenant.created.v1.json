@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tenant.created.v1.json",
+  "title": "Alpha One \u2014 event tenant.created v1",
+  "description": "V1 catalog event `tenant.created` (v1). Envelope per EVT-03. Consumers: AUD, CON, NOT (owner invite).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "tenant.created"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "tenant_id_ref": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "slug": {
+              "type": "string"
+            },
+            "firm_name": {
+              "type": "string"
+            },
+            "idp_org_id": {
+              "type": "string"
+            },
+            "jurisdiction": {
+              "type": "string"
+            },
+            "plan": {
+              "type": "string"
+            },
+            "created_by": {
+              "type": "string"
+            },
+            "created_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "tenant_id_ref",
+            "slug",
+            "firm_name",
+            "created_at"
+          ]
+        }
+      }
+    }
+  ]
+}

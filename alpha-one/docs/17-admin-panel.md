@@ -245,7 +245,7 @@ react-hook-form/zod, SSE, Sentry, pnpm monorepo.
 | Module | How |
 |---|---|
 | **GW** | all calls under `/v1/admin/*`; realm-scoped auth; rate limits (staff tier higher than trader tier) |
-| **AUTH** | staff login (ZITADEL console application/audience), roles (Casbin firm:*), step-up 2FA, identity admin |
+| **AUTH** | staff login (the **tenant** ZITADEL application/audience, org-scoped), roles (Casbin `dom = tenant_id`), step-up 2FA, identity admin over `tenant_memberships` + the ZITADEL user (`user.suspend`/`user.unsuspend`, `tenant.identity.*` keys) |
 | **LCC** | account list/detail, state timeline, action triggers (pause/halt commands — LCC enforces) |
 | **PAY** | the payout queue is ADM's highest-stakes screen (11 §7 admin API) |
 | **KYC/RSK** | manual review + risk case queues (13/10 §7) |
