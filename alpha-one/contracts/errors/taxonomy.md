@@ -70,7 +70,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." | KYC/PAY (impl: KYC-08; code naming — TODO — needs owner decision: dedicated code vs `payout.ineligible` sub-reason) |
 | `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." | PAY (impl: PAY-04, RSK-11) — HTTP status — TODO — needs owner decision |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." | PAY (impl: PAY-01, LCC-02) |
-| `payout.amount_exceeds_available` | 422 | Beyond available profit (balance+equity − initial − prior payouts) | "Amount exceeds your available profit." | PAY (impl: PAY-02) |
+| `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — docs/11 §3.2) | "Amount exceeds your available profit." | PAY (impl: PAY-02) |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached | "Your next payout is available on {date}." | PAY (impl: PAY-21, LCC-20) |
 | `payout.method_not_confirmed` | 400 | Payout method not confirmed | "Confirm your payout method first." | PAY (impl: PAY-05) |
 | `payout.invalid_address` | 400 | Chain-specific crypto address validation failed | "That wallet address is not valid for {chain}." | PAY (impl: PAY-45) |

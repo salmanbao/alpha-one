@@ -362,7 +362,7 @@
       "raised_by": "Tenth-pass review (docs/50 F13)",
       "owner": "BE-1 + PAY owner",
       "deadline": "Phase 4 wave 3 (trading depth) or first funded-account incident",
-      "answer": "(open \u2014 raised 2026-09-19; owner decision pending)"
+      "answer": "**Answered 2026-09-19 \u2014 option A (twelfth pass, docs/52):** FUNDED\u2192BREACH_DETECTED reuses the breach path (evidence, LCC-43 idempotency, CLOSING cleanup); in-flight approved payouts carry the hold flag (status_reason='on_hold', human queue); the RSK breach case auto-opens with payout_hold. The D29 FAILED reversal restores the pre-breach state (FUNDED for funded accounts)."
     },
     {
       "id": "D33",
@@ -403,6 +403,36 @@
       "owner": "BE-1",
       "deadline": "Phase 1 (BRG build)",
       "answer": "**Answered 2026-09-19 \u2014 option A:** sheet-faithful \u2014 no admin force-sync in V1; ADM observes freshness via the health surface (docs/08 \u00a77.2); revisit with the V2 broker-management surfaces (BRG-26/34)."
+    },
+    {
+      "id": "D37",
+      "source_doc": "52",
+      "section": "Payout System",
+      "question": "No payout.requested event and no trader acknowledgment email exist in V1 (the not.md template-7 TODO); the sheet lists only approved/rejected/PayoutPaid. Options \u2014 A: no V1 requested event (201 + TD status is the ack; queue reads the table; template 7 reserved); B: promote payout.requested + NOT template (scope addition). See docs/52 \u00a72 F6.",
+      "raised_by": "Twelfth-pass review (docs/52 F6)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (PAY build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** no V1 request event; template 7 has no V1 trigger (V2 reserve). Sheet-faithful."
+    },
+    {
+      "id": "D38",
+      "source_doc": "52",
+      "section": "Payout System",
+      "question": "docs/11 conflicted on reserves: \u00a73.6/\u00a710 say V2 (PAY-37) while blueprint step 8 built the approval-time hard block early. Options \u2014 A: V1 = visibility only (CON dashboard cash-vs-obligations + queue banner; no hard block); B: early hard block at approval. See docs/52 \u00a72 F7.",
+      "raised_by": "Twelfth-pass review (docs/52 F7)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (PAY build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** V1 reserves = visibility only; the PAY-37 hard block (nightly + at approval) stays V2. Human approvers are the V1 control."
+    },
+    {
+      "id": "D39",
+      "source_doc": "52",
+      "section": "Payout System",
+      "question": "\u00a73.1 binds 'eligibility re-checked at approval' but never says what a failed re-check does during approve. Options \u2014 A: approve fails with payout.ineligible, payout stays pending_approval (human decides); B: auto-reject on failed re-check. See docs/52 \u00a72 F8.",
+      "raised_by": "Twelfth-pass review (docs/52 F8)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (PAY build)",
+      "answer": "**Answered 2026-09-19 \u2014 option A:** failed re-check = 422 payout.ineligible, payout stays pending_approval, no state change; the approver may reject manually with a reason. Pinned in docs/11 \u00a73.7 guard 2."
     }
   ]
 }

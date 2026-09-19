@@ -783,8 +783,11 @@ CREATE TABLE payout_requests (
   method_version_at INT NOT NULL,             -- which method row version (disputes)
   requested_cents   BIGINT,                   -- NULL = everything available
   status            TEXT NOT NULL DEFAULT 'requested'
-    CHECK (status IN ('requested','pending_approval','approved','processing',
-                      'settled','failed','failed_final','rejected','cancelled','on_hold')),
+    CHECK (status IN ('requested','eligibility_checked','pending_approval','approved',
+                      'processing','paid','failed','cancelled','rejected')),
+    -- PAY-13's exact list (docs/52: 'settled'→'paid'; 'failed_final' is a V2
+    -- terminal reason within 'failed'; holds are status_reason='on_hold' flags on
+    -- 'approved' — never states, D32)
   status_reason     TEXT,
   -- frozen calc (PAY-02, §3.2)
   calc_snapshot     JSONB NOT NULL,           -- steps + inputs + snapshot versions

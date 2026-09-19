@@ -30,6 +30,7 @@ VERIFICATION        → AWAITING_ACTIVATION       approved, fee due (LCC-06 + LC
 VERIFICATION        → TERMINATED                verification rejected
 AWAITING_ACTIVATION → TERMINATED                payment window elapsed, no fee
 FUNDED              → SUSPENDED                 admin suspend (LCC-11, V1.1)
+FUNDED              → BREACH_DETECTED           hard breach (EVL-17 — D32, docs/52)
 SUSPENDED           → ACTIVE                    resume from evaluation-phase suspend (LCC-11)
 SUSPENDED           → FUNDED                    resume from funded-phase suspend (LCC-11)
 FUNDED              → TERMINATED                end of engagement (LCC-27)

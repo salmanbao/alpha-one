@@ -129,7 +129,7 @@
 | `account.day_rolled` | 07 (LCC) | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA | V1 |
 | `account.purchased` | 07 (LCC) | order.paid | NOT, ANA, CON | ext |
 | `account.provisioning_failed` | 07 (LCC) | provisioning-command failure (the V2 event form is bridge.account_create_failed) | NOT, CON (manual retry), AUD | ext |
-| `account.breached` | 07 (LCC) | verdict.breach | NOT, AUD (critical), RSK (case open V2), BRG (enforce cmd), TD (breach report) | ext |
+| `account.breached` | 07 (LCC) | verdict.breach | NOT, AUD (critical), RSK (case open — V1 for kind=breach, docs/10 §3), BRG (enforce cmd), TD (breach report), PAY (hold in-flight approved payouts... | ext |
 | `account.phase_completed` | 07 (LCC) | target_hit | NOT, DOC (cert), ANA | ext |
 | `account.funded` | 07 (LCC) | funded.activated | NOT, DOC, ANA, PAY (eligibility on) | ext |
 | `account.paused` | 07 (LCC) | tenant | NOT, BRG, AUD | ext |

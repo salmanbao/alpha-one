@@ -225,7 +225,7 @@
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval — "Verify your identity before requesting a payout." | V1 |
 | `payout.risk_hold` | 423 | Open risk case (RSK-11) or active suspension (PAY-04) — "Payouts are temporarily held for review." | V1 |
 | `payout.not_funded` | 409 | Account not in FUNDED state — "Payouts are only available on funded accounts." | V1 |
-| `payout.amount_exceeds_available` | 422 | Beyond available profit (balance+equity − initial − prior payouts) — "Amount exceeds your available profit." | V1 |
+| `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — §3.2) — "Amount exceeds your available profit." | V1 |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached — "Your next payout is available on {date}." | V1 |
 | `payout.method_not_confirmed` | 400 | Payout method not confirmed — "Confirm your payout method first." | V1 |
 | `payout.invalid_address` | 400 | Chain-specific crypto address validation failed — "That wallet address is not valid for {chain}." | V1 |

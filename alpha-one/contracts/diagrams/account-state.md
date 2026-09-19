@@ -19,6 +19,7 @@ stateDiagram-v2
     BREACH_DETECTED --> CLOSING: disable-then-close commands enqueued (EVL-17, BRG-10)
     CLOSING --> FAILED: broker confirms closure (BRG-11)
     FUNDED --> SUSPENDED: admin suspend (LCC-11, V1.1)
+    FUNDED --> BREACH_DETECTED: hard breach (EVL-17 — D32)
     SUSPENDED --> ACTIVE: resume from evaluation-phase suspend (LCC-11)
     SUSPENDED --> FUNDED: resume from funded-phase suspend (LCC-11)
     FUNDED --> TERMINATED: end of engagement (LCC-27)

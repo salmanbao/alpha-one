@@ -33,7 +33,7 @@ Failed eligibility never creates a payout: PAY-03 is a gate ("so that only eligi
 The state list is fixed by PAY-13 (V1) — the states are not removed; V1 code simply never transitions into these three.
 
 ## Auth
-Trader routes in trader group; finance approver and COO actions in admin group (GW-01). Roles: Trader (requests), Finance Approver (queue, approve/reject), COO (execution recording) — role names per AUTH-12 model; exact role-to-permission binding TODO — needs owner decision.
+Trader routes in trader group; finance approver and COO actions in admin group (GW-01). Roles: Trader (requests), Finance Approver (queue, approve/reject), COO (execution recording) — role names per AUTH-12 model. Binding (roles.yaml): `payout.request` user:trader (own); `payout.approve` firm:owner/admin/finance + step-up; `payout.read_queue` firm:owner/admin/finance/risk; `payout.record_execution` firm:owner/admin/finance; `payout.policy.write` firm:owner/admin/finance; `payout.method.write/read` user:trader (own).
 
 ## Tenant resolution
 From domain (GW-02). Payouts, methods, and policy are tenant-scoped (TEN-03).
@@ -42,12 +42,12 @@ From domain (GW-02). Payouts, methods, and policy are tenant-scoped (TEN-03).
 - `payout.request` — trader self-action # PAY-01
 - `payout.approve` — approve/reject with reason # PAY-09
 - `payout.record_execution` — record executed payout # PAY-12
-- `payout.read_queue` — view approval queue # PAY-08 — TODO — needs owner decision on key naming
+- `payout.read_queue` — view approval queue # PAY-08 (key bound in roles.yaml/registry)
 - `payout.policy.write` — configure payout policy # PAY-38
 - `payout.method.write` / `payout.method.read` — trader method management # PAY-05 (self)
 
 ## Idempotency
-Mutating requests accept an idempotency key per GW-12. Duplicate payout requests for the same account while one is open — TODO — needs owner decision (concurrency rule not in sheet).
+Mutating requests accept an idempotency key per GW-12. Duplicate payout requests while one is open fail with `payout.active_exists` 409 (docs/11 §3.1: one active request per account, enforced day 1).
 
 ## Endpoints
 
@@ -69,7 +69,7 @@ Response 201:
 
 Errors:
 - `payout.ineligible` 422 — failed an eligibility check with sub-reasons: KYC not approved (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max payout limits, account status (PAY-03) # implied by PAY-03 + KYC-08
-- `payout.risk_hold` 423/403 — open risk case (RSK-11) or active suspension (PAY-04, LCC-11 Suspended event) # implied by PAY-04, RSK-11; HTTP status TODO — needs owner decision
+- `payout.risk_hold` 423 — open risk case (RSK-11); 403 variant when the hold is an active suspension (PAY-04 / LCC-11) # docs/11 §6.1
 - `payout.not_funded` 409 — account not in FUNDED state # implied by PAY-01 "funded trader" + LCC-02
 - `payout.amount_exceeds_available` 422 — beyond available profit (PAY-02: balance+equity − initial balance − prior payouts, partial payout rules) # implied by PAY-02
 - `payout.method_not_confirmed` 400 — method not confirmed per PAY-05 # implied by PAY-05
@@ -140,7 +140,7 @@ Response 200:
 
 Errors:
 - `payout.not_pending_approval` 409 # implied by PAY-13 states
-- `payout.ineligible` 422 — re-check at approval # implied by PAY-03; re-check semantics TODO — needs owner decision
+- `payout.ineligible` 422 — re-check at approval runs inside the approval lock (docs/11 §3.7); failure returns the sub-reason and the payout stays `pending_approval` (D39, docs/52) — no state change
 
 Effects: emits payout.approved (PAY-09); posts payout obligation (LED-07, PAY-14); audit recorded (AUD-01).
 
@@ -184,14 +184,14 @@ Response 200:
 
 Errors:
 - `payout.not_approved` 409 # implied by PAY-13
-- `payout.execution_mismatch` 400 — amount mismatch vs approved — TODO — needs owner decision (rule not in sheet)
+- `payout.execution_mismatch` 400 — recorded amount ≠ approved amount (docs/11 §6.1); the recording is refused, payout state unchanged
 
 Effects: settles obligation in ledger (LED-08 — Decision 6 consumer); emits PayoutPaid through the outbox (PAY-12 — resolved 2026-09-16 (Decision 6); consumed by LED-08, DOC-04, ANA-01).
 
 ### POST /v1/admin/payouts/export
 Auth: Finance user — PAY-44 (V1.1)
 Tenant: from domain (GW-02)
-Permission: `payout.record_execution` (batch file feeds manual execution) # PAY-44; key — TODO — needs owner decision
+Permission: `payout.record_execution` (batch file feeds manual execution) # PAY-44 (key reuses PAY-12's — registry row cites both)
 Idempotency: optional
 
 Request:
@@ -222,11 +222,11 @@ Response 200:
 
 Errors:
 - `payout.policy_invalid` 400 # implied by PAY-38
-- Policy versioning effect on existing funded accounts (terms locked at funding per LCC-20) — TODO — needs owner decision
+- Policy versioning: policy edits never touch live funded accounts — terms are frozen at funding (LCC-20); new terms apply to fundings after the change (docs/07 §3.2)
 
 ## Internal contracts (no HTTP)
 - PAY-02 available profit: from balance and equity (fresh via BRG-09 on-demand sync), minus initial balance and prior payouts, respecting partial payout rules.
-- PAY-03 eligibility engine: KYC status (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max limits, account status. Threshold definitions — TODO — needs owner decision.
+- PAY-03 eligibility engine: KYC status (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max limits, account status. Thresholds are per-tenant policy values configured via `PUT /v1/admin/payout-policy` (PAY-38; defaults = the challenge/funded terms).
 - PAY-04 risk hold: block on open risk cases (RSK-11) or active suspension (LCC-11).
 - PAY-14 ledger: approval => obligation entry, execution => settled entry (LED-07, LED-08).
 
@@ -234,6 +234,6 @@ Errors:
 - Resolved 2026-09-17: payout state machine V1 edges and reserved states — see "Payout state machine (PAY-13)" above.
 - TODO — needs owner decision: exact sub-reason codes list for `payout.ineligible` (PAY-03 names eight checks; code naming scheme open).
 - TODO — needs owner decision: payout method confirmation flow in V1.1 (PAY-05 says "save and confirm"; steps and cooldown unspecified — Out Of Scope references a PAY-06 cooldown that is not a V1 row).
-- TODO — needs owner decision: NOT-01's delivery mechanism for the "payout approved" / "payout rejected" templates (catalog open question; PAY-09 emits the events but no V1 row ties NOT-05's templates to them).
+- Resolved 2026-09-19 (docs/52): the catalog consumer binding IS the tie — `payout.approved`/`payout.rejected` list NOT-01 (NOT-05 templates) as V1 consumers (contracts/events/catalog.md); NOT-01 consumes the events.
 - Resolved 2026-09-17: `failed` has no V1 entry path — reserved for V2 failure/retry (PAY-18). See "Payout state machine (PAY-13)" above.
-- TODO — needs owner decision: currency handling — V1 is USD-only (Out Of Scope); confirm amount fields are single-currency.
+- Resolved 2026-09-19 (docs/52): V1 is USD-only (docs/38 Out of Scope); all amount fields are single-currency integer cents (`currency CHAR(3) DEFAULT 'USD'` stays for V2 multi-currency).
