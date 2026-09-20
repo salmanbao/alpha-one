@@ -332,7 +332,7 @@
 | `auth.expired` | 401 | full-screen re-login (state preserved via query) | ext |
 | `tenant.not_found` | 404 | "site not found" (04: 404-not-403 posture) | ext |
 | `rate.limited` | 429 | inline "slow down, try in {n}s" | ext |
-| `gw.internal` | — | error boundary: retry button + ticket pre-fill + Sentry id shown | ext |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) | ext |
 | `stream.lost` | — | polling fallback + amber chip (not an error screen) | ext |
 | `render.stale` | — | amber "data from {time}" banner (honesty over polish) | ext |
 

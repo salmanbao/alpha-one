@@ -54,7 +54,7 @@ var codeStatus = map[string]int{
 	"gw.payload_too_large":         413,
 	"gw.method_not_allowed":        405,
 	"gw.timeout":                   504,
-	"gw.internal":                  500, // SOL-07 (docs/55): taxonomy gw.internal pinned to 500
+	"gw.internal":                  500, // generic boundary code at 500 (docs/55 SOL-07; ratified D50)
 }
 
 // WriteSuccess renders the binding D45 envelope:

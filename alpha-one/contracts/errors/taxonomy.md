@@ -365,7 +365,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.expired` | 401 | full-screen re-login (state preserved via query) |
 | `tenant.not_found` | 404 | "site not found" (04: 404-not-403 posture) |
 | `rate.limited` | 429 | inline "slow down, try in {n}s" |
-| `gw.internal` | — | error boundary: retry button + ticket pre-fill + Sentry id shown |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) |
 | `stream.lost` | — | polling fallback + amber chip (not an error screen) |
 | `render.stale` | — | amber "data from {time}" banner (honesty over polish) |
 

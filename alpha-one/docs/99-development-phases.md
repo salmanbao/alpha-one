@@ -313,7 +313,7 @@ URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved
 specification `docs/55-gw-solution-spec.md` (the developer-facing
 how-to-build for the eleven chain steps of docs/04 §3.1 — per-step
 algorithms, caches, degradation contracts, latency budgets, tests and the
-SOL-01…SOL-20 register; implementation-level only);
+SOL-01…SOL-20 register, with SOL-04/06/07 ratified 2026-09-20 as D48–D50); implementation-level only);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

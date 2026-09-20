@@ -513,6 +513,36 @@
       "owner": "BE-1",
       "deadline": "Phase 1 (relay build)",
       "answer": "**Answered 2026-09-19 \u2014 option A:** the relay subcommand ships in V1 (blueprint step 2); the rule is no dead event without a retry or a recorded purge decision."
+    },
+    {
+      "id": "D48",
+      "source_doc": "55",
+      "section": "Gateway \u2014 solution spec",
+      "question": "When a backing service dies (Redis / Postgres / the flag store), what should each gateway step do: keep working with defaults, serve slightly-old data, or refuse? The docs/55 \u00a73.6 matrix proposes: fail open where the Cloudflare edge still protects (default + login rate limits, with a CRITICAL alert), fail closed where money is at stake (payout rate limit, idempotency claims), serve status-gate/entitlement caches stale for 30 s / 5 min then refuse \u2014 and never map an infrastructure failure to a suspension code. Approve the matrix or amend it?",
+      "raised_by": "Gateway solution spec (docs/55 \u00a712 SOL-04)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (GW build)",
+      "answer": "**Answered 2026-09-20 \u2014 approved as proposed:** the docs/55 \u00a73.6 degradation matrix is binding for the GW build (fail-open only where the edge guards, fail-closed on money paths, bounded stale-serving, infra failures never masquerade as suspension codes)."
+    },
+    {
+      "id": "D49",
+      "source_doc": "55",
+      "section": "Gateway \u2014 solution spec",
+      "question": "What does a client receive when it retries with the same idempotency key while the first request is still running? docs/55 \u00a74.8 SOL-06 proposes: 409 request.idempotency_conflict (the registered code), with the in-flight claim held on a 15-minute lease; the client backs off and gets a clean replay after the first request finishes. Alternatives rejected: waiting server-side (cross-request pub/sub complexity in V1) and 425 Too Early (unregistered code \u2014 the registry gate forbids it). Approve?",
+      "raised_by": "Gateway solution spec (docs/55 \u00a712 SOL-06)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (GW build)",
+      "answer": "**Answered 2026-09-20 \u2014 approved as proposed:** an in-flight duplicate gets 409 request.idempotency_conflict; the 15-minute in-flight lease stands; registered codes only."
+    },
+    {
+      "id": "D50",
+      "source_doc": "55",
+      "section": "Gateway \u2014 solution spec",
+      "question": "Which error code does an unexpected platform failure (panic, unregistered failure) return? The taxonomy registers gw.internal but its HTTP cell was \u2014 (it was a UX-mapping row), and inventing a new code would fail the error-registry gate. docs/55 \u00a74.12 SOL-07 proposes: pin gw.internal to HTTP 500 as the generic boundary code (message \u201cSomething went wrong on our side.\u201d, plus X-Sentry-Event-Id for support). Approve the pin?",
+      "raised_by": "Gateway solution spec (docs/55 \u00a712 SOL-07)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (GW build)",
+      "answer": "**Answered 2026-09-20 \u2014 approved:** gw.internal is the generic API boundary code at HTTP 500 (taxonomy UX row updated to match); no new code is invented; the Sentry event id travels in the response header for support."
     }
   ]
 }

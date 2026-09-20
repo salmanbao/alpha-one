@@ -8,12 +8,52 @@
 > budgets, tests, and build order. Binding text is quoted, never changed.
 > Implementation-level choices made below the contract line are tagged
 > **SOL-nn** and registered in §12 — anything there that needs owner
-> ratification is flagged in place.
+> ratification is flagged in place. (None outstanding: SOL-04/06/07 were
+> approved by the owner on 2026-09-20 and are now **D48–D50** in the
+> decision register.)
 
 Status: SOLUTION SPEC — normative for implementation of the GW chain
 Owner: TBD (Platform)
 Version: v1
-Last updated: 2026-09-19
+Last updated: 2026-09-20
+
+---
+
+## 0. The short version in plain words
+
+Every request to the platform passes through one checkpoint before it
+reaches the real work code — like airport security with eleven desks in a
+fixed order. Nobody skips a desk and the order never changes. This file
+tells a developer how to build each desk.
+
+| Desk | Plain name | The question it answers |
+|---|---|---|
+| 1 | Front-door check | "Did this really come through our front door (Cloudflare)? What is your true internet address?" |
+| 2 | Which firm | "Which firm's address did you type? We only serve firms we know." |
+| 3 | Who are you | "Prove it — a login token, a session cookie, or a secret we gave to another machine." |
+| 3.5 | May you act right now | "Is your account blocked? Is the firm suspended or not open for business yet?" |
+| 4 | Are you allowed | "Does your role include this action? For dangerous actions, did you confirm your identity in the last 5 minutes?" |
+| 5 | Slow down | "Are you asking too much, too fast? This stops spam and password guessing." |
+| 6 | Is it in your plan | "Does this firm pay for this feature? Is it within its fair-use limits?" |
+| 7 | No double work | "If you press submit twice by accident, the work happens once and you get the same answer twice." |
+| 8 | Tracking number | "Every request gets an ID that shows up in every log, event and reply, so we can follow it end to end." |
+| 9 | Safety checks | "Is the request too big? Is it stuck? Are secrets kept out of the logs?" |
+| 10–11 | Do the work, answer the same way | "The business code runs; every success and every error uses the same fixed shapes." |
+
+Three things underneath can break: the fast cache store (Redis), the main
+database (Postgres), and the login service. The rule the owner approved on
+2026-09-20 (**D48**): normal pages keep working with slightly old data, and
+anything touching money stops safely — pausing a payout for a minute beats
+paying twice. A broken cache must never look like "this firm is suspended";
+a wrong reason gets the wrong fix.
+
+Two smaller rulings approved the same day: **D49** — if a client retries
+while its first copy is still running, it gets the standard "already being
+handled" error (409) instead of the server waiting for it; **D50** — any
+unexpected crash answers 500 with the code `gw.internal`, the only
+"something broke on our side" code the platform will ever show.
+
+The rest of this file is the precise version, for the engineers building it.
 
 ---
 
@@ -211,8 +251,8 @@ Rationale: availability where the edge already protects (default rate),
 safety where money or abuse resistance is at stake (payout rate,
 idempotency). The matrix is exercised by the chaos tests in §9. When this
 spec says "`500 gw.internal`", see SOL-07: the boundary code is the
-registered `gw.internal` row pinned to HTTP 500 — flagged for owner
-ratification.
+registered `gw.internal` row pinned to HTTP 500 (ratified
+2026-09-20 — D50).
 
 ## 4. The eleven steps — solutions
 
@@ -735,8 +775,9 @@ pagination `?limit≤100&cursor=`; `Retry-After` on 429; `Deprecation`/
   last-resort response is `500` + code `gw.internal` + message
   "Something went wrong on our side." + `X-Sentry-Event-Id: {event id}`.
   The taxonomy registers `gw.internal` as the generic failure row but its
-  HTTP cell is "—" (it was a UX mapping); **this spec pins it to 500 —
-  flagged in §12 for owner ratification** (the alternative — inventing a
+  HTTP cell was "—" (a UX mapping); **this spec pins it to 500 —
+  ratified 2026-09-20 as D50, and the taxonomy UX row now carries 500**
+  (the alternative — inventing a
   new `gw.internal_error` code — would fail the registry gate the docs
   define). Panics are recovered per request, Sentry-captured with the
   correlation id attached, and counted.
@@ -922,10 +963,10 @@ the Redis GCRA/fixed-window split; stores are in-memory by design.
 | SOL-01 | Correlation adopt-or-mint runs at chain position 0; slot 8 remains the propagation checkpoint | GW-18 requires `correlation_id` on step-2/3 failures; no security decision moves |
 | SOL-02 | Two listeners: public :8080, internal :8081 compose-only; `/internal/*` on the public listener → 404 | network-position enforcement of "never edge-routed" beats a path check |
 | SOL-03 | Typed context contract; steps never read later steps' outputs; one error funnel | testability + order stability |
-| SOL-04 | Degradation matrix (§3.6): fail-open default/auth rate, fail-closed payout rate + idempotency, stale-serve gates ≤ 30 s | availability where the edge guards; safety where money is at stake — **ratify** |
+| SOL-04 | Degradation matrix (§3.6): fail-open default/auth rate, fail-closed payout rate + idempotency, stale-serve gates ≤ 30 s | availability where the edge guards; safety where money is at stake — **approved 2026-09-20 (D48)** |
 | SOL-05 | GCRA for auth/payout classes, fixed window for the per-user default; one Lua script each | smooth money/login caps with exact Retry-After; cheap default |
-| SOL-06 | In-flight duplicate idempotency → `409 request.idempotency_conflict`; in-flight lease 15 min | registered codes only; simple client contract — **ratify** |
-| SOL-07 | Boundary: 500 + `gw.internal` + `X-Sentry-Event-Id`; taxonomy's `gw.internal` HTTP cell pinned to 500 | registry gate forbids unregistered 500 codes; **owner ratification needed** (HTTP cell is "—" in taxonomy) |
+| SOL-06 | In-flight duplicate idempotency → `409 request.idempotency_conflict`; in-flight lease 15 min | registered codes only; simple client contract — **approved 2026-09-20 (D49)** |
+| SOL-07 | Boundary: 500 + `gw.internal` + `X-Sentry-Event-Id`; taxonomy's `gw.internal` HTTP cell pinned to 500 | registry gate forbids unregistered 500 codes; **approved 2026-09-20 (D50)** — the taxonomy UX row now carries 500 |
 | SOL-08 | Message strings instantiate the taxonomy patterns per surface (login vs bearer 401 wording) | taxonomy gives patterns; exact strings ratified at contract freeze |
 | SOL-09 | `tenant_id` token claim must equal host-resolved tenant, else 401 + security event | closes cross-tenant token replay; 401 keeps "invalid here" semantics |
 | SOL-10 | Cache/invalidation table (§3.5): pub/sub drop + TTL upper bound | bounded staleness everywhere; no authoritative cache |
@@ -940,8 +981,7 @@ the Redis GCRA/fixed-window split; stores are in-memory by design.
 | SOL-19 | Internal bearers: SOPS → SHA-256 at boot, constant-time compare, 24 h dual-token rotation | docs/44 §7 90-day rotation with zero-downtime overlap |
 | SOL-20 | Declarative route table generates chain + OpenAPI + registry cross-check | one source of truth; drift = CI failure |
 
-**Flagged for owner ratification:** SOL-04 (degradation matrix), SOL-06
-(in-flight → 409), SOL-07 (`gw.internal` pinned to HTTP 500 — the only one
-that touches a registered-code cell). Everything else is below the contract
-line. No binding text was changed by this spec; no PRD workbook row was
-changed.
+**Ratified:** SOL-04 → **D48**, SOL-06 → **D49**, SOL-07 → **D50**
+(owner, 2026-09-20; recorded in `scripts/design-questions.json` and applied
+to the taxonomy UX row). No flags outstanding. No binding text was changed
+by this spec; no PRD workbook row was changed.

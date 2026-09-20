@@ -159,7 +159,7 @@ Client-side taxonomy (for FE error-boundary + Sentry grouping):
 | `auth.expired` | 401 on any call | full-screen re-login (state preserved via query) |
 | `tenant.not_found` | 404 tenant | "site not found" (04: 404-not-403 posture) |
 | `rate.limited` | 429 + Retry-After | inline "slow down, try in {n}s" |
-| `gw.internal` | 5xx | error boundary: retry button + ticket pre-fill + Sentry id shown |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) |
 | `stream.lost` | SSE 3 reconnect fails | polling fallback + amber chip (not an error screen) |
 | `render.stale` | data age > 10 min on live views | amber "data from {time}" banner (honesty over polish) |
 | `PARTIAL` | island fetch failed but page rendered | per-card skeleton + retry, never a broken page |
