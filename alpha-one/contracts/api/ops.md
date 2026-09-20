@@ -18,13 +18,13 @@ All services run as Docker images built in CI: api, workers, relay, bot, fronten
 Resolved 2026-09-17: **there is no `bot` lane in V1.** OPS-01's `bot` reference is a stale forward reference to the V2 Telegram bot worker (NOT-09, V2.0; NOT-10 linking likewise V2). The V1 service topology is `api`, `workers` (8 logical lanes per `contracts/diagrams/lanes.md`), `docs-worker`, `bridge`, `engine`, `relay`, plus the frontends and data services — container inventory in docs/06 §2.2. The `worker-realtime`/`worker-batch` naming belongs to OPS-16 (V2.0 row) and is not the V1 topology. NOT runs email + in-app channels in V1 (NOT-01); Telegram is deferred to V2.
 
 ### CI/CD (OPS-03, OPS-04)
-Every push runs lint, typecheck, unit tests, image build (GitHub Actions), plus gitleaks, dependency scan, and the contract gates (docs/99 0.2/0.10: error registry, 31 catalog, 32 schema). Merge to main deploys staging automatically; production requires manual approval.
+Every push runs lint, typecheck, unit tests, image build (GitHub Actions), plus gitleaks, dependency scan, and the contract gates (docs/99 0.2/0.10: error registry, 31 catalog, 32 schema). Merge to main deploys staging automatically; production requires manual approval. Production deploys roll two api replicas (D58) — no stop-the-world.
 
 ### Migrations (OPS-06)
 Versioned migrations with expand-contract discipline: **golang-migrate** (both up/down files mandatory, single runner, advisory lock — docs/06 §2.3); data access via **sqlc** codegen (docs/99 0.4). All `contracts/data/schemas/*.sql` are delivered through this process. BVR-08's Drizzle/Prisma preference predates the Go/Rust stack (ADR-9) and has no V1 surface — superseded for backend services (docs/56, docs/34).
 
 ### Backups (OPS-07, OPS-38)
-Daily Postgres backups plus WAL archiving; monthly restore rehearsal; scheduled automated restore verification to a scratch environment with alerting on failure.
+pgBackRest (D55): continuous WAL (`archive_timeout` 5 min, failure alerts) + nightly base; 3-2-1 copies (prod + standby host + off-provider delete-protected object store). Warm standby on a second prod-class host — promote ≤ 15 min (D56). Weekly automated restore verification + monthly full drill (D59).
 
 ### Secrets (OPS-09, BVR-06/21)
 SOPS + age. Secrets out of code, injected at runtime. TEN-12 depends on this for tenant integration secrets.

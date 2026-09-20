@@ -583,6 +583,56 @@
       "owner": "DevOps, Tech Lead",
       "deadline": "Phase 0 (compose stack)",
       "answer": "**Answered 2026-09-20 \u2014 option A, the split:** Hook0 ships in V1 (the V2 rows describe the per-tenant webhook product, not the pipeline); minimal Prometheus+Grafana ships in V1 for relay.lag / DLQ depth / disk / redis-mem; Uptime Kuma and the full observability stack stay V2. docs/06/34 aligned."
+    },
+    {
+      "id": "D55",
+      "source_doc": "57",
+      "section": "OPS \u2014 industry benchmark",
+      "question": "Backup architecture: WAL ships via rsync with no archive_timeout (a quiet database can go hours between ships \u2014 the RPO \u2264 5 min promise is not implementable as written), no archive-failure alerting, and every copy lives at one provider (the industry 3-2-1 rule says 3 copies, 2 systems, 1 off-provider). Options \u2014 A: pgBackRest (retention, encryption, verification, alerting built in) + an off-provider object-store copy with delete-protection, Hetzner copies kept; B: pgBackRest but same-provider only; C: keep scripts, add one offsite copy. See docs/57 \u00a73 B1.",
+      "raised_by": "Industry benchmark (docs/57)",
+      "owner": "DevOps",
+      "deadline": "Phase 0 (backups)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** pgBackRest owns WAL (archive_timeout 5 min, failure alerts) + nightly base + retention; copies live on prod, the standby host, and an off-provider object store with object lock and separate credentials."
+    },
+    {
+      "id": "D56",
+      "source_doc": "57",
+      "section": "OPS \u2014 industry benchmark",
+      "question": "Disaster recovery rebuilds the database from backups (RTO \u2264 2 h) while no second prod-class host exists. Industry standard for a money platform: an async streaming replica on a second host \u2014 recovery becomes promote-in-minutes. Sizing honesty: the CX32 staging box (4 GB/160 GB) cannot serve as the standby for a 24 GB-class Postgres. Options \u2014 A: provision a prod-class standby host (warm replica of the whole PG cluster incl. ZITADEL; promote \u2264 15 min; doubles as drill target); B: keep restore-based RTO \u2264 2 h; C: managed Postgres. See docs/57 \u00a73 B2.",
+      "raised_by": "Industry benchmark (docs/57)",
+      "owner": "DevOps",
+      "deadline": "Phase 0 (host provisioning)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** a prod-class standby host runs the warm replica (async streaming; the whole cluster, so ZITADEL rides along). RTO: promote \u2264 15 min primary path, full-restore \u2264 2 h remains the documented worst case. Cost note: one additional AX42-class host (~\u20ac40/mo) \u2014 the option's \u2018no new cost\u2019 framing was corrected during implementation."
+    },
+    {
+      "id": "D57",
+      "source_doc": "57",
+      "section": "OPS \u2014 industry benchmark",
+      "question": "All V1 monitoring runs on the monitored box (Prometheus dies with the host), and the external uptime checker was deferred to V2 (the D54 slice). If the box dies, nothing anywhere says so. Options \u2014 A: external uptime checks (Uptime Kuma from the standby host) + off-provider dead-man's switches (Healthchecks.io) for backups/cron/drill, in V1 \u2014 superseding the Uptime-Kuma-V2 slice of D54; B: keep D54 as-is. See docs/57 \u00a73 B3.",
+      "raised_by": "Industry benchmark (docs/57)",
+      "owner": "DevOps",
+      "deadline": "Phase 0 (blueprint step 9)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** external uptime + dead-man's switches ship in V1. This explicitly supersedes the Uptime-Kuma slice of D54 (the OPS-10/12 full-stack slice stands). A killed backup job must page within minutes."
+    },
+    {
+      "id": "D58",
+      "source_doc": "57",
+      "section": "OPS \u2014 industry benchmark",
+      "question": "docs/06 \u00a72 claimed rolling deploys (\u2018new \u2192 health \u2192 old down\u2019) but V1 runs ONE api container and plain Compose cannot roll a single container \u2014 reality was the honestly-labelled 10 s stop/start window. Options \u2014 A: two api replicas behind the compose-network ingress with a deploy cycler (start new \u2192 health \u2192 drain old) \u2014 real zero-downtime on the same box; B: keep one replica and describe the 10 s window honestly. See docs/57 \u00a73 B4.",
+      "raised_by": "Industry benchmark (docs/57)",
+      "owner": "DevOps, BE-1",
+      "deadline": "Phase 0 (compose stack)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** two api replicas + a rolling cycler in V1 (blueprint step 2/3); the \u20182 replicas V2\u2019 note moves to V1 for api only; blue-green two-stack tagging stays V2 (OPS-18)."
+    },
+    {
+      "id": "D59",
+      "source_doc": "57",
+      "section": "OPS \u2014 industry benchmark",
+      "question": "A backup is only fully tested once a month (the human drill). Industry cadence for money platforms adds an automated restore test between drills \u2014 a silently broken backup can otherwise sit undetected up to 30 days. Options \u2014 A: weekly automated restore verification (restore latest backup to scratch PG, pg_verifybackup + row-count/ledger-balance subset, alert on failure) alongside the monthly full drill; B: monthly drill only. See docs/57 \u00a73 B5.",
+      "raised_by": "Industry benchmark (docs/57)",
+      "owner": "DevOps",
+      "deadline": "Phase 0 (blueprint step 6)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** weekly automated restore verification + the monthly full human drill. The drill keeps the full integrity suite; the weekly check catches breakage within 7 days."
     }
   ]
 }
