@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: 2026-09-17
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 only). Nothing here is final until contract freeze.
 
@@ -15,13 +15,13 @@ OPS is platform infrastructure: containerization (OPS-01), Compose orchestration
 ### Services (OPS-01, OPS-02)
 All services run as Docker images built in CI: api, workers, relay, bot, frontends — the service lanes used in `contracts/diagrams/lanes.md`. Production is a Docker Compose stack on Hetzner (BVR-10: no Kubernetes in V1).
 
-Resolved 2026-09-17: **there is no `bot` lane in V1.** OPS-01's `bot` reference is a stale forward reference to the V2 Telegram bot worker (NOT-09, V2.0; NOT-10 linking likewise V2). The V1 worker topology is `api`, `worker-realtime`, `worker-batch`, `outbox-relay` (naming per OPS-16, which is itself a V2.0 row; V1 workers are the worker lanes enumerated in `contracts/diagrams/lanes.md`). NOT runs email + in-app channels in V1 (NOT-01); Telegram is deferred to V2.
+Resolved 2026-09-17: **there is no `bot` lane in V1.** OPS-01's `bot` reference is a stale forward reference to the V2 Telegram bot worker (NOT-09, V2.0; NOT-10 linking likewise V2). The V1 service topology is `api`, `workers` (8 logical lanes per `contracts/diagrams/lanes.md`), `docs-worker`, `bridge`, `engine`, `relay`, plus the frontends and data services — container inventory in docs/06 §2.2. The `worker-realtime`/`worker-batch` naming belongs to OPS-16 (V2.0 row) and is not the V1 topology. NOT runs email + in-app channels in V1 (NOT-01); Telegram is deferred to V2.
 
 ### CI/CD (OPS-03, OPS-04)
-Every push runs lint, typecheck, unit tests, image build (GitHub Actions). Merge to main deploys staging automatically; production requires manual approval.
+Every push runs lint, typecheck, unit tests, image build (GitHub Actions), plus gitleaks, dependency scan, and the contract gates (docs/99 0.2/0.10: error registry, 31 catalog, 32 schema). Merge to main deploys staging automatically; production requires manual approval.
 
 ### Migrations (OPS-06)
-Versioned migrations with expand-contract discipline. Drizzle ORM primary; Prisma fallback only (BVR-08). All `contracts/data/schemas/*.sql` are delivered through this process.
+Versioned migrations with expand-contract discipline: **golang-migrate** (both up/down files mandatory, single runner, advisory lock — docs/06 §2.3); data access via **sqlc** codegen (docs/99 0.4). All `contracts/data/schemas/*.sql` are delivered through this process. BVR-08's Drizzle/Prisma preference predates the Go/Rust stack (ADR-9) and has no V1 surface — superseded for backend services (docs/56, docs/34).
 
 ### Backups (OPS-07, OPS-38)
 Daily Postgres backups plus WAL archiving; monthly restore rehearsal; scheduled automated restore verification to a scratch environment with alerting on failure.
@@ -30,13 +30,13 @@ Daily Postgres backups plus WAL archiving; monthly restore rehearsal; scheduled 
 SOPS + age. Secrets out of code, injected at runtime. TEN-12 depends on this for tenant integration secrets.
 
 ### Data services (OPS-25, OPS-26, OPS-36, OPS-37)
-PgBouncer pooling per service; Redis 7.2 with AOF for Streams and eviction for cache; immutable image tags (commit sha) with env moving tags; explicit CPU/memory limits per container.
+PgBouncer pooling per service; Redis 7.2 as **three containers per D51** (docs/06 §2.6): `redis-main` sessions/deny-set/rate-counters/idempotency-claims (AOF everysec, noeviction), `redis-streams` (AOF everysec, noeviction, MAXLEN), `redis-cache` (allkeys-lru). Immutable image tags (commit sha) with env moving tags; explicit CPU/memory limits per container.
 
 ## Events emitted/consumed
 - None. OPS emits no domain events in the V1 sheet.
 
 ## Open contract questions
 - Resolved 2026-09-17: lane inventory — no `bot` lane in V1; V1 lanes are api, worker-realtime, worker-batch, outbox-relay (+ frontends); OPS-01's `bot` is a V2 forward reference (NOT-09). Remaining parameter: exact container counts/names per lane (deployment config, not contract).
-- TODO — needs owner decision: migration tooling ownership split between OPS-06 and module schemas (who reviews expand-contract PRs).
-- TODO — needs owner decision: backup RTO/RPO numbers for OPS-38 verification.
-- TODO — needs owner decision: host capacity headroom numbers for OPS-37.
+- Resolved 2026-09-20 (D53, docs/56): migration PRs need **two approvals** — DevOps owns the process (CI dry-run, both-files rule, rollback note) and BE-1 owns the schema content (types, indexes, tenant rules).
+- Resolved 2026-09-20: RPO ≤ 5 min / RTO ≤ 2 h per docs/06 §2.4 — the monthly drill measures and files both.
+- Resolved 2026-09-20: headroom = 16 GB RAM + 1 TB disk reserved (docs/06 §2.2); per-service limits per the §2.2 table.

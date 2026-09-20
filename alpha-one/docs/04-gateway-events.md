@@ -78,7 +78,7 @@ each doc's §7.1.
 | 10 | Handler | domain package | — |
 | 11 | Response | success envelope (**binding — D45, docs/54**): `{data, meta{request_id, version, pagination{cursor, has_more}}}`; error contract (GW-18 — `code`, `message`, `correlation_id`); pagination standard (GW-21, cursor); `Retry-After` on 429 (GW-29); `Deprecation`/`Sunset` headers (GW-28, V3) | GW-18..21,28,29,30 |
 | — | Audit flag | sensitive routes registered in a route table → mandatory audit write on success + failure (GW-17) | GW-17 |
-| — | Probes | `/healthz` (liveness: process up), `/readyz` (readiness: PG ping + Redis ping + relay lag < 60 s) | GW-14 |
+| — | Probes | `/healthz` (liveness: process up), `/readyz` (readiness: PG ping + Redis ping + relay lag < 60 s; schema version reported, deploy blocks on drift — docs/06 §2.3) | GW-14 |
 | — | OpenAPI | `/v1/openapi.json` per route group, served by api (GW-15); docs at `docs.alpha1.io` (CMS) | GW-15 |
 | — | Maintenance | `maintenance_mode` flag (Flipt) → 503 + `Retry-After` for all non-probe routes (GW-32) | GW-32 |
 | — | Caching | GET-only, cacheable routes declared per route (`Cache-Control: private, max-age=N` + tenant-tagged keys; invalidation by domain events) (GW-24, V2) | GW-24 |

@@ -313,7 +313,12 @@ URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved
 specification `docs/55-gw-solution-spec.md` (the developer-facing
 how-to-build for the eleven chain steps of docs/04 §3.1 — per-step
 algorithms, caches, degradation contracts, latency budgets, tests and the
-SOL-01…SOL-20 register, with SOL-04/06/07 ratified 2026-09-20 as D48–D50); implementation-level only);
+SOL-01…SOL-20 register, with SOL-04/06/07 ratified 2026-09-20 as D48–D50); implementation-level only), and the fifteenth-pass artifact is
+`docs/56-ops-review.md` (the platform under everything — OPS/DevOps: D51 the
+three-container Redis topology, D52 gw.maintenance + the degraded header rule,
+D53 dual-approval migration PRs, D54 the Hook0/minimal-metrics V1 tier split;
+the ops signals registered in the event catalog, the ops-platform tables given
+their DDL, the ops contract's stale TODOs resolved);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

@@ -225,11 +225,11 @@ total budget **≤ 5 ms p99**:
 | Tenant host → id | in-proc LRU (1k hosts) + Redis | 60 s pos / 10 s neg | `tenant.activated`, `tenant.host_changed` (pub/sub) |
 | Status gate (tenant / identity / membership) | in-proc + Redis | **≤ 5 s** (binding, docs/44 §7) | `user.suspended`, `user.activated`, membership events |
 | Entitlements per tenant | in-proc + Redis | 60 s | `entitlement.changed` |
-| JWKS (ZITADEL signing keys) | in-proc | 15 min + refresh-on-unknown-kid | — |
-| Rate/step counters | Redis only | window length | TTL |
-| Idempotency claims/results | Redis only | 24 h (binding GW-31) | TTL |
+| JWKS (ZITADEL signing keys) | in-proc | 24 h + refresh-on-unknown-kid (docs/02 §9 — binding; docs/56) | — |
+| Rate/step counters | `redis-main` (D51, docs/06 §2.6) | window length | TTL |
+| Idempotency claims/results | `redis-main` (D51, docs/06 §2.6) | 24 h (binding GW-31) | TTL |
 | Maintenance flag | in-proc | 5 s | TTL (fast enough for a human-scale switch) |
-| Revocation deny-set | Redis only | 24 h | write-through on revoke (docs/02) |
+| Revocation deny-set | Redis only | jti = access-token TTL (15 min); session-keyed entries outlive the refresh idle window (docs/02 §9 — docs/56) | write-through on revoke |
 
 Pattern: **Redis pub/sub fan-out → each api instance drops its in-proc
 entry**; every cache entry also carries its TTL as the upper bound, so a
@@ -619,7 +619,7 @@ Phase 2 — commit (after response, status < 500):
   optional by wire format; client contracts *require* it on those routes
   (docs per module). The gateway does not invent a 4xx for a missing key —
   the route's contract does that in docs.
-- **Durability honesty:** Redis with AOF `everysec` + replica. Worst case
+- **Durability honesty:** Redis `redis-main` (the durable container — D51, docs/06 §2.6) with AOF `everysec` + replica. Worst case
   (lose the key between claim and commit) a client retry re-executes — the
   exact scenario idempotency exists to prevent — but bounded: AOF loses ≤ 1
   s of writes, and commit happens within one handler run. A PG-backed store

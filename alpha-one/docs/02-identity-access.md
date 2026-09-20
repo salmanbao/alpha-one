@@ -329,7 +329,9 @@ now ZITADEL's generic error surface plus ours on `/session`; throttling and lock
 from ZITADEL's per-org lockout policy with our per-IP counters as the second layer.
 
 **Sessions** (`AUTH-07`, `TD-20`): ZITADEL access tokens (short-lived, JWT) + rotating
-refresh tokens; `api` keeps a **Redis deny-set** (jti/session-id, 24 h TTL) and the
+refresh tokens; `api` keeps a **Redis deny-set** (jti entries live for the
+access-token TTL; session-keyed entries outlive the refresh idle window — the
+§9 split rule, harmonized 2026-09-20 docs/56) and the
 `auth_sessions` projection so revocation is immediate. **V1 baseline survives
 intact (binding):** rotating refresh, server-side revocation, and *reuse of a rotated
 refresh token → revoke all sessions of the identity + CRITICAL audit*. **Rotation and

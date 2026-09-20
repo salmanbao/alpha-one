@@ -27,7 +27,7 @@
 - **Indexes**: every `(tenant_id, …)` leading; the read-model tables (`*_ro`)
   are the query surface for reads (19 §3.1).
 
-## 2. The schema (125 tables in 29 DDL blocks, module-ordered)
+## 2. The schema (128 tables in 30 DDL blocks, module-ordered)
 
 ### 02 — AUTH (from docs/02-identity-access.md §9)
 
@@ -471,7 +471,37 @@ CREATE TRIGGER no_mutate_audit    BEFORE UPDATE OR DELETE ON audit_events    FOR
 
 ### 06 — OPS (from docs/06-devops-deployment.md §9)
 
-_(no DDL in the module doc — the module is stateless or reuses another)_
+```sql
+CREATE TABLE backups (
+  id           ULID PRIMARY KEY,
+  kind         TEXT NOT NULL,          -- wal | base | r2_manifest
+  taken_at     TIMESTAMPTZ NOT NULL,
+  size_bytes   BIGINT NOT NULL,
+  checksum     TEXT NOT NULL,
+  verified_at  TIMESTAMPTZ,            -- weekly checksum verify (§5)
+  drill_report JSONB                   -- monthly restore drill (OPS-38)
+);
+CREATE INDEX idx_backups_kind_taken ON backups(kind, taken_at DESC);
+
+CREATE TABLE incidents (
+  id              ULID PRIMARY KEY,
+  severity        TEXT NOT NULL,       -- P1 | P2 | P3 (§5 ladder)
+  title           TEXT NOT NULL,
+  started_at      TIMESTAMPTZ NOT NULL,
+  resolved_at     TIMESTAMPTZ,
+  post_mortem_url TEXT                 -- ops/incidents/ (P1/P2 ≤ 48 h)
+);
+
+CREATE TABLE deploys (
+  id          ULID PRIMARY KEY,
+  env         TEXT NOT NULL,           -- staging | prod
+  sha         TEXT NOT NULL,           -- immutable GHCR tag
+  started_at  TIMESTAMPTZ NOT NULL,
+  finished_at TIMESTAMPTZ,
+  status      TEXT NOT NULL,           -- promoted | deployed | rolled_back | failed
+  actor       TEXT NOT NULL
+);
+```
 
 ### 07 — LCC (from docs/07-account-lifecycle.md §9)
 

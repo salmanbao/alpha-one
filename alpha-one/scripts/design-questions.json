@@ -543,6 +543,46 @@
       "owner": "BE-1",
       "deadline": "Phase 1 (GW build)",
       "answer": "**Answered 2026-09-20 \u2014 approved:** gw.internal is the generic API boundary code at HTTP 500 (taxonomy UX row updated to match); no new code is invented; the Sentry event id travels in the response header for support."
+    },
+    {
+      "id": "D51",
+      "source_doc": "56",
+      "section": "OPS — DevOps & Deployment",
+      "question": "docs/06 \u00a72.6 put sessions, streams and cache in ONE Redis instance with per-database eviction policies \u2014 impossible, because Redis eviction policy and maxmemory are instance-wide. A full cache could evict login sessions or idempotency claims (a double-submittable money write). Also, the new gateway needs a named home for rate counters and idempotency claims. Options \u2014 A: three small Redis containers (redis-main sessions/deny-set/counters/claims, AOF+noeviction; redis-streams AOF+noeviction+MAXLEN; redis-cache allkeys-lru); B: one Redis, noeviction, TTL-only cache; C: two containers (durable + cache). See docs/56 \u00a73 F1.",
+      "raised_by": "Fifteenth-pass review (docs/56 F1)",
+      "owner": "DevOps, BE-1",
+      "deadline": "Phase 0 (compose stack)",
+      "answer": "**Answered 2026-09-20 \u2014 option A, three containers:** redis-main (sessions, deny-set, GW rate counters, idempotency claims \u2014 AOF everysec, noeviction), redis-streams (AOF everysec, noeviction, MAXLEN), redis-cache (allkeys-lru, no persistence). Money-adjacent state never shares a box with the cache."
+    },
+    {
+      "id": "D52",
+      "source_doc": "56",
+      "section": "OPS — DevOps & Deployment",
+      "question": "docs/06 \u00a76 used sys.maintenance for the maintenance page (the registered code is gw.maintenance \u2014 docs/04) and sys.degraded for degraded reads (never registered \u2014 both would fail the error-registry gate). A degraded read is still a 200 success, and the binding D45 success envelope has no field a code could occupy. Options \u2014 A: adopt gw.maintenance; degraded becomes a header-only convention (X-Service: degraded), no code; B: register both sys.* codes and fold gw.maintenance; C: adopt gw.maintenance and extend the D45 meta with a degraded marker. See docs/56 \u00a73 F2.",
+      "raised_by": "Fifteenth-pass review (docs/56 F2)",
+      "owner": "BE-1",
+      "deadline": "Contract freeze",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** gw.maintenance is the only maintenance code (503); degraded reads are the X-Service: degraded response header convention with no code \u2014 the taxonomy registers envelope codes only."
+    },
+    {
+      "id": "D53",
+      "source_doc": "56",
+      "section": "OPS — DevOps & Deployment",
+      "question": "contracts/api/ops.md open TODO: who reviews expand-contract migration PRs? Options \u2014 A: dual approval (DevOps owns the process \u2014 CI dry-run, both-files rule, rollback note; BE-1 owns schema content \u2014 types, indexes, tenant rules); B: BE-1 alone; C: Tech Lead signs every migration PR. See docs/56 \u00a73 F9.",
+      "raised_by": "Fifteenth-pass review (docs/56 F9 \u2014 stale contract TODO)",
+      "owner": "DevOps, BE-1",
+      "deadline": "Phase 0 (first migration)",
+      "answer": "**Answered 2026-09-20 \u2014 option A, dual approval:** every migration PR carries the docs/06 \u00a72.3 companion note and needs DevOps (process) + BE-1 (content) to sign."
+    },
+    {
+      "id": "D54",
+      "source_doc": "56",
+      "section": "OPS — DevOps & Deployment",
+      "question": "Tier conflict: Hook0 is tested in docs/99 tasks 0.3/0.7 and resourced in docs/06 \u00a72.2, but docs/34 tags it with the V2.0 EVT-11/13/14/15 rows; Prometheus/Grafana are built in docs/06 \u00a716 step 8 and assumed by docs/04 (relay.lag, DLQ metrics), but docs/99 0.9 defers the observability stack (OPS-10/12); Uptime Kuma is wired in docs/06 \u00a716 step 9 but OPS-31 is V2. Options \u2014 A: split \u2014 Hook0 + a minimal Prometheus/Grafana (the four binding metrics) ship in V1; Uptime Kuma and the full stack (Loki/OTel/dashboards) wait for V2; B: strictly nothing extra in V1 (rewrite docs/04 and 0.7); C: everything in V1 (amend docs/99 0.9). See docs/56 \u00a73 F10.",
+      "raised_by": "Fifteenth-pass review (docs/56 F10)",
+      "owner": "DevOps, Tech Lead",
+      "deadline": "Phase 0 (compose stack)",
+      "answer": "**Answered 2026-09-20 \u2014 option A, the split:** Hook0 ships in V1 (the V2 rows describe the per-tenant webhook product, not the pipeline); minimal Prometheus+Grafana ships in V1 for relay.lag / DLQ depth / disk / redis-mem; Uptime Kuma and the full observability stack stay V2. docs/06/34 aligned."
     }
   ]
 }

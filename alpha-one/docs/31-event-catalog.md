@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (157 events — 37 V1 baseline, 120 extended — across 33 topics)
+## 2. The catalog (160 events — 37 V1 baseline, 123 extended — across 33 topics)
 
 ### `user.*`
 
@@ -101,6 +101,15 @@
 | `audit.export_completed` | 05 (LED/AUD) | AUD | ext | ext |
 | `audit.access_denied` | 17 (ADM) | security tab (V2) | security tab (V2) | ext |
 
+### `ops.*`
+
+| Event | Producer | When / V1 producer | Consumers | Tier |
+|---|---|---|---|---|
+| `ops.deploy_started` | 06 (OPS) | every deploy step | CON (internal dashboard), NOT (staff channel on failure) | ext |
+| `ops.backup_completed` | 06 (OPS) | nightly base backup (03:00 UTC) | CON, NOT (staff channel on failure) | ext |
+| `ops.restore_drill_completed` | 06 (OPS) | monthly restore drill (OPS-38) | CON (drill report filed) | ext |
+| `ops.provider_health` | 08 (BRG) | 5 min | CON, dashboards | ext |
+
 ### V1 PascalCase events (LCC-23, PayoutPaid)
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
@@ -143,12 +152,6 @@
 | `bridge.positions_closed` | 08 (BRG) | after confirmed close-all | LCC, AUD, NOT (breach evidence) | ext |
 | `bridge.reconciliation_exception` | 08 (BRG) | nightly mismatch | ADM, AUD, CON | ext |
 | `bridge.command_dead` | 08 (BRG) | terminal command failure | CON (CRITICAL), AUD | ext |
-
-### `ops.*`
-
-| Event | Producer | When / V1 producer | Consumers | Tier |
-|---|---|---|---|---|
-| `ops.provider_health` | 08 (BRG) | 5 min | CON, dashboards | ext |
 
 ### `evaluation.*`
 
