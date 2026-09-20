@@ -102,8 +102,9 @@ button):
 1. **Tenant halt** (LCC-33 class, 07): pause all accounts of one tenant —
    trading halts, no new purchases, payouts freeze (in-flight settle).
    Use: tenant-side incident, provider abuse by a tenant.
-2. **Platform maintenance mode** (CON-16, V2): banner + purchase/payout
-   intake off (trading continues — it's broker-side, we can't stop it; the
+2. **Platform maintenance mode** (GW-32): the flag is live in V1 — the flip
+   is Flipt directly (docs/55 §4.1); the CON-16 console surface is V2:
+   banner + purchase/payout intake off (trading continues — it's broker-side, we can't stop it; the
    banner tells traders "platform maintenance, trading unaffected").
 3. **Relay pause** (04): the outbox relay stops draining (events queue in
    the outbox — **trading and enforcement are unaffected**; 04 §3.2: the
@@ -175,7 +176,7 @@ safety.
 | `console.impersonation_started/ended` (V2) | view-as lifecycle | AUD (critical) |
 | `tenant.*` (TEN) | provisioning/saga/suspension — produced by TEN, surfaced in console | CON (ops alerts), AUD |
 
-Consumes: `system.*` (OPS), `tenant.*`, relay/provider health polls,
+Consumes: `ops.*` signals (docs/56 §4), `tenant.*`, relay/provider health polls,
 `audit.*` (for the platform audit view's live tail).
 
 ## 5. Lifecycles
@@ -239,7 +240,7 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/con.md` (
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54 — the console group). Shown for platform completeness (V2/V3 phases, docs/99).
 
 All under `/v1/console/*` (platform realm):
 `GET /v1/console/health` (home screen),

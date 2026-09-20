@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until contract freeze.
 
@@ -19,7 +19,7 @@ Dashboard endpoint in admin group (GW-01), Tenant Admin role. Note: a `analytics
 From domain (GW-02). Read models are tenant-scoped; no cross-tenant analytics in V1 (Out Of Scope).
 
 ## Permissions
-- `analytics.read` — view KPI dashboard # derived from ANA-32 admin story — TODO — needs owner decision on key naming
+- `analytics.read` — view KPI dashboard — registered and ratified 2026-09-19 (D14; `contracts/permissions/registry.md`: view the real-time KPI dashboard of the caller's own firm, ANA-32).
 
 ## Idempotency
 n/a (read-only surface).
@@ -32,10 +32,16 @@ Tenant: from domain (GW-02)
 Permission: `analytics.read` # ANA-32
 Idempotency: n/a
 
-Response 200:
+Response 200 (D45):
 ```json
-{ "revenue_today": "TODO", "active_accounts": "TODO", "pending_queues": "TODO", "breach_count": "TODO", "as_of": "TODO" }
+{ "data": { "revenue_today_cents": 0, "active_accounts": 0,
+    "pending_queues": { "payout": 0, "kyc_manual": 0, "risk": 0 },
+    "breach_count": 0, "as_of": 1758282000000 },
+  "meta": { "request_id": "01J9ULID...", "version": "v1" } }
 ```
+
+Definitions per docs/19 §3.2 (active = 24 h; revenue = order.paid gross today;
+queues = payout pending / KYC manual / risk open).
 
 Errors: none beyond standard gateway errors # ANA-32
 Freshness contract: values no older than one minute # ANA-32 ("update within a minute")
@@ -47,7 +53,7 @@ Freshness contract: values no older than one minute # ANA-32 ("update within a m
 - V1 domain events feed the read models (ANA-01: "read model tables updated from domain events plus nightly aggregation"). The per-table event mapping — TODO — needs owner decision (ANA-01 names the mechanism, not the event list).
 
 ## Open contract questions
-- TODO — needs owner decision: exact KPI definitions (what counts as "active accounts", "pending queues" — which queues?, "revenue" — captured vs settled?).
-- TODO — needs owner decision: read model table list and refresh SLAs beyond the one-minute KPI rule.
-- TODO — needs owner decision: tenant dashboards beyond KPI (fixed report set from Out Of Scope — "fixed report set plus CSV export" — the report list itself is not in the V1 sheet).
-- TODO — needs owner decision: CSV export surface for reports (referenced by Out Of Scope; no V1 row defines it).
+- Resolved 2026-09-20 (docs/59): KPI definitions = docs/19 §3.2 (active traders = 24 h; revenue = order.paid gross today; queues = payout pending / KYC manual / risk open; breach count; tick-age honesty block).
+- Resolved 2026-09-20 (docs/59): the read-model table list = docs/19 §3.1 (equity_points, accounts_ro, traders_ro, payments_daily, payouts_daily, funnel_steps, risk_summary, kpi_snapshot); refresh: 30-s snapshot job, 1-min equity buckets, the KPI route answers values ≤ 1 min old (ANA-32).
+- Resolved 2026-09-20 (docs/59): the dashboard beyond KPI = the fixed V2 report suite (ANA-02..09/16, docs/19 §3.3) — V1 ships the KPI screen only.
+- Resolved 2026-09-20 (docs/59): CSV export = ANA-11 (V2): async CSV/PDF workers → R2 → 24-h URLs (docs/19 §2).

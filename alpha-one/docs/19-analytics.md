@@ -11,8 +11,9 @@
 - **Read model foundation (ANA-01, V1):** materialized tables maintained by
   event consumers (the EVT consumer-group pattern, 04 §3.3): fast, denormalized
   queries for TD/ADM without hitting the write-side tables.
-- **Real-time KPI dashboard (ANA-32, V1):** the operator's glance screen
-  (rendered in ADM): what is live right now, what needs attention.
+- **Real-time KPI dashboard (ANA-32, V1.1 — docs/99 task 3.2):** the operator's
+  glance screen (rendered in ADM); the V1 foundation (ANA-01) ships the read
+  models + the 30-s snapshot job it reads.
 - **V2 (29):** the report suite (daily ops ANA-02, monthly financial
   ANA-03, challenge performance ANA-04, payout ANA-05, geo ANA-06,
   challenge-vs-payout ANA-07, top earners/loss cohorts ANA-08, funnel
@@ -39,10 +40,11 @@ Requirement coverage: `ANA-01` (V1.0) + `ANA-32` (V1.1) + `02..14,16,20..27,29..
      equity_points      ← bridge.tick (per account, 1-min bucket)
      accounts_ro        ← account.state_changed (denormalized account row)
      traders_ro         ← identity + membership events
-     payments_daily     ← payments.intent_captured/refund_settled (daily rollup)
+     payments_daily     ← order.paid (daily rollup; refund events are V2)
      payouts_daily      ← payout.settled/failed (daily rollup)
-     funnel_steps       ← kyc.session_started, payments.intent_created,
-                           account.funded (per-trader step table)
+     funnel_steps       ← kyc.session_started (ext), order.paid, FundedCreated,
+                           payout.settled (per-trader step table; the
+                           checkout-session-lifecycle step is V2)
      risk_summary       ← risk.case_opened/decided (counts + aging)
      kpi_snapshot       ← 30-s materialized view refresh (the dashboard table)
    dashboards (ADM V1; ANA-02/03 V2): read-only SQL against the read models
@@ -101,7 +103,7 @@ All tables: `tenant_id` indexed first, monthly partitions from V2
 (only `equity_points` in V1 — it's the volume table: 1,440 rows/account/month
 ≈ 50M rows/yr at 1k funded accounts → partition by month + 13-mo retention).
 
-### 3.2 V1 KPI dashboard (ANA-32 — in ADM)
+### 3.2 The KPI dashboard (ANA-32, V1.1 — in ADM; the `kpi_snapshot` read model ships with ANA-01)
 
 One screen, five blocks (all from `kpi_snapshot` + `risk_summary`):
 1. **Live**: funded accounts (state=funded), active traders (24 h),

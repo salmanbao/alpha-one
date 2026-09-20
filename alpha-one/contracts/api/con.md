@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: 2026-09-17
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 only). Nothing here is final until contract freeze.
 
@@ -37,9 +37,10 @@ Request:
 { "email": "TODO", "password": "TODO", "totp_code": "TODO" }
 ```
 
-Response 200:
+Response 200 (D45):
 ```json
-{ "session_token": "TODO", "expires_at": "TODO" }
+{ "data": { "session_token": "<opaque>", "expires_at": 1758283020000 },
+  "meta": { "request_id": "01J9ULID...", "version": "v1" } }
 ```
 
 Errors:
@@ -52,9 +53,9 @@ Tenant: platform scope
 Permission: self-action
 Idempotency: optional
 
-Response 200:
+Response 200 (D45):
 ```json
-{}
+{ "data": {}, "meta": { "request_id": "01J9ULID...", "version": "v1" } }
 ```
 
 Errors: none
@@ -70,14 +71,15 @@ Request:
 { "reason": "TODO" }
 ```
 
-Response 200:
+Response 200 (D45):
 ```json
-{ "session_id": "TODO", "revoked": true }
+{ "data": { "session_id": "01J9SES...", "revoked": true },
+  "meta": { "request_id": "01J9ULID...", "version": "v1" } }
 ```
 
 Errors:
 - `console.session_not_found` 404 # implied by CON-30
-- `console.cannot_revoke_self` 400 — TODO — needs owner decision (rule not in sheet)
+- `console.cannot_revoke_self` 400 — the V1 baseline rule (docs/21 §6.1: revoking your own session goes through the self-service session list, not the admin revoke endpoint).
 
 ### Session semantics (CON-30, no dedicated endpoints implied)
 - Expires after inactivity — timeout value TODO — needs owner decision

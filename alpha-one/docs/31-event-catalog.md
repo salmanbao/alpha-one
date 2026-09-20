@@ -4,7 +4,7 @@
 > doc's §4). This is the catalog the CI gate checks against (docs/04 §5.7,
 > docs/28 §11): an event emitted but not cataloged, or a consumer that never
 > handled it, fails the build. The V1 event schemas live in
-> `contracts/events/payloads/` (envelope + 37 V1 event schemas) and the extended
+> `contracts/events/payloads/` (envelope + 39 V1 event schemas) and the extended
 > set in `contracts/events/extended/`; this table is the
 > producer/consumer map. `when`/`consumers` are condensed from the owning
 > doc's row; the owning doc is the authority. Tier: **V1** = the V1
@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (160 events — 40 V1 baseline, 120 extended — across 33 topics)
+## 2. The catalog (160 events — 42 V1 baseline, 118 extended — across 33 topics)
 
 ### `user.*`
 
@@ -168,12 +168,12 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
+| `risk.case_opened` | 10 (RSK) | manual open (RSK-10) / after breach (V1 kind=breach) | ADM (queue), AUD | V1 |
+| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep), LCC (if action), AUD | V1 |
 | `risk.signal_created` | 10 (RSK) | any signal | ANA (V2), AUD (standard) | ext |
-| `risk.case_opened` | 10 (RSK) | manual/auto/after breach | NOT (owner/risk), ADM (queue), AUD | ext |
-| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep), LCC (if action), NOT, AUD | ext |
 | `risk.case_escalated` | 10 (RSK) | SLA breach | NOT (owner + CON), AUD | ext |
 | `risk.case_appealed` | 10 (RSK) | trader appeal | ADM, AUD | ext |
-| `risk.payout_hold_set` | 10 (RSK) | hold lifecycle | PAY, NOT, AUD | ext |
+| `risk.payout_hold_set` | 10 (RSK) | hold lifecycle (RSK-11/PAY-04, V1.1+) | PAY, NOT, AUD | ext |
 
 ### `payout.*`
 

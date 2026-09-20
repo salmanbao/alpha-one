@@ -27,6 +27,9 @@ Last updated: 2026-09-20
 ## 2. What the review validated (no action needed)
 
 - **Backups/DR (OPS-07/38):** RPO ≤ 5 min / RTO ≤ 2 h, nightly base + WAL, monthly restore drill with a real integrity suite (row counts, ledger balance, audit chain spot-check, IdP-link check + login smoke) — internally consistent, and docs/48 makes no competing numbers. The ZITADEL DB rides the same ritual with the master key stored separately.
+Session restore (D64, docs/59): browser sessions are PG rows (`auth_sessions`),
+so a restored DB repopulates all three realms' cookies (trader, staff, console);
+the redis-main session keys are an acceleration layer, not truth.
 - **Secrets (OPS-09):** SOPS+age, tmpfs-only decrypt, CI redaction test, rotation calendar; TEN-11/12 dependency intact; Infisical correctly parked as the V2 path.
 - **Migrations (OPS-06):** both-files mandatory, expand→migrate→contract, no destructive down, version gate in `/readyz`, ZITADEL's one-way event-sourced migrations correctly excluded from golang-migrate with a deploy order.
 - **Auth posture (§3.5):** the login-outage asymmetry is stated as a decision; the numbers match docs/02 §9 and docs/43 (JWKS 24 h + refresh-on-unknown-kid; revocation p95 ≤ 60 s; `IdpSyncStalled` pages at 5 min).

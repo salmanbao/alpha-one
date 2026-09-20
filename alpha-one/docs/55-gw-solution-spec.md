@@ -354,13 +354,20 @@ configuration:
 |---|---|---|
 | `/v1/auth/*`, `/v1/trader/*` | `Authorization: Bearer` JWT, aud `trader` | ZITADEL RS256/EdDSA via cached JWKS; `exp/iat/nbf`; `sub` present; **deny-set check** (Redis `GET deny:jti` / `deny:sess:{sid}`, docs/02); `tenant_id` claim must equal the step-2 tenant (SOL-09) — mismatch = cross-tenant token = `401`, logged as a security event |
 | `/v1/admin/*` | Bearer JWT, aud `staff` | same checks + `amr` contains mfa for step-up-flagged routes (D38, §4.5) |
-| `/v1/console/*` | cookie `pf_console_session` (HttpOnly, Secure, SameSite=Lax) | opaque 128-bit id → server-side session in Redis (30-min sliding idle, docs/02); session holds the principal; no JWT on this realm |
+| `/v1/console/*` | cookie `pf_console_session` (HttpOnly, Secure, SameSite=Lax) | opaque 128-bit id → server-side session in Redis (15-min sliding idle — the console realm's D66 carve-out, docs/02 §9); session holds the principal; no JWT on this realm |
 | `/v1/webhooks/*` | provider signature | per-provider verifier registry (CHK-07, KYC-05, EVT-10): raw body read **before any parse**, HMAC (or provider scheme) verify, timestamp tolerance ±5 min, provider event id extracted for the dedupe the handler owns (`evt.webhook_duplicate` semantics). Failure → `401 webhook.signature_invalid` |
 | `/internal/*` | static bearer (SOPS) | SHA-256 of presented token compared constant-time against boot-loaded hashes; service label becomes the principal (`kind=service`); every call logged with service identity + `correlation_id` (docs/44 §7). Rotation: dual-token overlap 24 h (SOL-19) |
 
 `auth_time` (or ZITADEL's `amr` mfa evidence) is carried into the principal
 as `MFAAt` — step 4's step-up consumes it; the gateway never *prompts*, it
 only refuses with `403 authz.step_up_required`.
+
+**Transport (D64, docs/59):** the browser realms present the HttpOnly session
+cookie (the `auth_sessions` projection — docs/02 §3.3); machine clients
+present the bearer JWT. Cookie-authenticated state-changing requests pass an
+**origin check** (validate `Origin`/`Referer` against the request host)
+before the realm logic — the docs/28 T8 CSRF defense; the reference scaffold
+notes it as a production swap-in at the front of `Auth.Middleware`.
 
 **Failure & security.** All realm failures return the **identical generic**
 `401 auth.invalid_credentials` — no realm disclosure, no user enumeration

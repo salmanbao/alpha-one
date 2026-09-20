@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "risk.case_decided.v1.json",
+  "title": "Alpha One \u2014 event risk.case_decided v1",
+  "description": "V1 catalog event `risk.case_decided` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = PAY (hold release/keep), LCC (if action), AUD. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "risk.case_decided"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "case_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "tenant_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "outcome": {
+              "type": "string"
+            },
+            "decided_by": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "note": {
+              "type": "string"
+            },
+            "decided_at": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "case_id",
+            "tenant_id",
+            "account_id",
+            "outcome",
+            "decided_by",
+            "decided_at"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

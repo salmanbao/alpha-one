@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 only). Nothing here is final until contract freeze.
 
@@ -16,5 +16,5 @@ All other admin-panel data flows consume module contracts: payouts queue (`contr
 Out Of Scope constraints: fixed role-based dashboards (no widget editor), fixed report set plus CSV export, no live chat, no field-level permissions beyond route/action permissions, white-label limited to branding tokens.
 
 ## Open contract questions
-- TODO — needs owner decision: whether ADM needs any endpoints of its own in V1 (the sheet implies none — every screen is a consumer).
+- Resolved 2026-09-20 (docs/59): no ADM-owned endpoints in V1 — the module doc's §7.1 states it and every screen consumes the owning module's admin API (docs/17 §7.2).
 - ~~TODO — needs owner decision: staff role definitions for admin panel access~~ **Resolved 2026-09-19 (D14, docs/44 §4):** the role catalog is `contracts/permissions/roles.yaml` — 7 tenant roles (`firm:owner`/`admin`/`risk`/`compliance`/`finance`/`support`, `user:trader`); every admin screen is gated by the underlying module route's permission key (route → key → roles map: `contracts/permissions/matrix.md` §3). The consolidated specification is `docs/46-authorization-model.md`. Custom staff roles (AUTH-12/14) remain a V2 extension.

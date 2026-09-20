@@ -135,14 +135,29 @@ it can never corrupt a case.
 
 ## 4. Events (topic `risk`)
 
+### 4.1 V1 baseline events — authoritative
+
+Promoted 2026-09-20 (D65, docs/59): the
+case spine is V1 (RSK-01/10) and the risk queue is a committed V1 ADM screen
+(docs/17 §3.1) — the two lifecycle events are V1; the risk-case EMAIL
+templates stay V2 reserves (docs/58, D61).
+
+| Event | When | Consumers |
+|---|---|---|
+| `risk.case_opened` | manual open (RSK-10) / after breach (V1 kind=breach) | ADM (queue), AUD |
+| `risk.case_decided` | decision | PAY (hold release/keep), LCC (if action), AUD |
+
+### 4.2 Extended (post-V1) events — design-level
+
 | Event | When | Consumers |
 |---|---|---|
 | `risk.signal_created` | any signal | ANA (V2), AUD (standard) |
-| `risk.case_opened` | manual/auto/after breach | NOT (owner/risk), ADM (queue), AUD |
-| `risk.case_decided` | decision | PAY (hold release/keep), LCC (if action), NOT, AUD |
-| `risk.case_escalated` (V2) | SLA breach | NOT (owner + CON), AUD |
-| `risk.case_appealed` (V2) | trader appeal | ADM, AUD |
-| `risk.payout_hold_set` / `risk.payout_hold_released` | hold lifecycle | PAY, NOT, AUD |
+| `risk.case_escalated` | SLA breach | NOT (owner + CON), AUD |
+| `risk.case_appealed` | trader appeal | ADM, AUD |
+| `risk.payout_hold_set` / `risk.payout_hold_released` | hold lifecycle (RSK-11/PAY-04, V1.1+) | PAY, NOT, AUD |
+
+V2 promotions to expect: NOT joins the case_opened/decided consumers when the
+risk-case templates ship (docs/58 §3.4 reserves).
 
 ## 5. Lifecycles
 

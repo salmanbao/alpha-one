@@ -328,7 +328,15 @@ messages and paper: D60 the settlement event is `payout.settled`, D61 the
 14-template V1 set with every trigger registered and every reserve named,
 D62 no KYC invite email in V1, D63 expiry silent; the signed-URL endpoint in
 the V1 baseline, D45 shapes in the DOC contract, ten contract questions
-resolved);
+resolved), and the eighteenth-pass artifact is `docs/59-surfaces-review.md`
+(the four surface modules TD/ADM/CON/ANA: D64 dual transport — browser
+surfaces on the HttpOnly session cookie with the origin check in the GW
+chain, machines keep the bearer JWT; D65 the risk-case spine events promoted
+to V1 for the ADM risk queue; D66 the realm idle carve-out — traders 30,
+staff + console 15; D67 the admin panel on the tenant host under /admin;
+plus the pre-D45 envelope, the un-prefixed trader paths, the PAY-44 tier,
+the step-up code, the ops.* topic, the ANA-32 tier and feed names, and 12
+contract questions resolved);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

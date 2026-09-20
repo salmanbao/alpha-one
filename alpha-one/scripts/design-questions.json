@@ -673,6 +673,46 @@
       "owner": "BE-2",
       "deadline": "Phase 1 (NOT build)",
       "answer": "**Answered 2026-09-20 \u2014 option A:** silent in V1; an expiry email is a V2 reserve."
+    },
+    {
+      "id": "D64",
+      "source_doc": "59",
+      "section": "Surfaces TD/ADM/CON/ANA — deep review",
+      "question": "TRANSPORT: docs/04 \u00a73.1 says the trader/staff realms authenticate with JWT bearer tokens, but all three surface docs (16/17/21) say the browser uses a same-origin session cookie \u2014 and docs/28 T8 cites 'the CSRF origin check in the GW middleware', which no gateway text ever defined. Options \u2014 A: dual transport \u2014 browser surfaces carry the HttpOnly session cookie (the auth_sessions projection as session of record, ZITADEL refresh behind it), machine clients keep the bearer JWT, and the GW chain gains the origin check on cookie-authenticated state changes; B: bearer-in-memory everywhere (rewrite every surface doc, SSE needs token workarounds, no server-side session to revoke on XSS). See docs/59 \u00a73 F1.",
+      "raised_by": "Eighteenth-pass review (docs/59 F1)",
+      "owner": "BE-1, FE-1",
+      "deadline": "Phase 1 (surfaces build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** dual transport. Browser = HttpOnly session cookie + the origin check in the GW chain (docs/28 T8's defense, now implemented there); machines = bearer. docs/02/04/55 written; SSE works unchanged (cookies flow on EventSource)."
+    },
+    {
+      "id": "D65",
+      "source_doc": "59",
+      "section": "Surfaces TD/ADM/CON/ANA — deep review",
+      "question": "TIER TENSION: the risk-case queue is a committed V1 ADM screen (docs/17 \u00a73.1) and the case spine is V1 (RSK-01/10), but risk.case_opened/case_decided are catalogued ext \u2014 the V1 screen's live updates and the audit mirror ride events that officially do not exist in V1. Options \u2014 A: promote the two lifecycle events to V1 (the risk-case email templates stay V2 reserves per D61 \u2014 events for screens/audit, emails later); B: the V1 queue reads tables with no events (live-update promise degrades to refresh). See docs/59 \u00a73 F2.",
+      "raised_by": "Eighteenth-pass review (docs/59 F2)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (RSK build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** risk.case_opened and risk.case_decided are V1 catalog events (docs/10 \u00a74.1 + payload schemas added); the risk templates stay V2 reserves."
+    },
+    {
+      "id": "D66",
+      "source_doc": "59",
+      "section": "Surfaces TD/ADM/CON/ANA — deep review",
+      "question": "SESSION IDLE: docs/02's global policy idles sessions at 30 min, but docs/17 (\u2018idle 15 min \u2014 stricter than TD's 30 \u2014 money actions\u2019) and docs/21 (CON-30) enforce 15 min for staff/console. Options \u2014 A: realm carve-out in docs/02 \u00a79 (traders 30, staff + console 15 \u2014 the money actors keep the stricter timeout); B: uniform 30 (relax the two surface docs). See docs/59 \u00a73 F3.",
+      "raised_by": "Eighteenth-pass review (docs/59 F3)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (surfaces build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** docs/02 \u00a79 gains the realm carve-out \u2014 traders idle 30 min, staff + console 15 min."
+    },
+    {
+      "id": "D67",
+      "source_doc": "59",
+      "section": "Surfaces TD/ADM/CON/ANA — deep review",
+      "question": "ADM HOST: docs/17 \u00a72 placed the staff admin panel on the console's subdomain (docs/21 owns console.*), and no doc names the admin host. Options \u2014 A: the admin renders on the tenant's own host under /admin ({slug}.alpha1.io/admin, custom domains alike \u2014 one host per firm, the session realm decides the portal, realm-name-separated cookies, tenant resolution unchanged); B: dedicated admin.{slug} subdomains (doubles DNS/cert surface; contradicts the docs/47 one-subdomain-source rule). See docs/59 \u00a73 F4.",
+      "raised_by": "Eighteenth-pass review (docs/59 F4)",
+      "owner": "FE-1, BE-1",
+      "deadline": "Phase 1 (surfaces build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** the staff admin lives on the tenant host under /admin; the platform console keeps its own subdomain (docs/21). docs/17 \u00a72 corrected."
     }
   ]
 }

@@ -234,6 +234,23 @@ EVENTS = {
       "executed_by": ULID, "executed_at": TS,
     }, ["payout_id", "account_id", "amount", "provider", "reference", "executed_at"]),
   },
+  "risk.case_opened": {
+    "consumers": ["ADM (queue)", "AUD"],
+    "payload": obj({
+      "case_id": ULID, "tenant_id": ULID, "account_id": ULID,
+      "kind": {"type": "string", "enum": ["manual", "breach"]},
+      "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
+      "opened_by": ULID, "summary": {"type": "string"}, "opened_at": TS,
+    }, ["case_id", "tenant_id", "account_id", "kind", "severity", "opened_at"]),
+  },
+  "risk.case_decided": {
+    "consumers": ["PAY (hold release/keep)", "LCC (if action)", "AUD"],
+    "payload": obj({
+      "case_id": ULID, "tenant_id": ULID, "account_id": ULID,
+      "outcome": {"type": "string"},
+      "decided_by": ULID, "note": {"type": "string"}, "decided_at": TS,
+    }, ["case_id", "tenant_id", "account_id", "outcome", "decided_by", "decided_at"]),
+  },
 }
 
 def main():

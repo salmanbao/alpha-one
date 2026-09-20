@@ -332,13 +332,16 @@ from ZITADEL's per-org lockout policy with our per-IP counters as the second lay
 refresh tokens; `api` keeps a **Redis deny-set** (jti entries live for the
 access-token TTL; session-keyed entries outlive the refresh idle window — the
 §9 split rule, harmonized 2026-09-20 docs/56) and the
-`auth_sessions` projection so revocation is immediate. **V1 baseline survives
+`auth_sessions` projection so revocation is immediate. **Transport (D64, docs/59):**
+the browser surfaces (TD/ADM/CON) carry the **HttpOnly session cookie** (the
+`auth_sessions` projection is the session of record; the ZITADEL refresh flow
+sits behind it); non-browser clients present the bearer JWT. **V1 baseline survives
 intact (binding):** rotating refresh, server-side revocation, and *reuse of a rotated
 refresh token → revoke all sessions of the identity + CRITICAL audit*. **Rotation and
 reuse detection are ZITADEL's** (OIDC refresh rotation; a reused token revokes its family)
 — decision D17, docs/44 §6.2; our side is the *response*: `RevokeAllMyRefreshTokens` +
 session v2 `DeleteSession` + deny-set, which is what makes the kill immediate. We keep no
-refresh secrets (§9 — the `refresh_hash` columns are removed). Sliding idle 30 min /
+refresh secrets (§9 — the `refresh_hash` columns are removed). Sliding idle 30 min for traders (the staff and console realms idle at 15 min — D66, docs/59) /
 absolute 30 d are our session policy, enforced by
 the instance OIDC settings (docs/43 §6) plus the `auth_sessions` row; per-org overrides
 are `AUTH-34` (V2) and the ZITADEL login-UI session is a separate per-org policy. Trader
@@ -402,7 +405,7 @@ min 10 / max 128, complexity, no reuse of last 5 (ZITADEL history), self-service
 (`AUTH-40`) requires the current password + (staff) 2FA.
 
 **Token and session parameters (review G12; enforced per decision D10, docs/43 §6).**
-Access and ID tokens **15 min**; refresh rotated on every use, idle timeout 30 min,
+Access and ID tokens **15 min**; refresh rotated on every use, idle timeout 30 min for traders (staff/console 15 min — D66, docs/59),
 absolute lifetime 30 d; JWT clock skew ±60 s; JWKS cached 24 h with an immediate refetch
 on an unknown `kid`; deny-set TTL = access-token TTL (session-keyed entries outlive the
 refresh idle window); per-identity concurrent sessions: **open (D6, docs/37)**, default 10

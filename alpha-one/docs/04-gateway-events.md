@@ -59,9 +59,15 @@ separation enforced at the routing layer:
 | `/v1/webhooks/*` | provider webhooks (payments CHK-07, KYC KYC-05) | provider signature (EVT-10) |
 | `/internal/*` (compose network only) | service-to-service (BRG/EVL command + engine paths) | static per-service bearer (step 3); never edge-routed |
 
-The exact URL plan beyond the V1 baseline is an owner decision
-(`contracts/api/gw.md` open question); the V1 endpoints per module are in
-each doc's §7.1.
+The URL plan beyond the V1 baseline groups is resolved (D46, docs/54): module
+paths normalize under the four groups (each doc's §7.1/§7.2).
+
+**Transport (D64, docs/59):** the browser surfaces (TD/ADM/CON) authenticate
+with the **HttpOnly session cookie** (the `auth_sessions` projection is the
+session of record — docs/02 §3.3; the ZITADEL refresh flow sits behind it);
+non-browser clients present the bearer JWT. Cookie-authenticated state
+changes pass the **origin check** in this chain — the docs/28 T8 CSRF
+defense, now written into the chain rather than cited.
 
 | # | Step | Behavior | Req |
 |---|---|---|---|
