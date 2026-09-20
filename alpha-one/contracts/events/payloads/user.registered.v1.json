@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.registered.v1.json",
-  "title": "Alpha One — event user.registered v1",
-  "description": "V1 catalog event `user.registered` (v1). Envelope per EVT-03. Consumers per contracts/events/catalog.md: NOT-01 (welcome), AUD, ANA. Payload INFERRED; field confirmation is an open owner decision.",
+  "title": "Alpha One \u2014 event user.registered v1",
+  "description": "V1 catalog event `user.registered` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (welcome), AUD, ANA-01. Derived from: docs/02 \u00a74.1 (user.registered, AUTH-01) + docs/32 `identities` (id) / `identity_emails` (email_hash). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,31 +15,19 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
             "identity_id": {
               "$ref": "envelope.schema.json#/$defs/ULID"
             },
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "email_hash": {
               "type": "string",
-              "description": "sha256 of the normalised email (never the address itself)"
+              "description": "sha256(normalised email) \u2014 the address itself never appears in an event payload (catalog note)"
             },
             "source": {
               "type": "string",
-              "enum": [
-                "registration_form",
-                "invitation",
-                "sso_jit",
-                "scim",
-                "migration"
-              ]
+              "description": "registration channel (e.g. hosted login, sso)"
             },
             "registered_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -52,7 +40,12 @@
             "registered_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

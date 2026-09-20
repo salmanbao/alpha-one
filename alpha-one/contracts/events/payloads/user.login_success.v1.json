@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.login_success.v1.json",
-  "title": "Alpha One — event user.login_success v1",
-  "description": "V1 catalog event `user.login_success` (v1). Envelope per EVT-03. Consumers: AUD, ANA, RSK (anomaly baseline). Origin is ZITADEL (Actions v2 event trigger) or our session materialisation — same field set either way.",
+  "title": "Alpha One \u2014 event user.login_success v1",
+  "description": "V1 catalog event `user.login_success` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = AUD, ANA-01, RSK (anomaly baseline). Derived from: docs/02 \u00a74.1 (user.login_success, session materialisation) + docs/32 `auth_sessions` (id, amr, ip/ua per the \u00a74.1 note). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -14,9 +14,6 @@
         },
         "version": {
           "const": 1
-        },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
         },
         "payload": {
           "type": "object",
@@ -32,7 +29,7 @@
               "items": {
                 "type": "string"
               },
-              "description": "authentication methods (pwd, otp, webauthn)"
+              "description": "auth_sessions.amr (authentication methods)"
             },
             "mfa": {
               "type": "boolean"
@@ -55,7 +52,12 @@
             "logged_in_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

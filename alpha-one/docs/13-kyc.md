@@ -113,7 +113,7 @@ request-resubmission → NEEDS_RESUBMISSION).
 | Gate | Read | Fail behavior |
 |---|---|---|
 | Funding/activation (LCC-07/KYC-07, V1) | `kyc.state == APPROVED` when the challenge's `kyc_timing` requires it before funded creation | funded account creation blocked until APPROVED (synchronous status check — **not** event consumption; LCC owns the state, KYC status surfaces in TD) |
-| Payout (KYC-08 → PAY-03, V1) | `kyc.state == APPROVED` when timing requires it | `payout.ineligible` (KYC sub-reason) / `payout.kyc_required` (code naming open, taxonomy) — **at request time AND re-checked at approval** (D39, docs/52) |
+| Payout (KYC-08 → PAY-03, V1) | `kyc.state == APPROVED` when timing requires it | `payout.ineligible` with sub-reason `kyc_not_approved` (D72, docs/62 — closed naming question: no dedicated `payout.kyc_required` code) — **at request time AND re-checked at approval** (D39, docs/52) |
 | Purchase (V2 — **no V1 purchase gate**, D44) | V2: tenant-configured level read at session create | V2: `kyc.required` on session create; **V1 control = login-first checkout** (docs/12 §1) |
 
 ### 3.3 Verified identity record (KYC-09)

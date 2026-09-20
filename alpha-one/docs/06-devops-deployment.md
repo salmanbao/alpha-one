@@ -144,6 +144,49 @@ loss (therefore `noeviction`); evicting an idempotency claim = a
 double-submittable money write (worst case). `redis-main` down = the D48
 degradation matrix applies per step (docs/55 §3.6).
 
+### 2.7 Operational model: 1-person DevOps (added 2026-09-20 — gap-closure pass; revises the docs/00 non-negotiable #6 wording)
+
+The binding promise is **1-person operable**, and it holds *only if* the
+13 deployables (docs/01 §1.1) are read as two attention classes, not 13
+equal responsibilities. This section makes that split explicit so the
+promise is checkable.
+
+**Class 1 — install-and-forget** (unmodified upstream images; the operator's
+job is a periodic version bump + the fixed backup ritual, nothing else):
+
+| Deployable | Why it can be forgettable |
+|---|---|
+| `zitadel` | Upstream image, unmodified (ADR-13); state lives in the same Postgres as everything else, so backup/restore is shared; login policy is config, not code |
+| `hook0` | Upstream image; delivery state is ours in Postgres, the engine is a dumb forwarder |
+| `flipt` | Upstream image; flags live in Postgres |
+| `db` / `db-proxy` | Standard Postgres 16 + PgBouncer; the non-optional ritual is the pgBackRest battery — continuous WAL archive (5 min `archive_timeout`, D55) + nightly base + weekly automated restore verification (D59) + monthly full drill (OPS-07/OPS-38, §2.4) |
+| `redis` (×3) | Standard Redis 7; transport/cache only — every stream and cache key is rebuildable, so a box wipe is a non-event |
+| `prometheus` / `grafana` | Minimal V1 pair (scrape + dashboards); no pipeline engineering |
+
+**Class 2 — active attention** (our code: release cycles, rollbacks,
+on-call, and the runbooks in §3.6):
+
+| Deployable | Attention surface |
+|---|---|
+| `api` | The largest surface (all REST + the gateway); D58 rolling cycle with 2 replicas |
+| `bridge` | MetaApi rate limits + the command queue; circuit breakers |
+| `engine` | PnL/verdict correctness — the highest-stakes deploys (contract-tested before release) |
+| `workers` | All consumers, schedulers, DLQ handling — the failure modes that need a human |
+| `relay` | Exactly-one publisher; the failover story is §3.7 below |
+| `web` / `docs-worker` | Frontend + PDF rendering; low-frequency, low-risk deploys |
+
+**Honest costs named in the open** (so the 1-person promise is not a
+slogan): 4 runtimes to keep current (Go 1.27, Rust/axum, Node 22, TS/Next);
+upstream images that move under us (ZITADEL majors — the quarterly review in
+§3.5 is the control); and the backup/restore ritual is non-optional even
+though Postgres is "standard". What the 1-person promise deliberately does
+*not* buy: no **active** HA pair — V1 accepts the single-box SPOF (ADR-9/10);
+the D56 standby host is a disaster standby (warm replica + Uptime Kuma), not
+a traffic split, so RTO is promote (≤ 15 min) or full restore (≤ 2 h worst
+case), §2.4 — no 24/7 staffing (Uptime Kuma + the CRITICAL alert set page
+the one person), and no Kubernetes-style self-healing (supervision is compose
+`restart: always` + the per-service runbooks).
+
 ## 3. System design (deploy mechanics)
 
 ### 3.1 Zero-downtime deploys (D58: V1 = 2 api replicas + rolling cycle; blue-green two-stack = V2 OPS-18)
@@ -213,6 +256,21 @@ rehearsable, not tribal knowledge:
 | **Quarterly access review (G39)** | export ZITADEL IAM members/grants + `identity_idp_links` holder list → diff against `roles.yaml` expectations → record the diff and the sign-off in the compliance register |
 | **IdP break-glass** | sealed credential from the ops vault (one of exactly two `IAM_OWNER` holders, G39) → admin plane only reachable inside the network / Cloudflare Access → rotate on use, notify, post-incident review |
 | **Deny-set / session kill drill** | with `docker stop zitadel` and with Redis flushed: prove kill latency and fail-closed behaviour (docs/99 gate 10, docs/35 §5.1) |
+
+### 3.7 Relay failover (added 2026-09-20 — gap-closure pass; decision D76 — see the D76 row in the docs/37 Design-review questions register)
+
+The relay is the exactly-one publisher (docs/01 §1.1). V1 treats relay
+outage as a **designed, quantified path**, not an accepted risk:
+
+| Question | V1 answer (all by citation) |
+|---|---|
+| **Supervisor** | compose `restart: always` — on a single Hetzner box, compose *is* the process supervisor. Defence-in-depth: the `relay:lock` PG advisory lock with a **30 s heartbeat steal** (docs/04 §3.3) means a zombie or a second started relay cannot publish while the lock is held, and a dead lock is stealable within 30 s |
+| **Detection** | `relay.lag` Prometheus metric + CON gauge (docs/04 §11 — a metric, never an event), the `evt.relay_stopped` internal CRITICAL after **60 s without a publish** (docs/04 §6 ext), and Uptime Kuma on `/readyz` — which already gates readiness on *relay lag < 60 s* (docs/04 §4), so a stalled relay takes the api replica out of service traffic the same way any readiness failure would |
+| **Detection-to-restart time** | process death: seconds (compose restart). Zombie/hung relay: lock steal ≤ 30 s + restart, and the CRITICAL alert fires at 60 s. **Worst case ≈ 60–90 s** of no publishing |
+| **In-flight outbox rows** | there are none, by construction: a row leaves the outbox only after its XADD batch succeeds (`published_at IS NULL` *is* the work queue — `idx_outbox_unpublished`, docs/04 §3.3). A relay that dies mid-poll leaves `published_at NULL` rows in Postgres; the restarted (or lock-stealing) relay drains them in the next 500-row batch. At-least-once redelivery is absorbed by consumer idempotency on `event_id` (docs/04 §5.7) |
+| **Backlog impact** | everything *event-fed* lags by stall + drain time: trader notifications (NOT), tenant webhooks (Hook0), LED postings, ANA read models, certificate rendering. **The trading path is unaffected** — bridge enforcement acts on synced broker state, not events (docs/04 §16 risks: "bridge enforcement doesn't depend on events") |
+| **Proof** | docs/04 §16 step 2 exit criterion: *kill relay 5 min → restart → zero events lost, zero dupes* (the 0.7 gate in docs/99 runs the shorter "kill and restart resumes at LastSeq+1" variant) |
+| **Out of scope (V2 candidate)** | dual-relay lease handover for sub-30 s failover — not worth the complexity while the worst case is a ~90 s notification delay on a single-tenant platform |
 
 ## 4. Events
 

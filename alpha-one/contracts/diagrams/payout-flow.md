@@ -29,11 +29,12 @@ sequenceDiagram
         FIN->>COO: approved batch, optional export (PAY-44)
         COO->>PAY: record execution: provider, reference, amount, timestamp (PAY-12)
         PAY->>LED: settle obligation (LED-08)
-        PAY->>EVT: PayoutPaid (PAY-12, via outbox — Decision 6, consumed by LED-08, DOC-04, ANA-01)
+        PAY->>EVT: payout.settled (PAY-12, via outbox — catalog name; consumed by LED-08, DOC-04, ANA-01)
     end
     Note over FIN,COO: reject path: reason recorded (PAY-09), payout.rejected emitted, trader notified (NOT-05)
 ```
 
-## Open contract questions
-- TODO — needs owner decision: who moves approved → processing → paid given manual execution (PAY-13 states vs PAY-12 direct recording).
-- TODO — needs owner decision: whether on-demand sync (BRG-09) is automatic in the request flow or operator-triggered.
+## Confirmed by citation (resolved 2026-09-20, gap-closure pass — docs/11, docs/07)
+- **Who moves `approved → processing → paid`** — nobody, in V1: `processing` is a **reserved state with no V1 entry path** (docs/11 §3.3). V1 terminal states are `paid` and `rejected`; the manual execution recording (PAY-12 — provider, reference, amount, timestamp, amount must equal the approved amount to the cent or `payout.execution_mismatch` 400) moves `approved → paid` **directly**, with the LED-08 settlement posting and the `payout.settled` event in the same step. The `approved → processing → paid` chain is the **V2** design (automated rail executor PAY-24, docs/11 §3.3 note).
+- **On-demand sync (BRG-09)** — it is **automatic in the request flow, not operator-triggered**: the trader's payout request triggers the fresh snapshot, and the PAY-03 eligibility gate runs synchronously against it (docs/11 §2 flow: "trader (TD) ──request──► BRG-09 on-demand sync (fresh snapshot)"). This is also why the payout's risk/suspension check (PAY-04) is a synchronous status check on `accounts.state`, not an event consumer (docs/11 §3.1/§3.7, D39).
+- **Event name**: the catalog name is `payout.settled` (the "PayoutPaid" label in the earlier diagram draft was a legacy name — see contracts/events/catalog.md, D60).

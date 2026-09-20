@@ -28,8 +28,10 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SRC = ROOT / "scripts" / "prd-workbook.json"
 DESIGN_Q = ROOT / "scripts" / "design-questions.json"
+TRIAGE = ROOT / "scripts" / "prd-question-triage.json"
 DOCS = ROOT / "docs"
 EXTRACT_DATE = "2026-09-19"
+TRIAGE_DATE = "2026-09-20"
 
 HEADER = """# {num} — {title}
 
@@ -216,6 +218,154 @@ def build_open_questions(data: dict) -> str:
                "not in ad-hoc comments.\n")
     out.append("- **Design-review rows carry an ID (`D1`, `D2`, …)** and are cited by that ID from "
                "the module docs; PRD rows are cited as `<Section> #<n>`.\n")
+    out.extend(triage_section(data))
+    return "\n".join(out) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# 37 (cont.) — question triage (who can answer) + 37a stakeholder hand-off
+# --------------------------------------------------------------------------- #
+
+
+def _norm(text: str) -> str:
+    import re
+    return re.sub(r"\s+", " ", text or "").strip()
+
+
+def _load_triage() -> dict:
+    if not TRIAGE.is_file():
+        return {}
+    return json.loads(TRIAGE.read_text())
+
+
+def _triage_map(data: dict, triage: dict) -> dict:
+    """(section, normalized question) -> triage row, for the OPEN rows only."""
+    lookup = {(t["section"], _norm(t["q"])): t for t in triage.get("rows", [])}
+    return lookup
+
+
+def triage_section(data: dict) -> list[str]:
+    triage = _load_triage()
+    lookup = _triage_map(data, triage)
+    if not lookup:
+        return []
+    buckets = triage.get("buckets", [])
+    internal = triage.get("internal_bucket")
+
+    # register numbering: every row of a section gets a # (as in the tables above)
+    num: dict[str, int] = {}
+    matched: list[dict] = []
+    for q in data["open_questions"]:
+        sec = q.get("section") or "Unfiled"
+        num[sec] = num.get(sec, 0) + 1
+        if is_open(q):
+            key = (sec, _norm(q.get("question")))
+            if key in lookup:
+                matched.append({**lookup[key], "sec": sec, "n": num[sec]})
+
+    if len(matched) != len(lookup):
+        raise SystemExit(
+            f"triage mismatch: {len(lookup)} triage rows but only {len(matched)} "
+            f"matched open workbook rows — re-run scripts/build_triage_data.py")
+
+    per_bucket: dict[str, list[dict]] = {b: [] for b in buckets}
+    for m in matched:
+        per_bucket[m["bucket"]].append(m)
+
+    out = [f"\n## Question triage — who can answer (added {TRIAGE_DATE}, gap-closure pass)\n"]
+    out.append("Source: `scripts/prd-question-triage.json` (written by "
+               "`scripts/build_triage_data.py`). Every open question above is assigned to the "
+               "stakeholder **who can answer it** — not the person who raised it. "
+               f"**No row in this section is an answer**: the `{internal}` rows carry a "
+               "proposed answer marked *Proposed — pending sign-off* (adopting the PRD's own "
+               "'Recommended:' text where present, or the binding spec where it already decided "
+               "the point); it becomes a decision only when the named owner signs off — the "
+               "D-number convention (docs/62 register) applies. The flat hand-off for the "
+               "stakeholders themselves is "
+               "`docs/37a-stakeholder-questions-for-funderblu.md`.\n")
+    out.append("| Bucket (who can answer) | Questions |")
+    out.append("|---|---|")
+    for b in buckets:
+        out.append(f"| {md_cell(b)} | {len(per_bucket[b])} |")
+    out.append(f"| **Total** | **{len(matched)}** |")
+    for b in buckets:
+        rows = sorted(per_bucket[b], key=lambda m: (m["sec"], m["n"]))
+        out.append(f"\n### {b} ({len(rows)})\n")
+        out.append("| Ref | Question | Note / proposal |")
+        out.append("|---|---|---|")
+        for m in rows:
+            ref = f"{md_cell(m['sec'])} #{m['n']}"
+            qtext = m["q"]
+            if len(qtext) > 110:
+                qtext = qtext[:107].rsplit(" ", 1)[0] + "…"
+            out.append(f"| {ref} | {md_cell(qtext)} | {md_cell(m.get('note') or '—')} |")
+    return out
+
+
+def build_stakeholder_handoff(data: dict) -> str:
+    triage = _load_triage()
+    lookup = _triage_map(data, triage)
+    buckets = triage.get("buckets", [])
+    internal = triage.get("internal_bucket")
+    num: dict[str, int] = {}
+    matched: list[dict] = []
+    for q in data["open_questions"]:
+        sec = q.get("section") or "Unfiled"
+        num[sec] = num.get(sec, 0) + 1
+        if is_open(q):
+            key = (sec, _norm(q.get("question")))
+            if key in lookup:
+                matched.append({**lookup[key], "sec": sec, "n": num[sec]})
+    per_bucket: dict[str, list[dict]] = {b: [] for b in buckets}
+    for m in matched:
+        per_bucket[m["bucket"]].append(m)
+
+    out = [
+        "# 37a — Open Questions, grouped by who can answer (hand-off for FunderBlu)",
+        "",
+        f"> Generated {TRIAGE_DATE} by `scripts/build_prd_registers.py` from "
+        "`scripts/prd-question-triage.json` + `scripts/prd-workbook.json` (the docs/37 open "
+        "rows). Do not edit by hand — answers are captured in the PRD workbook and the "
+        "design-question register (the D-number convention), then this file is regenerated.",
+        ">",
+        f"> **What this is:** the {len(matched)} open PRD questions from "
+        "`docs/37-prd-open-questions.md`, regrouped by the stakeholder who can actually "
+        "answer each one. **What it is not:** an answer sheet. Only the "
+        f"\"{internal}\" section at the bottom carries proposed answers, each marked "
+        "*Proposed — pending sign-off*; every other section needs the named stakeholder's "
+        "decision. A question becomes *Answered* only when a real owner decision is "
+        "recorded (workbook answer cell or a D-row in docs/37) — never by default.",
+        ">",
+        "**How to use it (suggested):** each stakeholder replies per question (copy the "
+        "numbered list into a reply). When a decision lands: the Tech Lead writes it into "
+        "`scripts/prd-workbook.json` (PRD rows) or `scripts/design-questions.json` "
+        "(new D-row), re-runs `scripts/build_prd_registers.py`, and the owning module doc "
+        "is updated in the same change.",
+        "",
+    ]
+    for b in buckets:
+        rows = sorted(per_bucket[b], key=lambda m: (m["sec"], m["n"]))
+        out.append(f"## {b} — {len(rows)} questions\n")
+        if b == internal:
+            out.append("These are the questions the Tech Lead can decide now; each carries a "
+                       "proposal marked *Proposed — pending sign-off*. Proposals adopt the "
+                       "PRD's own 'Recommended:' text where present, or the binding spec where "
+                       "it already decided the point. They are **not** decisions until "
+                       "FunderBlu (the relevant owner) signs off.\n")
+        out.append("| # | Section | Question | Note |")
+        out.append("|---|---|---|---|")
+        for i, m in enumerate(rows, 1):
+            out.append(f"| {i} | {md_cell(m['sec'])} | {md_cell(m['q'])} | "
+                       f"{md_cell(m.get('note') or '—')} |")
+        out.append("")
+    total = len(data["open_questions"])
+    answered = total - sum(1 for q in data["open_questions"] if is_open(q))
+    out.append("---")
+    out.append(f"\nCounts by stakeholder: " +
+               ", ".join(f"{b} {len(per_bucket[b])}" for b in buckets) +
+               f". Total: **{len(matched)}** of {total} PRD questions are open "
+               f"({answered} answered — in the docs/37 register; answers captured in the "
+               "workbook outrank prose elsewhere).\n")
     return "\n".join(out) + "\n"
 
 
@@ -352,6 +502,7 @@ def build_change_log(data: dict) -> str:
 BUILDERS = {
     "36-prd-feature-proposals.md": build_proposals,
     "37-prd-open-questions.md": build_open_questions,
+    "37a-stakeholder-questions-for-funderblu.md": build_stakeholder_handoff,
     "38-prd-out-of-scope.md": build_out_of_scope,
     "39-prd-change-log.md": build_change_log,
 }

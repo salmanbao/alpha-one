@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.activated.v1.json",
-  "title": "Alpha One — event tenant.activated v1",
-  "description": "V1 catalog event `tenant.activated` (v1). Envelope per EVT-03. Consumers: GW (allow traffic), NOT (owner), AUD, ANA.",
+  "title": "Alpha One \u2014 event tenant.activated v1",
+  "description": "V1 catalog event `tenant.activated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = GW (allow traffic), NOT-01, AUD, ANA-01. Derived from: docs/03 \u00a74.1 (tenant.activated, onboarding checklist complete) + docs/32 `tenants.activated_at`. Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,29 +15,27 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "activated_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
             },
             "activated_by": {
-              "type": "string"
+              "$ref": "envelope.schema.json#/$defs/ULID"
             }
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "activated_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

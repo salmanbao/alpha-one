@@ -14,6 +14,9 @@ file in place.
 ```bash
 python3 scripts/build_contracts.py           # OpenAPI specs + extended event schemas
 python3 scripts/complete_contracts_pack.py   # post-V1 api specs, examples, extended registries
+python3 scripts/build_v1_payloads.py         # V1 event payload schemas (payloads/)
+python3 scripts/check_event_payloads.py      # CI gate: every catalog event has a payload schema
+                                             #   (2020-12 schema, type-const match, no float money)
 ```
 
 ## Layout
@@ -31,8 +34,8 @@ contracts/
 │   ├── dictionary.md          #   canonical field dictionary
 │   └── schemas/*.sql          #   per-module DDL, split from docs/32 (26 files, 06/16/17 incl.)
 ├── events/
-│   ├── catalog.md             #   V1 baseline event catalog (18 events, Req-ID-cited)
-│   ├── payloads/              #   V1 baseline payload schemas (19 files incl. envelope)
+│   ├── catalog.md             #   V1 baseline event catalog (37 events, Req-ID-cited)
+│   ├── payloads/              #   V1 baseline payload schemas (40 files: 39 event schemas incl. 2 risk.* + envelope)
 │   ├── extended/              #   post-V1 topic schemas, JSON Schema 2020-12 (32 files, 141 events)
 │   └── examples/              #   illustrative example per extended event (141 fixtures + README)
 ├── errors/taxonomy.md         #   error registry: 66 V1 codes (binding) + 232 extended (provisional)
@@ -42,7 +45,7 @@ contracts/
 
 **Scope numbers (2026-09-19):** 26 OpenAPI specs (**445**
 operations), 36 api specs, 26 SQL schemas, 32 extended event
-schemas (**141 events**) + 141 examples, 19 V1 payloads,
+schemas (**141 events**) + 141 examples, 39 V1 payload schemas,
 298 error codes, 100 permission keys, 8 diagrams.
 
 ## Pack index (per module)

@@ -111,5 +111,7 @@ flowchart TD
 
 Note: edges are the union of `Depends On` references between modules in the sheet. Intra-module dependencies (e.g. AUTH-07 depending on nothing) are omitted. Arrow = "depends on".
 
-## Open contract questions
-- TODO — needs owner decision: confirm the critical path (OPS → TEN → AUTH → GW → EVT → EVL/BRG → LCC → CHK → PAY → LED) matches the working session's sequencing.
+**The sheet's graph is cyclic** (LCC ⇄ BRG, EVL ⇄ LCC via CHK, PAY → LCC, LED ⇄ CHK/PAY, …) — a dependency graph with cycles has no linear topological order, so this picture must not be read as a strict total order. The **binding build order is the phase plan**, not the raw edge list: Phase-0 prefix `OPS → TEN → AUTH → GW → EVT` (LED/AUD/CON fold into 0.8; frozen V0 contracts land at 0.10) and Phase-1 `LCC → BRG → EVL → RSK → KYC → CHK → PAY` (docs/01 §8, docs/99). Within Phase 1, `LCC → BRG → EVL` is the **deliberate cycle-break**: the V0 contracts frozen at 0.10 (envelope, payload schemas, error taxonomy — `contracts/`) let both sides of every cross pair build and integrate in parallel without waiting on the other.
+
+## Confirmed sequencing (resolved 2026-09-20, gap-closure pass)
+The earlier candidate path "OPS → TEN → AUTH → GW → EVT → **EVL/BRG → LCC** → CHK → PAY → LED" was a misreading of the edge direction (the sheet's edges say LCC depends on BRG/EVL, not the reverse). Confirmed against docs/01 §8 and docs/99: **OPS → TEN → AUTH → GW → EVT, then LCC → BRG → EVL → RSK → KYC → CHK → PAY** — the order above, not one that puts EVL/BRG before LCC.

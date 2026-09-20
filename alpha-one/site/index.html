@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alpha One — Platform Specification</title>
+<meta name="description" content="Complete specification & contract pack for Alpha One, a Prop Firm-as-a-Service platform: 65 spec docs, 37 V1 events, 33 API contracts, decision registers.">
+<link rel="stylesheet" href="styles.css">
+<script>/* set theme before first paint */
+try{var t=localStorage.getItem('a1-theme');if(!t)t=matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';document.documentElement.dataset.theme=t;}catch(e){}
+</script>
+</head>
+<body>
+<div class="progress" id="progress" aria-hidden="true"></div>
+<button class="hamburger" id="hamburger" type="button" aria-label="Toggle navigation" aria-expanded="false">☰</button>
+<div class="overlay" id="overlay"></div>
+
+<div class="layout">
+<aside class="sidebar" id="sidebar">
+  <div class="sb-head">
+    <a class="sb-brand" href="#/"><span class="sb-logo">◈</span> Alpha One <span class="sb-tag">spec</span></a>
+    <div class="sb-search">
+      <input id="nav-search" type="search" placeholder="Search the spec…  ( / )" autocomplete="off" aria-label="Search the specification">
+    </div>
+  </div>
+  <nav class="sb-nav" id="sb-nav" aria-label="Specification"></nav>
+  <div class="sb-foot">
+    <a class="sb-chip frozen" href="#/doc/00-executive-brief">frozen · self-consistent</a>
+    <a class="sb-chip open" href="#/registers">197 PRD questions open →</a>
+  </div>
+</aside>
+
+<div class="content-col">
+<header class="topbar">
+  <div class="topbar-crumb" id="crumb">Alpha One — Platform Specification</div>
+  <div class="topbar-actions">
+    <a class="tbtn" href="../docs/" target="_blank" title="Browse the raw markdown">Markdown</a>
+    <button class="tbtn" id="theme-toggle" type="button" aria-label="Toggle color theme" title="Theme (t)">◐</button>
+  </div>
+</header>
+
+<main class="content" id="view" tabindex="-1"></main>
+
+<aside class="rail" id="rail" aria-label="On this page">
+  <div class="rail-box">
+    <h4>On this page</h4>
+    <ol class="rail-list" id="rail-list"></ol>
+  </div>
+</aside>
+</div>
+</div>
+
+<button class="totop" id="totop" type="button" aria-label="Back to top">↑</button>
+<script src="vendor/marked.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -37,6 +37,6 @@ sequenceDiagram
     LCC->>T: credentials delivered via portal + email (BRG-06, NOT-03)
 ```
 
-## Open contract questions
-- TODO — needs owner decision: webhook tenant routing (how the provider call maps to the tenant).
-- TODO — needs owner decision: failed-payment retry branch (CHK-16, V1.1) flow placement.
+## Confirmed by citation (resolved 2026-09-20, gap-closure pass — docs/12, docs/32)
+- **Webhook tenant routing** — the webhook route is per-provider, not per-tenant: `POST /v1/webhooks/{provider}` (docs/12 §2/§3.2; signature verified by EVT-10). The provider payload carries the provider-side transaction reference, which maps to `payment_intents` via the `(provider, provider_ref)` index (`idx_pint_provider_ref`, docs/32 §12) — the intent row's `tenant_id` is the routing key for everything downstream, and the resolved tenant is stamped onto `provider_events` (docs/32 §4) for idempotency and audit. There is no tenant in the URL and no per-tenant webhook endpoint in V1.
+- **Failed-payment retry branch** — it is *not* a separate flow placement: the intent state machine (docs/12 §3.2) carries it — `pending ──webhook failed──► failed`, and a retry is **a new payment intent on the same order** (fresh `idempotency_key`, same `order_id`); the order stays `open` until any intent is captured. V1.1's CHK-16 formalizes the retry surface; in V1.0 the trader simply re-initiates from the order. Non-recoverable states (e.g. order already paid) → `order.not_retryable` (409).

@@ -2,13 +2,23 @@
 
 Status: DRAFT
 Owner: TBD
-Last updated: TODO
+Last updated: 2026-09-20 (rendering tool pinned, PNG-vs-CI decided, all "needs owner decision" markers resolved — see the note below each diagram source)
 
 Derived from the V1 Execution Sheet of `Alpha One PRD.xlsx`.
 
-Each diagram has a Mermaid source in a sibling `.md` file. The zero-byte `.png` files are placeholders: **render the Mermaid to PNG** (and replace the placeholder) before contract freeze. Rendering tool: TODO — needs owner decision (mermaid-cli suggested).
+Each diagram has a Mermaid source in a sibling `.md` file. **Rendering tool
+(pinned 2026-09-20):** `@mermaid-js/mermaid-cli` (mermaid-cli v11, already a
+declared dependency of `prop-firm-bridge/` — `npm i && npx mmdc -i <file>.md
+-o <file>.png` from that directory; its `puppeteer.json` supplies the
+`--no-sandbox` flags this environment needs). **PNG strategy (pinned
+2026-09-20): the rendered PNGs are committed in-repo** — the contract-freeze
+review happens in the docs, not in CI, and mermaid-cli needs a Chromium
+download that not every build environment can guarantee. When a Mermaid
+source changes, re-render its PNG in the same change (a reviewer noticing a
+stale PNG is a merge blocker, not a CI failure). CI wiring is a V2
+candidate, not a V1 requirement.
 
-| Diagram | Mermaid source | PNG placeholder | Cites |
+| Diagram | Mermaid source | PNG (rendered, committed) | Cites |
 |---|---|---|---|
 | Service lanes | `lanes.md` | `lanes.png` | OPS-01 (api, workers, relay, bot, frontends) |
 | Purchase flow | `purchase-flow.md` | `purchase-flow.png` | CHK-06, CHK-07, CHK-08, CHK-09, LCC-05 |
@@ -19,5 +29,7 @@ Each diagram has a Mermaid source in a sibling `.md` file. The zero-byte `.png` 
 | Event bus | `event-bus.md` | `event-bus.png` | EVT-01, EVT-02, EVT-05, EVT-08 |
 | Build order | `build-order.md` | `build-order.png` | Depends On column, V1 Execution Sheet |
 
-## Open contract questions
-- TODO — needs owner decision: PNG rendering tool and whether PNGs stay in-repo or are generated in CI.
+## Rendering & staleness (resolved 2026-09-20, gap-closure pass)
+- Tool: mermaid-cli v11 via `prop-firm-bridge/node_modules/.bin/mmdc` (Chromium via puppeteer; `puppeteer.json` args `--no-sandbox --disable-setuid-sandbox --disable-dev-shm-usage`).
+- All 8 PNGs above are currently rendered from the committed sources (last render 2026-09-20). Diagrams whose sources changed in the 2026-09-20 gap-closure pass: `build-order.md`, `event-bus.md`, `purchase-flow.md`, `payout-flow.md` (plus the `PayoutPaid` → `payout.settled` rename touching `event-bus.md`/`payout-flow.md`) — re-render these four before contract freeze.
+- The Mermaid sources are the source of truth; a PNG that contradicts its source is treated as a contract defect.

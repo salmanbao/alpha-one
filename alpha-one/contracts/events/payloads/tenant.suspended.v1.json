@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.suspended.v1.json",
-  "title": "Alpha One — event tenant.suspended v1",
-  "description": "V1 catalog event `tenant.suspended` (v1). Envelope per EVT-03. Consumers: AUTH (kill sessions), GW (deny), NOT (owner), AUD — all stop within 1 s (TEN-15).",
+  "title": "Alpha One \u2014 event tenant.suspended v1",
+  "description": "V1 catalog event `tenant.suspended` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = AUTH (kill sessions), GW (deny), NOT-01, AUD \u2014 all within 1 s. Derived from: docs/03 \u00a74.1 (tenant.suspended, TEN-15 cascade) + docs/32 `tenants` (suspended_at, suspension_reason). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,30 +15,19 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "reason_code": {
-              "type": "string",
-              "enum": [
-                "billing",
-                "abuse",
-                "risk",
-                "manual",
-                "provider"
-              ]
+              "type": "string"
             },
             "reason_text": {
-              "type": "string"
+              "type": "string",
+              "description": "tenants.suspension_reason"
             },
             "actor": {
-              "type": "string"
+              "type": "string",
+              "description": "platform staff identity or 'system'"
             },
             "suspended_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -46,12 +35,16 @@
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "reason_code",
             "suspended_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

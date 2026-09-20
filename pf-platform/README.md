@@ -1,3 +1,12 @@
+> **⚠ Research scaffold — not a production design.** This codebase is
+> executable research with verified checks, *not* the production system. The
+> **binding specification is `alpha-one/docs/`** (the Alpha One spec + its
+> contract pack). Where this scaffold disagrees with the binding docs — e.g.
+> **Kafka vs Redis Streams**, **WebSocket push vs poll-only REST**, or
+> **platform-recomputed PnL vs broker-sole-truth** — **the binding docs win**
+> (see `alpha-one/docs/51-brg-review.md` §F9 for the full cross-walk).
+> Nothing here should be read as a V1 implementation decision.
+
 # pf-platform — working scaffold
 
 Executable companion to the design report in [`../prop-firm-bridge/`](../prop-firm-bridge)

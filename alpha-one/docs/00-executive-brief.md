@@ -1,5 +1,20 @@
 # 00 — Executive Brief
 
+> **Status (2026-09-20, gap-closure pass) — what "frozen" means and does not
+> mean.** The spec is **frozen in the narrow sense**: the 64 docs, the contract
+> pack (`contracts/`), and the generated registers all agree with each other —
+> no further consistency pass is needed. "Frozen" does **not** mean
+> "business-complete": **197 of the 205 PRD open questions (docs/37) are still
+> unanswered by their owners** — FunderBlu's COO, Risk Owner, Ops Owner,
+> Product Owner, Marketing, Legal, CEO, and the broker — and 5
+> design-review questions remain open. Those 197 are **triaged by who can
+> answer each one** in the docs/37 triage section and handed off flat in
+> **docs/37a-stakeholder-questions-for-funderblu.md**; the Tech-Lead-decidable
+> subset (43) carries *Proposed — pending sign-off* answers, and nothing is
+> marked "Answered" without a real owner decision (the D-number convention).
+> Until the owners reply, "frozen" = "self-consistent", not "ready to sign
+> off".
+
 ## 1. What we are building
 
 **Alpha One** is a **Prop Firm as a Service (PFaaS)** platform. A prop firm buys
@@ -174,10 +189,20 @@ following two quarters.
    event consumer tolerates redelivery (at-least-once bus).
 5. **The broker is the source of truth for trading state.** We do not trust our own
    copy. Sync gaps are detected, alerted, and never silently filled.
-6. **Boring technology.** The platform must be operable by a 1-person DevOps team:
-   Docker Compose on Hetzner, no Kubernetes, no Kafka, no microservice sprawl.
-   "Monolith-lite": one deployable per concern (bridge, core API, workers), shared
-   Postgres.
+6. **Boring technology, honestly scoped.** The platform must be operable by a
+   1-person DevOps team: Docker Compose on Hetzner, no Kubernetes, no Kafka, no
+   microservice sprawl. That is a *13 deployable* stack (docs/01 §1.1: web,
+   zitadel, api, bridge, engine, relay, workers, docs-worker, db, db-proxy,
+   redis, hook0, flipt — plus a minimal Prometheus/Grafana pair), which is only
+   operable by one person because the deployables split into two operational
+   classes: **install-and-forget** (unmodified upstream images: zitadel, hook0,
+   flipt, db, db-proxy, redis — version bumps only) and **active attention**
+   (the code we own and deploy: api, bridge, engine, workers, relay, web,
+   docs-worker — releases, rollbacks, and on-call). "Monolith-lite" in code:
+   shared Postgres, domains as packages inside the deployables, no distributed
+   transactions. The honest cost is 4 runtimes (Go, Rust, Node, TS) and
+   turnkey-first upgrades; the 1-person promise is about *attention classes*,
+   not deployable count (docs/06 §2.7).
 7. **Everything auditable.** Sensitive reads and all state changes write to the audit
    trail. If it isn't audited, it doesn't ship.
 8. **Contracts freeze early.** API + event contracts are in `contracts/` and change

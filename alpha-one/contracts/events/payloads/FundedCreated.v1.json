@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "FundedCreated.v1.json",
   "title": "Alpha One \u2014 event FundedCreated v1",
-  "description": "V1 catalog event `FundedCreated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = DOC-04 (certificate), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `FundedCreated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = DOC-04 (certificate), ANA-01. Derived from: docs/07 \u00a73.1 (spawn edge: 'Funded creation \u2026 new FUNDED' with parent_account_id); funded terms per docs/11 \u00a73.2 (split_ratio_bps, frequency, first payout delay); docs/14 \u00a73.4: no V1 email (deliberate, D61 closed set). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -22,19 +22,27 @@
               "$ref": "envelope.schema.json#/$defs/ULID"
             },
             "trader_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "accounts.identity_id"
             },
             "parent_account_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "the passed evaluation account (spawn edge, docs/07 \u00a73.1)"
             },
-            "profit_split": {
-              "type": "number"
+            "split_ratio_bps": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000,
+              "description": "funded terms (docs/11 \u00a73.2): basis points, e.g. 8000 = 80% \u2014 integer, never a float ratio"
             },
             "payout_frequency": {
-              "type": "string"
+              "type": "string",
+              "description": "funded terms (docs/11 \u00a73.1): biweekly|monthly|on_demand per tenant config"
             },
-            "first_withdrawal_delay_days": {
-              "type": "integer"
+            "first_payout_delay_days": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "funded terms (docs/11 \u00a73.1 first-withdrawal delay; the D72 sub-reason name is first_payout_delay)"
             }
           },
           "additionalProperties": false,

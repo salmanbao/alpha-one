@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.created.v1.json",
-  "title": "Alpha One — event tenant.created v1",
-  "description": "V1 catalog event `tenant.created` (v1). Envelope per EVT-03. Consumers: AUD, CON, NOT (owner invite).",
+  "title": "Alpha One \u2014 event tenant.created v1",
+  "description": "V1 catalog event `tenant.created` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = AUD, CON-01, NOT-01 (owner). Derived from: docs/03 \u00a74.1 (tenant.created, TEN-01) + docs/32 `tenants` (slug, firm_name, idp_org_id, jurisdiction, plan, created_by). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,32 +15,33 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "slug": {
-              "type": "string"
+              "type": "string",
+              "description": "tenants.slug (the {slug}.alpha1.io domain root)"
             },
             "firm_name": {
               "type": "string"
             },
             "idp_org_id": {
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "tenants.idp_org_id \u2014 NULL until provisioning"
             },
             "jurisdiction": {
-              "type": "string"
+              "type": "string",
+              "description": "tenants.jurisdiction (ISO-3166-1 alpha-2)"
             },
             "plan": {
-              "type": "string"
+              "type": "string",
+              "description": "tenants.plan (contract ref in V1)"
             },
             "created_by": {
-              "type": "string"
+              "$ref": "envelope.schema.json#/$defs/ULID"
             },
             "created_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -48,13 +49,17 @@
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "slug",
             "firm_name",
             "created_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

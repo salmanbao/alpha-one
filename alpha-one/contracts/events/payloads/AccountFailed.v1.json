@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "AccountFailed.v1.json",
   "title": "Alpha One \u2014 event AccountFailed v1",
-  "description": "V1 catalog event `AccountFailed` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: phase failed), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `AccountFailed` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: phase failed), ANA-01. Derived from: docs/07 \u00a73.2 (CLOSING\u2192FAILED: 'FAILED recorded only after real closure (BRG-11); AccountFailed (LCC-23)'); docs/32 `accounts.failed_reason`. Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -26,7 +26,8 @@
               "minimum": 1
             },
             "reason": {
-              "type": "string"
+              "type": "string",
+              "description": "accounts.failed_reason: 'breach:{rule}' | 'expired' (D30)"
             },
             "failed_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"

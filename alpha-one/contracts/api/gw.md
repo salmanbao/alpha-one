@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 only). Nothing here is final until contract freeze.
 

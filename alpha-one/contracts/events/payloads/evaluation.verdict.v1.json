@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "evaluation.verdict.v1.json",
   "title": "Alpha One \u2014 event evaluation.verdict v1",
-  "description": "V1 catalog event `evaluation.verdict` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43), NOT-01, DOC-04 (TD-25 breach report), AUD (critical on breach), RSK (V2 case open). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `evaluation.verdict` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43), NOT-01, DOC-04 (TD-25 breach report), AUD (critical on breach), RSK (V2 case open). Derived from: docs/09 \u00a73.4 (verdict priority + emission) + docs/32 `evaluations` (status enum, rule_id, input_hash); comparison fields per docs/09 \u00a73.3 (limit_cents, tolerance_cents). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -31,7 +31,7 @@
                 "target_hit",
                 "gap_flagged"
               ],
-              "description": "target_hit_pending is recorded in evaluations.status only \u2014 it is never emitted (docs/09 \u00a73.4)"
+              "description": "evaluations.status minus the non-emitted states (ok is not an event; target_hit_pending is recorded only \u2014 docs/09 \u00a73.4)"
             },
             "rule_id": {
               "type": "string",

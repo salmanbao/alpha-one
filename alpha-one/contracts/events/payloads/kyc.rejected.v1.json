@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "kyc.rejected.v1.json",
   "title": "Alpha One \u2014 event kyc.rejected v1",
-  "description": "V1 catalog event `kyc.rejected` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: KYC result), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `kyc.rejected` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: kyc_rejected \u2014 D61 split), ANA-01. Derived from: docs/13 \u00a74.1 (V1 kyc.* events) + docs/32 `kyc_sessions` (reject_reason_class \u2014 what the trader sees). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -18,14 +18,17 @@
         "payload": {
           "type": "object",
           "properties": {
-            "kyc_verification_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
+            "kyc_session_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "kyc_sessions.id (API alias kyc_verification_id)"
             },
             "trader_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "kyc_sessions.identity_id"
             },
             "reason": {
-              "type": "string"
+              "type": "string",
+              "description": "kyc_sessions.reject_reason_class (detail is staff-only, never in the payload)"
             },
             "rejected_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -33,7 +36,7 @@
           },
           "additionalProperties": false,
           "required": [
-            "kyc_verification_id",
+            "kyc_session_id",
             "trader_id",
             "reason",
             "rejected_at"

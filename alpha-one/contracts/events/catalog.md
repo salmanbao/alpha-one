@@ -3,23 +3,23 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: 2026-09-17
+Last updated: 2026-09-20
 
 Derived from the `V1 Execution Sheet` (releases V1.0 and V1.1 only) of `Alpha One PRD.xlsx`.
 Every event uses the EVT-03 envelope: `id`, `type`, `version`, `tenant_id`, `occurred_at`, `correlation_id`, `payload` (correlation_id required since the ninth pass — docs/49 C1; it is GW step 8's propagation promise made contractual).
-Delivery is at-least-once with idempotent consumers (EVT-05). Payload field values are TODO until owners fill them in.
+Delivery is at-least-once with idempotent consumers (EVT-05). Every event's payload schema (field names/types) is a JSON Schema in `payloads/` — the sheet defines only the envelope (EVT-03), and the per-event payloads were pinned in the gap-closure pass of 2026-09-20, each derived from the owning module doc and the docs/32 DDL (source section cited in each schema's `description`); `scripts/check_event_payloads.py` fails the build if any catalog event lacks its schema.
 
 ## Lifecycle events — producer: LCC (LCC-23, emitted through the outbox per EVT-01)
 
 | Event | Version | Producer | Consumers | Payload |
 |---|---|---|---|---|
 | AccountCreated | v1 | LCC-23 | NOT-01 (NOT-05 template: account created), ANA-01 | `payloads/AccountCreated.v1.json` |
-| PhaseAdvanced | v1 | LCC-23 | ANA-01 | `payloads/PhaseAdvanced.v1.json` |
+| PhaseAdvanced | v1 | LCC-23 | ANA-01 only — NOT-01 does NOT consume it (resolved 2026-09-20: the V1 template set (D61, docs/14 §3.4) has no "phase advanced" template; the trader-facing phase-completion email is `phase_passed` ← `AccountPassed`. `PhaseAdvanced` is the internal progression signal for the read models) | `payloads/PhaseAdvanced.v1.json` |
 | AccountPassed | v1 | LCC-23 | NOT-01 (NOT-05 template: phase passed), DOC-04 (certificate), ANA-01 | `payloads/AccountPassed.v1.json` |
 | AccountBreached | v1 | LCC-23 | NOT-01 (NOT-05 template: breach), ANA-01 | `payloads/AccountBreached.v1.json` |
 | AccountFailed | v1 | LCC-23 | NOT-01 (NOT-05 template: phase failed), ANA-01 | `payloads/AccountFailed.v1.json` |
-| FundedCreated | v1 | LCC-23 | DOC-04 (certificate), ANA-01; NOT-01 — TODO — needs owner decision (citation not directly supported by sheet: no funded-account template in NOT-05) | `payloads/FundedCreated.v1.json` |
-| Suspended | v1 | LCC-23 | PAY-04 (holds payouts on active suspension — mechanism, event vs status check, TODO — needs owner decision), ANA-01 | `payloads/Suspended.v1.json` |
+| FundedCreated | v1 | LCC-23 | DOC-04 (certificate), ANA-01 — NOT-01 does NOT consume it (resolved 2026-09-20: the closed V1 template set (D61, docs/14 §3.4) deliberately carries no funded-account template — funding is confirmed by the DOC-04 certificate + the TD funded view; adding a funded email is a scope change to the closed D61 set, docs/14 §3.4) | `payloads/FundedCreated.v1.json` |
+| Suspended | v1 | LCC-23 | PAY-04 (payout hold while suspension is active — resolved 2026-09-20: **status check, not event consumption**: PAY-03/PAY-04 read `accounts.state == SUSPENDED` synchronously at request and approval time (docs/11 §3.1/§3.7, D39); the event informs ANA only — a suspended account whose event is delayed must still be blocked the moment the state is read), ANA-01 — NOT-01 does NOT consume it (resolved 2026-09-20: no suspension template in the closed D61 set; the trader sees the state in TD and at the payout gate, the D63 "silent" pattern, docs/14 §3.4) | `payloads/Suspended.v1.json` |
 | Resumed | v1 | LCC-23 | ANA-01 | `payloads/Resumed.v1.json` |
 | account.activated | v1 | LCC (CREATED → ACTIVE on broker.created) — tenth pass D28 (docs/50) | BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD | `payloads/account.activated.v1.json` |
 | account.day_rolled | v1 | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA | `payloads/account.day_rolled.v1.json` |
@@ -52,21 +52,21 @@ Resolved 2026-09-16 (Decision 5): KYC-05 emits these five events through the out
 
 | Event | Version | Producer | Consumers | Payload |
 |---|---|---|---|---|
-| kyc.submitted | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 — consumer link per KYC-16's story ("so that lifecycle auto-upgrade and payout eligibility react without coupling"; LCC-07 / KYC-07 / KYC-08 gates remain synchronous status checks, not event consumption) | `payloads/kyc.submitted.v1.json` |
-| kyc.approved | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), LCC-06 (auto-upgrade on approval), PAY-03 (payout eligibility reacts without coupling), ANA-01 | `payloads/kyc.approved.v1.json` |
-| kyc.rejected | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 | `payloads/kyc.rejected.v1.json` |
-| kyc.expired | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 + the session-TTL worker (D43, docs/53: 24 h session expiry) | NOT-01 (NOT-05 template: KYC result), ANA-01 — trigger resolved 2026-09-19 (D43: session TTL only; APPROVED never expires in V1) | `payloads/kyc.expired.v1.json` |
-| kyc.resubmission_requested | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: KYC result), ANA-01 | `payloads/kyc.resubmission_requested.v1.json` |
+| kyc.submitted | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | ANA-01 (no V1 email — D61: `kyc.submitted` is the pre-decision record; the trader just submitted, there is nothing to tell them) — consumer link per KYC-16's story ("so that lifecycle auto-upgrade and payout eligibility react without coupling"; LCC-07 / KYC-07 / KYC-08 gates remain synchronous status checks, not event consumption) | `payloads/kyc.submitted.v1.json` |
+| kyc.approved | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: `kyc_approved` — D61 split), LCC-06 (auto-upgrade on approval), PAY-03 (payout eligibility reacts without coupling), ANA-01 | `payloads/kyc.approved.v1.json` |
+| kyc.rejected | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: `kyc_rejected` — D61 split), ANA-01 | `payloads/kyc.rejected.v1.json` |
+| kyc.expired | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 + the session-TTL worker (D43, docs/53: 24 h session expiry) | ANA-01 (no V1 email — D63: expiry is silent in V1; the portal shows the status and the payout gate's `kyc.required` redirect is the signal) — trigger resolved 2026-09-19 (D43: session TTL only; APPROVED never expires in V1) | `payloads/kyc.expired.v1.json` |
+| kyc.resubmission_requested | v1 | KYC-05 (webhook status handling, via outbox per EVT-01), KYC-16 | NOT-01 (NOT-05 template: `kyc_needs_docs` — D61 split), ANA-01 | `payloads/kyc.resubmission_requested.v1.json` |
 
-Note: the "KYC result" NOT-05 template's per-event mapping (which of the five events fires it) is TODO — needs owner decision.
+Note: the "KYC result" NOT-05 template's per-event mapping is **resolved (D61, docs/58)** — the single "KYC result" template was split per event: `kyc_approved` ← `kyc.approved`, `kyc_rejected` ← `kyc.rejected`, `kyc_needs_docs` ← `kyc.resubmission_requested`; `kyc.submitted` fires no V1 email (pre-decision) and `kyc.expired` is silent in V1 (D63). docs/14 §3.4 is the binding list.
 
 ## Payout events
 
 | Event | Version | Producer | Consumers | Payload |
 |---|---|---|---|---|
-| payout.approved | v1 | PAY-09 | LED-07 (payout obligation posting), NOT-01 (NOT-05 template: payout approved), ANA-01 | `payloads/payout.approved.v1.json` |
-| payout.rejected | v1 | PAY-09 | NOT-01 (NOT-05 template: payout rejected), ANA-01 | `payloads/payout.rejected.v1.json` |
-| PayoutPaid | v1 | PAY-12 (execution recording, via outbox per EVT-01) — resolved 2026-09-16 (Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 | `payloads/PayoutPaid.v1.json` |
+| payout.approved | v1 | PAY-09 | LED-07 (payout obligation posting), NOT-01 (NOT-05 template: `payout_approved` — D61: fired by event consumption through the docs/14 §3.3 mapping table, not by a direct call from PAY-09), ANA-01 | `payloads/payout.approved.v1.json` |
+| payout.rejected | v1 | PAY-09 | NOT-01 (NOT-05 template: `payout_rejected` — D61, same mechanism), ANA-01 | `payloads/payout.rejected.v1.json` |
+| payout.settled | v1 | PAY-12 (execution recording, via outbox per EVT-01) — resolved 2026-09-16 (Decision 6; renamed from the sheet's `PayoutPaid` by D60, docs/58) | LED-08 (settlement posting), DOC-04 (receipt), ANA-01 | `payloads/payout.settled.v1.json` |
 
 ## Identity events — producer: AUTH (ADR-13 model; V1 baseline)
 
@@ -110,7 +110,9 @@ docs/31 §2 with the rest of the extended catalog.
 
 ## Open contract questions
 
-- TODO — needs owner decision: payload schemas (field names/types) for every event above; the sheet defines only the envelope (EVT-03).
-- TODO — needs owner decision: NOT-01's delivery mechanism for the "payout approved" / "payout rejected" templates — NOT-01 requires event consumption, but no V1 row ties the templates to payout.approved / payout.rejected; alternative is direct template triggering from PAY-09.
-- TODO — needs owner decision: is `PhaseAdvanced` consumed by NOT-01 (a "phase advanced" email is not in the NOT-05 template list)?
-- TODO — needs owner decision: event versioning policy — the catalog pins v1; confirm bump rules after contract freeze.
+**All resolved (gap-closure pass, 2026-09-20):**
+
+- ~~Payload schemas (field names/types) for every event~~ — **Done:** all 37 V1 events have a JSON Schema in `payloads/` (one file per event, plus `envelope.schema.json`), each derived from the owning module doc + the docs/32 DDL (source cited in the schema's `description`; money = integer minor units per docs/00 #3). Enforced by `scripts/check_event_payloads.py` (fails if a catalog event has no schema file or its `type` const mismatches).
+- ~~NOT-01's delivery mechanism for the "payout approved" / "payout rejected" templates~~ — **Resolved by citation (D61, docs/58; docs/14 §3.3/§3.4):** NOT-01 fires templates by **event consumption** through the event→template mapping table (docs/14 §3.3, data not code); the binding rows `payout_approved` ← `payout.approved` and `payout_rejected` ← `payout.rejected` exist in the closed V1 set (docs/14 §3.4). No direct triggering from PAY-09 — the producer emits the event, NOT maps it.
+- ~~Is `PhaseAdvanced` consumed by NOT-01?~~ — **No, deliberately:** the closed V1 template set (D61) contains no "phase advanced" template; the trader-facing phase-completion email is `phase_passed` ← `AccountPassed` (docs/14 §3.4). `PhaseAdvanced` stays ANA-only.
+- ~~Event versioning policy~~ — **Resolved by citation (docs/01 §4.2, ADR-7):** `version` is the schema version of `payload`; bump on any payload change, additive-only between freezes; consumers must handle `version < max` they know about; an unknown higher version → DLQ + alert. The catalog pins v1 for every V1 event; the first payload change to any event becomes v2 under those rules at the contract-freeze session (docs/99 §12).

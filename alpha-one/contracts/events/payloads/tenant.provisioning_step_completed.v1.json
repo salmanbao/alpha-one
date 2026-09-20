@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.provisioning_step_completed.v1.json",
-  "title": "Alpha One — event tenant.provisioning_step_completed v1",
-  "description": "V1 catalog event `tenant.provisioning_step_completed` (v1). Envelope per EVT-03. Consumers: CON (live view), NOT (staff on failure).",
+  "title": "Alpha One \u2014 event tenant.provisioning_step_completed v1",
+  "description": "V1 catalog event `tenant.provisioning_step_completed` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = CON-01 (live view), NOT (staff). Derived from: docs/03 \u00a73.5 (9-step saga) + docs/32 `provisioning_jobs` (current_step, status, error_message, completed_at). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,49 +15,45 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "step": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "step_name": {
-              "type": "string"
+              "type": "string",
+              "description": "provisioning_jobs.current_step (e.g. step_1_zitadel_org)"
             },
             "status": {
               "type": "string",
               "enum": [
-                "completed",
+                "succeeded",
                 "failed"
-              ]
+              ],
+              "description": "provisioning_jobs status on this step"
             },
-            "attempt": {
-              "type": "integer",
-              "minimum": 1
+            "error_message": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "provisioning_jobs.error_message \u2014 provider-safe, never a secret"
             },
-            "error_code": {
-              "type": "string"
-            },
-            "finished_at": {
+            "completed_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
             }
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "step",
             "status",
-            "finished_at"
+            "completed_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }
