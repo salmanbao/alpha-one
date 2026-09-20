@@ -151,9 +151,9 @@ Response 200:
 
 Errors:
 - `tenant.not_found` 404 # implied by TEN-08
-- `module.unknown` 400 — module key not a V1 module # implied by TEN-08; exact behavior TODO — needs owner decision
+- `module.unknown` 400 — module key not a V1 module # registered V1 (docs/30) — the change is rejected atomically, no partial apply — resolved 2026-09-20 (docs/62)
 
-Effects: changes are manual and immediate (Out Of Scope sheet: no marketplace UI, no provisioning pipeline). Gateway enforcement point — TODO — needs owner decision (the sheet does not say where entitlements are checked per request; compare `module.not_entitled` naming).
+Effects: changes are manual and immediate (Out Of Scope sheet: no marketplace UI, no provisioning pipeline). Gateway enforcement point — resolved 2026-09-20 (docs/62): the GW chain's **step 6 (quota/entitlement gate)** checks entitlements per request from the two-level cache (docs/55 §4.7); denial uses the registered `module.not_entitled`-family code (docs/30).
 
 ### PUT /v1/tenants/{tenant_id}/integrations
 Auth: Tenant Admin — TEN-11

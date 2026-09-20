@@ -168,6 +168,10 @@ each with field-encrypted details (wallet address / account ref). Rules:
 - **Address validation (V1):** per-chain format check (length/charset/base58/bech32
   as applicable) + checksum where the chain has one (EIP-55 for ERC20 addresses);
   V2: test-transfer verification (PAY-35) + name match (PAY-07).
+- **Method confirmation (PAY-05, V1.1 — D73, docs/62):** confirm-once — a new
+  method version must be confirmed by the trader in TD (the method view +
+  an explicit confirm action) before its first payout; no per-payout
+  re-confirmation.
 - **Method change cooldown (PAY-06, V2):** a method edited < 72 h before payout
   request triggers a warning flag on the request (fraud pattern: compromised
   trader account).
@@ -287,7 +291,7 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 From `contracts/errors/taxonomy.md` (the V1 execution sheet; module PAY). These are the exact codes the V1 surfaces return; the envelope is GW-18 (`code`, `message`, `correlation_id`).
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
-| `payout.ineligible` | 422 | Failed an eligibility check; sub-reasons from PAY-03: KYC not approved (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max limits, account status | "You are not eligible for a payout yet: {reason}." |
+| `payout.ineligible` | 422 | Failed an eligibility check; **sub-reason enum (D72, docs/62 — closed, extended only at freeze):** `kyc_not_approved`, `min_trading_days`, `consistency`, `trading_day_threshold`, `first_payout_delay`, `next_payout_date`, `min_amount`, `max_amount`, `account_status`, `risk_hold` | "You are not eligible for a payout yet: {reason}." |
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." |
 | `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." |

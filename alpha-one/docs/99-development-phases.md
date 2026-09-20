@@ -353,7 +353,12 @@ re-pointed to the real sections, `audit_log` → `audit_events`, three legacy
 uppercase error codes lowercased, the `payments.*` alias family retired in
 docs/07/23/24/27/99, the `isolation.test` suite given its true home
 (01 ADR-1 / 28 §3.3 / 35 I-01), and docs/35 gained the decision-coverage
-test hooks for D64/D66/D68/D70/D71);
+test hooks for D64/D66/D68/D70/D71), and the twenty-first-pass artifact is
+`docs/62-contract-todo-sweep.md` (the contract-TODO backlog: all 53 open
+owner-questions closed — 49 by citation, 4 decided: D72 the closed
+payout-ineligible sub-reason enum, D73 the confirm-once method flow,
+D74 ops-runbook credential delivery in V1, D75 the coupon/add-on/numbering
+shapes — the contract pack is now TODO-free);
 like docs/42
 these change V1 design detail only — **no PRD workbook row was
 changed**.

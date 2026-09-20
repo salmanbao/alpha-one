@@ -753,6 +753,46 @@
       "owner": "BE-2",
       "deadline": "Phase 1 (task 1.4)",
       "answer": "**Answered 2026-09-20 \u2014 option A:** one open case per account, transactional check under a per-trader advisory lock; documented in \u00a73.2, \u00a79/DDL and the contract."
+    },
+    {
+      "id": "D72",
+      "source_doc": "62",
+      "section": "Contract-TODO backlog sweep — PAY",
+      "question": "PAYOUT INELIGIBLE CODES: payout.ineligible carries sub-reasons from the eight PAY-03 checks, but no code scheme was ever fixed (open since the twelfth pass; the taxonomy TODO also asked whether payout.kyc_required should be a dedicated top-level code like payout.risk_hold). Options \u2014 A: a closed named enum (kyc_not_approved, min_trading_days, consistency, trading_day_threshold, first_payout_delay, next_payout_date, min_amount, max_amount, account_status, risk_hold), kyc_required stays a sub-reason \u2014 one shape for all failures; B: the enum plus a dedicated top-level 423 payout.kyc_required mirroring payout.risk_hold \u2014 two shapes for the two hard gates. See docs/62 \u00a73.",
+      "raised_by": "Twenty-first-pass sweep (docs/62)",
+      "owner": "BE-2",
+      "deadline": "Contract freeze",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** the closed named enum; kyc stays a sub-reason. docs/11 \u00a76 row + api/pay.md written."
+    },
+    {
+      "id": "D73",
+      "source_doc": "62",
+      "section": "Contract-TODO backlog sweep — PAY",
+      "question": "METHOD CONFIRMATION (PAY-05/06, V1.1): 'save and confirm' had no defined steps and the Out-Of-Scope PAY-06 cooldown is not a V1 row (open since the twelfth pass). Options \u2014 A: confirm-once \u2014 a new method version must be confirmed by the trader in TD before its first payout; the registered 72-h cooldown guards changes; no per-payout re-confirmation; B: confirm every payout (strongest anti-fraud, but a step on every payout). See docs/62 \u00a73.",
+      "raised_by": "Twenty-first-pass sweep (docs/62)",
+      "owner": "BE-2 + FE-1",
+      "deadline": "Phase 2 (V1.1 slice)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** confirm-once at first payout + the 72-h cooldown. docs/11 \u00a73 + api/pay.md written."
+    },
+    {
+      "id": "D74",
+      "source_doc": "62",
+      "section": "Contract-TODO backlog sweep — BRG",
+      "question": "CREDENTIAL DELIVERY (BRG-06): traders need their MT5 credentials, NOT-05 has no credentials template, and the email-vs-security question was carried twice (bridge pass, NOT pass). Options \u2014 A: ops-runbook delivery in V1 \u2014 staff copy credentials from the ADM detail view (sensitive-read audited, the KYC-doc pattern) and deliver through the firm's own channel; no template; automated V2 delivery with its own security design (one-time link); B: automated email in V1 (convenient, but live trading credentials in email). See docs/62 \u00a73.",
+      "raised_by": "Twenty-first-pass sweep (docs/62; carried from docs/51 + docs/58)",
+      "owner": "BE-1",
+      "deadline": "Phase 1 (task 1.2)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** ops-runbook delivery in V1; no template (the D61 set stands). docs/08 \u00a72/\u00a716 + api/brg.md written."
+    },
+    {
+      "id": "D75",
+      "source_doc": "62",
+      "section": "Contract-TODO backlog sweep — CHK",
+      "question": "CHECKOUT CATALOG GAPS: CHK-02 reserves a coupon with no coupon model, TD-09 mentions add-ons with no catalog representation, and CHK-08/40 have no numbering scheme (three open TODOs since the thirteenth pass). Options \u2014 A: minimal V1 shapes \u2014 coupons as tenant-managed catalog rows (code, %/flat off, usage limit, expiry; challenge.write family; validated at reservation), add-ons defer to V2, ORD-/INV-{TENANT}-{YY}-{seq6} numbering; B: leave all three for the contract-freeze session with the tenant's finance input. See docs/62 \u00a73.",
+      "raised_by": "Twenty-first-pass sweep (docs/62)",
+      "owner": "BE-2",
+      "deadline": "Contract freeze",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** minimal V1 shapes for all three; docs/12 \u00a79 + api/chk.md written."
     }
   ]
 }

@@ -11,14 +11,14 @@ Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until c
 Audit event schema (AUD-01), single audit service API (AUD-03), append-only storage (AUD-04), audit log access/export itself audited (AUD-21), sensitive data access audit (AUD-23, V1.1). (AUD-01, AUD-03, AUD-04, AUD-21, AUD-23)
 
 ## Auth
-Read/search/export endpoints in admin group (GW-01). Who may read audit logs — TODO — needs owner decision (an `audit.read`-style permission was referenced in earlier drafts (AUD-06) but that Req ID is not in the V1 sheet; AUD-21 implies viewing/searching/exporting happens but grants no role).
+Read/search/export endpoints in admin group (GW-01). Who may read audit logs — resolved 2026-09-20 (docs/62): `audit.read` / `audit.export` (registry, D14-era) bound to `firm:owner`, `firm:admin`, `firm:compliance` (roles.yaml); every view/search/export is itself recorded.
 
 ## Tenant resolution
 From domain (GW-02). Audit entries are tenant-scoped (AUD-01 records tenant).
 
 ## Permissions
-- `audit.read` — view/search audit log # derived from AUD-21 — TODO — needs owner decision on key name and role
-- `audit.export` — export audit log # derived from AUD-21 — TODO — needs owner decision
+- `audit.read` — view/search audit log # registered (D14-era registry, AUD-21); owner/admin/compliance — resolved 2026-09-20 (docs/62)
+- `audit.export` — export audit log # registered; owner/admin/compliance — resolved 2026-09-20 (docs/62)
 
 ## Idempotency
 n/a for reads; exports accept an idempotency key per GW-12.
@@ -31,7 +31,7 @@ Tenant: from domain (GW-02)
 Permission: `audit.read` # AUD-21
 Idempotency: n/a
 
-Query filters — TODO — needs owner decision (AUD-01 schema suggests actor, action, entity type/id, time range, correlation id)
+Query filters — resolved 2026-09-20 (docs/62): actor, action, resource type/id, time range, correlation_id — exactly the `audit_events` columns and indexes (docs/05 §9).
 
 Response 200:
 ```json
@@ -69,8 +69,8 @@ Side effect: the export is itself recorded # AUD-21
 - AUD-23 sensitive access (V1.1): staff access to KYC documents, payout methods, and personal data audited with actor, reason, permission, entity (consumers: KYC-11 manual review, PAY-05 methods).
 
 ## Open contract questions
-- TODO — needs owner decision: who can read audit logs (role/permission not granted to any V1 row).
-- TODO — needs owner decision: retention period and archival (AUD-03 mentions retention; no value in the sheet).
-- TODO — needs owner decision: before/after payload size limits and PII minimization rules (Out Of Scope: automatic PII redaction is out; "V1 minimizes PII in payloads by design" — the minimization rule needs definition).
-- TODO — needs owner decision: export format and delivery (download vs email link).
-- TODO — needs owner decision: console-side audit visibility in V1 (what the super admin console can see and with which permission; no impersonation exists in V1 per `api/auth.md`, so there is no impersonation-audit integration point).
+- Resolved 2026-09-20 (docs/62): who reads — `audit.read` (owner/admin/compliance, roles.yaml).
+- Resolved 2026-09-20 (docs/62): retention = **7 years** (the binding 00 §6 duty; docs/05 §3.5), partitioned by month; archival = the nightly R2 snapshot (docs/05 §3.5).
+- Resolved 2026-09-20 (docs/62): before/after = JSONB, capped by the GW 10 MB payload limit; PII minimization = the docs/28 §4 rule — S1/S2 data never enters payloads (refs/masks only, AUD-23); no automatic redaction in V1 (Out Of Scope stands).
+- Resolved 2026-09-20 (docs/62): export = CSV download from CON (CON-13, docs/21 §3.3), critical-audited, 7-yr retained — no email links.
+- Resolved 2026-09-20 (docs/62): console-side audit visibility in V1 = **none** — the platform audit view is a V2 CON row (docs/99 task 5 batch); cross-tenant audit reads are `platform:super_admin`-only by D25 (docs/48), with no V1 UI.

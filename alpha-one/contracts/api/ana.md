@@ -50,7 +50,7 @@ Freshness contract: values no older than one minute # ANA-32 ("update within a m
 - ANA-01 read models: tables updated from domain events (all catalog events) plus nightly aggregation jobs; reports never query operational tables.
 
 ## Events consumed
-- V1 domain events feed the read models (ANA-01: "read model tables updated from domain events plus nightly aggregation"). The per-table event mapping — TODO — needs owner decision (ANA-01 names the mechanism, not the event list).
+- V1 domain events feed the read models (ANA-01: "read model tables updated from domain events plus nightly aggregation"). The per-table event mapping — resolved 2026-09-20 (docs/62): docs/19 §3.1's feed map (equity_points ← bridge.tick; accounts_ro/traders_ro ← the LCC events; payments_daily ← order.paid; payouts_daily ← payout.*; funnel_steps ← the registered funnel events; risk_summary ← risk.case_*; kpi_snapshot ← the 30-s job).
 
 ## Open contract questions
 - Resolved 2026-09-20 (docs/59): KPI definitions = docs/19 §3.2 (active traders = 24 h; revenue = order.paid gross today; queues = payout pending / KYC manual / risk open; breach count; tick-age honesty block).

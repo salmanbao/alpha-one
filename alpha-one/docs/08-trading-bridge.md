@@ -94,7 +94,7 @@ type Connector interface {
    program allowlist).
 3. MetaApi returns login + generated trading/investor passwords → **field-
    encrypted** (BRG-44, AUTH §10.2 envelope) → `broker_accounts.credentials_enc`.
-4. BRG reports `broker.created` → LCC activates account → credentials email
+4. BRG reports `broker.created` → LCC activates account → credential delivery (D74, docs/62: no automated email in V1 — staff copy from the ADM detail view, sensitive-read audited; automated V2 template later)
    (NOT + DOC template, one-time reveal in TD).
 5. Failure: attempts ≤ 2, then `broker.failed` (LCC state) + CON alert.
 
@@ -442,7 +442,7 @@ archive V2).
 | 1. Schemas (groups, accounts, positions, deals, executions) + envelope types | BE-1 | 2 d | OPS | migrations green |
 | 2. MetaApi client + connector (info/positions/deals-since/create) + normalizer + **fixture corpus** | BE-1 | 4 d | 0, 1 | unit: 200 recorded MetaApi responses normalize deterministically |
 | 3. Scheduler (per-tenant budget, stagger, re-poll after commands) + sync writer + gap detection + `bridge.tick` | BE-1 | 4 d | 2 | 3 test accounts sync 24 h clean; injected gap → event + alert |
-| 4. Provisioning (create → creds encrypt → broker.created) + credentials email path | BE-1 | 3 d | 2, LCC | end-to-end: LCC command → real MT5 account → trader gets creds email (staging) |
+| 4. Provisioning (create → creds encrypt → broker.created) + the credential-delivery path (D74, docs/62: the ADM sensitive-read reveal, staff-delivered in V1) | BE-1 | 3 d | 2, LCC | end-to-end: LCC command → real MT5 account → staff reveal is audited and the trader receives credentials through the firm's channel (staging) |
 | 5. Executor (disable/enable/close-all) + confirm re-reads + circuit breaker + command_dead | BE-1 | 3 d | 3, LCC | breach on sandbox: positions closed < 10 s, confirmed empty |
 | 6. BRG-43 **adapter contract test suite** (fixtures + lifecycle scenarios, runnable per adapter) | BE-1 | 2 d | 2–5 | CI job `bridge-contract` green; a fake broken adapter fails it |
 | 7. Reconciliation (nightly) + provider health + dashboards + alerts | BE-2 | 3 d | 3, 5 | injected mismatch detected; MetaApi 500s → degraded state visible in CON |

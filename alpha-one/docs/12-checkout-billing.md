@@ -301,6 +301,13 @@ CREATE TABLE checkout_sessions (              -- CHK-02/43/44 (D42: added — wa
     CHECK (state IN ('reserved','completed','expired','cancelled')),
   price_snapshot  JSONB NOT NULL,           -- package_id, rule_set_id, base_cents, currency
   coupon_code     TEXT,                     -- reserved (CHK-02); released on expire/cancel
+-- Coupon model (D75, docs/62): tenant-managed catalog rows —
+--   coupons(code PK, percent_off|flat_cents, usage_limit, used_count, expires_at)
+-- maintained with the challenge pricing (challenge.write family); validated +
+-- usage-decremented at session reservation (checkout.coupon_invalid 400).
+-- Add-ons: V2 (the TD-09 catalog extension — no V1 rows).
+-- Numbering (D75): ORD-{TENANT}-{YY}-{seq6} at order creation;
+--   INV-{TENANT}-{YY}-{seq6} at invoice issue.
   reservation_expires_at TIMESTAMPTZ NOT NULL,
   order_id        ULID,                     -- set on submit (the idempotent CHK-42 create)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),

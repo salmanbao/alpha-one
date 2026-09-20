@@ -136,6 +136,8 @@ constantly).
 
 | [61-freeze-audit](docs/61-freeze-audit.md) | **The freeze audit** (twentieth pass): the cross-cutting sweep over docs/28 Security + 29 Scalability + 35 Testing — **zero new decisions needed**, every finding was already-decided text not yet propagated: the D51/D55/D56/D57/D59 OPS facts synced into the Security and Scalability aggregations (three Redis containers, pgBackRest, the warm standby's ≤ 15-min promote, the external monitors, the weekly restore verify), 30+ stale `02 §3.x` citation refs re-pointed to the restructured AUTH layout, `audit_log` → `audit_events`, three legacy uppercase error codes lowercased, the `payments.*` alias family retired across five docs, `isolation.test` given its true home, and docs/35 gained the D64/D66/D68/D70/D71 test hooks |
 
+| [62-contract-todo-sweep](docs/62-contract-todo-sweep.md) | **The contract-TODO sweep** (twenty-first pass): all 53 open owner-questions in the API contracts closed — 49 resolved by citation (keys already registered, codes already ruled, docs/09's rulepack block, D14/D25/D36/D40/D61/D66) and 4 decided: D72 the closed `payout.ineligible` sub-reason enum, D73 the confirm-once payout-method flow (PAY-05/06), D74 ops-runbook credential delivery in V1 (no automated email — carried twice, now settled), D75 the coupon/add-on/numbering shapes — the contract pack is now TODO-free for the freeze session |
+
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The
 > machine-readable mirror of every PRD sheet is `scripts/prd-workbook.json`.

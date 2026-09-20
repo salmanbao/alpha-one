@@ -82,13 +82,13 @@ Errors:
 - `console.cannot_revoke_self` 400 — the V1 baseline rule (docs/21 §6.1: revoking your own session goes through the self-service session list, not the admin revoke endpoint).
 
 ### Session semantics (CON-30, no dedicated endpoints implied)
-- Expires after inactivity — timeout value TODO — needs owner decision
-- Requires re-authentication for sensitive actions — which actions count as sensitive — TODO — needs owner decision
+- Expires after inactivity — **15 min** (the console realm carve-out, D66, docs/02 §9) — resolved 2026-09-20 (docs/62)
+- Requires re-authentication for sensitive actions — the list: impersonation start, break-glass, tenant suspend/terminate, entitlement changes (the actions docs/21 §3.3–§3.5 gate with 2FA/two-op today) — resolved 2026-09-20 (docs/62)
 
 ## Frontend note
 CON-29 (shell, navigation, layout, routing) is a frontend requirement with no API surface; it consumes the endpoints above plus tenant management (TEN-01 via `contracts/api/tenant.md`), entitlements (TEN-08), and console-visible features. No HTTP contract beyond session/auth in V1.
 
 ## Open contract questions
 - RESOLVED 2026-09-17: impersonation API surface and audit format — none in V1 (AUTH-16 separation-only; enablement TEN-16/CON-07/AUD-08 is V2.0). See `contracts/api/auth.md`.
-- TODO — needs owner decision: console inactivity timeout and step-up re-auth action list (CON-30).
-- TODO — needs owner decision: what the console can see in V1 (the sheet ships shell + tenant management + entitlements; the full console feature list is not in V1 rows).
+- Resolved 2026-09-20 (docs/62): CON-30 = the 15-min idle (D66) + the step-up list above (impersonation, break-glass, tenant suspend/terminate, entitlement changes).
+- Resolved 2026-09-20 (docs/62): the V1 console = the shell + tenant list/provisioning + entitlements + the health/incident ladder (docs/21 §3.1); the §5 roadmap rows are V2 (docs/99 task 5).

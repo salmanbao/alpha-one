@@ -107,7 +107,7 @@ Response 201:
 
 Errors:
 - `payout.method_invalid` 400 — invalid details / failed chain-specific validation # implied by PAY-05 + PAY-45
-- Confirmation flow (cooldown and re-confirmation rules referenced in Out Of Scope as "PAY-06 by design") — TODO — needs owner decision (PAY-06 is not a V1 row; confirm what V1.1 requires)
+- Confirmation flow — resolved 2026-09-20 (D73, docs/62): **confirm-once at first payout** — a new method version must be confirmed by the trader in TD (the method view + an explicit confirm action) before its first payout; the registered 72-h method-change cooldown (PAY-06-by-design) guards changes afterwards; no per-payout re-confirmation.
 
 ### GET /v1/admin/payouts/queue
 Auth: Finance Approver — PAY-08
@@ -232,8 +232,8 @@ Errors:
 
 ## Open contract questions
 - Resolved 2026-09-17: payout state machine V1 edges and reserved states — see "Payout state machine (PAY-13)" above.
-- TODO — needs owner decision: exact sub-reason codes list for `payout.ineligible` (PAY-03 names eight checks; code naming scheme open).
-- TODO — needs owner decision: payout method confirmation flow in V1.1 (PAY-05 says "save and confirm"; steps and cooldown unspecified — Out Of Scope references a PAY-06 cooldown that is not a V1 row).
+- Resolved 2026-09-20 (D72, docs/62): the sub-reason enum = `kyc_not_approved`, `min_trading_days`, `consistency`, `trading_day_threshold`, `first_payout_delay`, `next_payout_date`, `min_amount`, `max_amount`, `account_status`, `risk_hold` — closed, extended only at freeze; the trader message renders the matched reason.
+- Resolved 2026-09-20 (D73, docs/62): PAY-05's "save and confirm" = the confirm-once rule above; PAY-06's cooldown = the registered 72-h `pay.method_changed_recently` guard — both live in docs/11 §3.
 - Resolved 2026-09-19 (docs/52): the catalog consumer binding IS the tie — `payout.approved`/`payout.rejected` list NOT-01 (NOT-05 templates) as V1 consumers (contracts/events/catalog.md); NOT-01 consumes the events.
 - Resolved 2026-09-17: `failed` has no V1 entry path — reserved for V2 failure/retry (PAY-18). See "Payout state machine (PAY-13)" above.
 - Resolved 2026-09-19 (docs/52): V1 is USD-only (docs/38 Out of Scope); all amount fields are single-currency integer cents (`currency CHAR(3) DEFAULT 'USD'` stays for V2 multi-currency).

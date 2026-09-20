@@ -10,7 +10,7 @@ Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until c
 ## Scope
 Catalog consumption, checkout session with price/coupon reservation, session lifecycle (expiry worker CHK-43 + trader cancel CHK-44 — Decision 7, 2026-09-16), payment provider adapters (Match2Pay, Interkasa, crypto rails — CHK-04), hosted payment flow, payment webhook handling, order creation, provisioning trigger, failed payment handling (V1.1), receipts (V1.1), invoice download (V1.1), client retry idempotency. (CHK-01, CHK-02, CHK-04, CHK-06, CHK-07, CHK-08, CHK-09, CHK-16, CHK-17, CHK-40, CHK-42, CHK-43, CHK-44)
 
-Note: coupons are reserved in sessions (CHK-02) but coupon CRUD is not a V1 row — TODO — needs owner decision (management surface unspecified).
+Note: coupons are reserved in sessions (CHK-02) but coupon CRUD is not a V1 row — resolved 2026-09-20 (D75, docs/62): coupons are **tenant-managed catalog rows** (code, % or flat off, usage limit, expiry) maintained with the challenge pricing under the `challenge.write` key family; validated at session reservation (`checkout.coupon_invalid` 400 covers invalid/expired/exhausted).
 
 ## Auth
 Trader routes are public-or-trader per endpoint: catalog browsing is public (TD-09); everything from session create onward is **login-first** (docs/12 §1 — PRD default). Webhook routes are provider-authenticated (signature per EVT-10).
@@ -92,7 +92,7 @@ Tenant: from request subdomain (GW-02, TEN-02). Provider webhook URLs are provis
 Permission: none (signature-authenticated)
 Idempotency: required — dedupe by provider event id # CHK-07, EVT-10
 
-Request: provider-specific payload — TODO — needs owner decision per adapter (Match2Pay, Interkasa, crypto rails)
+Request: provider-specific payload — resolved 2026-09-20 (docs/62): each adapter normalizes to the canonical internal payment event (docs/12 §3.2; the EVT-10 verification utilities); the provider-specific shapes are the providers' own API docs, pinned per adapter at build — the contract fixes only the normalized schema.
 
 Response 200:
 ```json
@@ -146,7 +146,7 @@ Response 200: invoice PDF # CHK-40
 
 Errors:
 - `order.not_found` 404 # implied
-- Invoice numbering/tax fields — TODO — needs owner decision (Out Of Scope: no automatic tax calculation; manual tax fields only)
+- Invoice numbering/tax fields — resolved 2026-09-20 (D75, docs/62): invoice numbers `INV-{TENANT}-{YY}-{seq6}` issued at DOC render; tax fields are manual (Out Of Scope stands — no automatic tax calculation).
 
 ## Events emitted
 - `order.paid` — payment captured — CHK-09 (producer), consumed by LCC-05, LED-04, ANA-01.
@@ -155,9 +155,9 @@ Errors:
 
 ## Open contract questions
 - Resolved 2026-09-19 (docs/53): session TTL = card 15 min, crypto 24 h (docs/12 §3.2); wire had no V1 TTL (D41 demoted wire to V2).
-- TODO — needs owner decision: coupon model — CHK-02 reserves a coupon but no V1 row defines coupon creation, validation rules, or usage limits.
-- TODO — needs owner decision: add-on catalog representation (TD-09 mentions add-ons; CHK rows do not define them).
-- TODO — needs owner decision: provider webhook payload schemas for each of the three rails (Match2Pay, Interkasa, NOWPayments crypto).
+- Resolved 2026-09-20 (D75, docs/62): the coupon model = tenant-managed catalog rows (code, %/flat off, usage limit, expiry) under the `challenge.write` family; validation + usage decrement at session reservation.
+- Resolved 2026-09-20 (D75, docs/62): add-ons defer to **V2** — TD-09's mention is the V2 catalog extension; V1 ships challenges (+ coupons) only.
+- Resolved 2026-09-20 (docs/62): provider webhook payload schemas = the adapters normalize to the canonical internal event (docs/12 §3.2); provider shapes pinned per adapter at build.
 - Resolved 2026-09-17: webhook tenant routing — per-tenant subdomain (GW-02, TEN-02); provider webhook URLs are provisioned per tenant. No second tenant-resolution mechanism.
-- TODO — needs owner decision: order numbering / invoice numbering scheme (CHK-08, CHK-40).
+- Resolved 2026-09-20 (D75, docs/62): order numbers `ORD-{TENANT}-{YY}-{seq6}` at order creation (CHK-08); invoice numbers `INV-{TENANT}-{YY}-{seq6}` at invoice issue (CHK-40).
 - Resolved 2026-09-19 (D40, docs/53): no trader-facing refund endpoint in V1 — refunds are the ADM-only minimal manual form (create + provider-dashboard op + webhook confirm + LED reversal); trader window and auto-breach are V2 (CHK-15).
