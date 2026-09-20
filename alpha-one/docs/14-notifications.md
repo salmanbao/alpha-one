@@ -137,7 +137,21 @@ shipped dead.
 **Owner rulings folded in:** no KYC invite email in V1 — the session opens
 inside the purchase flow (D62; `kyc.session_started` stays an internal ext
 event); expiry is silent in V1 — the portal shows the status and the payout
-gate's `kyc.required` error redirects to re-verify (D63).
+gate's `kyc.required` error redirects to re-verify (D63). Two more
+deliberate absences, pinned 2026-09-20 when the catalog's open questions were
+closed against this set: **no `FundedCreated` email** — the trader already
+got the `phase_passed` email when the evaluation passed, and funding itself
+is confirmed by the DOC-04 funded certificate + the TD funded view; a
+separate "you are funded" email would duplicate the pass email and requires a
+scope change to the closed D61 set if ever wanted. **No `Suspended` email** —
+suspension is a risk/security state the trader sees in TD and at the payout
+gate (the D63 "silent" pattern); the binding consumer of the `Suspended`
+event is the status check that blocks payouts (docs/11 §3.1/§3.7), not a
+template. The KYC-result template is likewise split per event
+(`kyc_approved` ← `kyc.approved`, `kyc_rejected` ← `kyc.rejected`,
+`kyc_needs_docs` ← `kyc.resubmission_requested`); `kyc.submitted` fires no
+email (pre-decision) and `PhaseAdvanced` fires no email (internal progression
+signal — the phase-completion email is `phase_passed` ← `AccountPassed`).
 
 **V2 reserves (trigger named, never shipped dead):** `payout_requested` ←
 `payout.requested` (V2 event — D37); `payout_failed_final` ← `payout.failed`

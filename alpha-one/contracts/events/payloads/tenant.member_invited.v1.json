@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.member_invited.v1.json",
-  "title": "Alpha One — event tenant.member_invited v1",
-  "description": "V1 catalog event `tenant.member_invited` (v1, AUTH-03; V1 for the SSO cutover tenant per decision P3). Envelope per EVT-03. Consumers: NOT (invite email), CON.",
+  "title": "Alpha One \u2014 event tenant.member_invited v1",
+  "description": "V1 catalog event `tenant.member_invited` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (invite email), CON-01. Derived from: docs/03 \u00a74.1 (tenant.member_invited, AUTH-03 \u2014 V1 for the SSO cutover tenant, decision P3) + docs/32 `tenant_memberships` (id, role, status=invited). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,40 +15,37 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "invitation_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "tenant_memberships.id with status='invited' (G37/D22 lifecycle)"
             },
             "email_hash": {
-              "type": "string"
+              "type": "string",
+              "description": "sha256(normalised email) \u2014 never the address"
             },
             "role": {
-              "type": "string"
+              "type": "string",
+              "description": "tenant_memberships.role (roles.yaml tenant realm)"
             },
             "invited_by": {
-              "type": "string"
-            },
-            "expires_at": {
-              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+              "$ref": "envelope.schema.json#/$defs/ULID"
             }
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "invitation_id",
-            "role",
-            "expires_at"
+            "role"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

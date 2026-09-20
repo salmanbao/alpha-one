@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "order.paid.v1.json",
   "title": "Alpha One \u2014 event order.paid v1",
-  "description": "V1 catalog event `order.paid` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LCC-05 (provisioning), LED-04 (payment capture posting), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `order.paid` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LCC-05 (provisioning), LED-04 (payment capture posting), ANA-01. Derived from: docs/12 \u00a73.2 (capture: intent captured \u2192 order paid) + docs/32 `orders` (id, amount_cents, currency, line_items{package_id}), `payment_intents` (provider, method), `provider_events` (provider_event_id); coupon per D75 (docs/62). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -22,35 +22,40 @@
               "$ref": "envelope.schema.json#/$defs/ULID"
             },
             "challenge_id": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
-            "size": {
-              "type": "string"
+              "$ref": "envelope.schema.json#/$defs/ULID",
+              "description": "orders.line_items.package_id (frozen at submit \u2014 D42); the accounts.program_id / catalog 'challenge' ref LCC-05 provisions from"
             },
             "amount": {
               "$ref": "envelope.schema.json#/$defs/Money"
             },
             "payment_method": {
-              "type": "string"
+              "type": "string",
+              "description": "payment_intents.method: card|local:{kind}|crypto:{chain}|wire"
             },
             "provider": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "match2pay",
+                "interkasa",
+                "nowpayments"
+              ]
             },
             "provider_event_id": {
-              "type": "string"
+              "type": "string",
+              "description": "provider_events(provider, provider_event_id) \u2014 the ingress idempotency key (EVT-10)"
             },
             "coupon_code": {
               "type": [
                 "string",
                 "null"
-              ]
+              ],
+              "description": "reserved at session (D75); null when no coupon"
             }
           },
           "additionalProperties": false,
           "required": [
             "order_id",
             "challenge_id",
-            "size",
             "amount",
             "payment_method",
             "provider",

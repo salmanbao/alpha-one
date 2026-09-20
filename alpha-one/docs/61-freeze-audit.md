@@ -1,5 +1,18 @@
 # 61 — The Cross-Cutting Freeze Audit (twentieth pass)
 
+> **Reading note (added 2026-09-20, gap-closure pass):** "The book freezes
+> consistent" (below) is a claim about **inter-doc consistency** — and it
+> still stands. It was never a claim that the business questions are
+> answered, and the headline below should not be read as one: **197 of the
+> 205 PRD open questions (docs/37) still await their FunderBlu owners** (COO,
+> Risk, Ops, Product, Marketing, Legal, CEO) plus the broker, and 5
+> design-review questions remain open. Consistency was this pass's exit
+> criterion all along; the open business questions were always out of scope
+> for a consistency pass. They are now triaged by owner in the docs/37
+> triage section and handed off in
+> docs/37a-stakeholder-questions-for-funderblu.md — see the status banner in
+> docs/00 for what "frozen" does and does not mean.
+
 > The twentieth completeness pass reviews the three cross-cutting docs —
 > **docs/28 (Security)**, **docs/29 (Scalability)**, **docs/35 (Testing
 > Strategy)** — the aggregation layer every module review has been editing

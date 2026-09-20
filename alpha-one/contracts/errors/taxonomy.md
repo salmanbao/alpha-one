@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-20 (all V1-baseline "needs owner decision" markers resolved by citation — see the resolution notes in each row and the "Resolved questions" section; zero new D-numbers were needed)
 
 Derived from the V1 Execution Sheet (V1.0 / V1.1) of `Alpha One PRD.xlsx`.
 Envelope per GW-18: every error response carries exactly `code`, `message`, `correlation_id`.
@@ -18,7 +18,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `rate.limited` | 429 | Per-IP/per-user rate limit exceeded | "Too many requests. Try again shortly." | GW (impl: GW-05) |
 | `request.idempotency_conflict` | 409 | Idempotency key reused with different request body | "Request already processed with different data." | GW (impl: GW-12) |
 | `tenant.suspended` | 403 | Tenant suspended: logins, new orders, payouts stop | "This firm is currently suspended." | GW/TEN (impl: TEN-15) |
-| `tenant.not_entitled` | 403 | Module disabled for tenant | "This feature is not part of your plan." | GW/TEN (impl: TEN-08; code naming — TODO — needs owner decision) |
+| `tenant.not_entitled` | 403 | Module disabled for tenant | "This feature is not part of your plan." | GW/TEN (impl: TEN-08) — **resolved 2026-09-20**: the name stays `tenant.not_entitled` (the entitlement is a property of the *tenant's plan*, so the code namespaces under `tenant`, not the module — `module.not_entitled` was an earlier-draft name, kept out of V1; see Notes). Enforcement point: **exactly once, at gateway step 6** (docs/55 §4.7, the GW/TEN boundary) — modules never re-check entitlements, they rely on the gateway gate. Rationale: one enforcement point = one failure mode, and a per-module re-check would let two modules disagree on the same entitlement row. |
 | `module.unknown` | 400 | Entitlement change references a non-V1 module | "Unknown module." | TEN (impl: TEN-08) |
 
 ## Auth (AUTH)
@@ -26,7 +26,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
 | `auth.invalid_registration` | 400 | Registration payload fails validation (incl. password policy) | "Please check your details and try again." | AUTH (impl: AUTH-01, AUTH-17) |
-| `auth.email_taken` | 409 | Email already registered on this tenant | "An account with this email already exists." | AUTH (impl: AUTH-01) — enumeration-safety treatment — TODO — needs owner decision |
+| `auth.email_taken` | 409 | Email already registered on this tenant | "An account with this email already exists." | AUTH (impl: AUTH-01) — **resolved 2026-09-20**: no separate enumeration-safety treatment is needed — V1 registration runs on the ZITADEL hosted surface (ADR-13, docs/02 §3.2), so there is no first-party duplicate-email check for an attacker to enumerate; AUTH-04's identical-message discipline continues to cover login. The 409 code stays for the tenant-custom registration-copy flows (docs/02 §6.1). Rationale: you cannot enumerate an oracle you do not host. |
 | `auth.account_suspended` | 403 | User suspended; sessions and tokens already invalidated | "Your account has been suspended." | AUTH (impl: AUTH-20) |
 | `auth.membership_suspended` | 403 | Membership at this tenant is suspended (identity itself is fine) | "Your access to this firm is suspended." | AUTH (impl: AUTH-20, docs/02 §4 GW step 3.5c) |
 | `auth.realm_mismatch` | 403 | Login from the other realm for an existing identity (staff ↔ trader); operator decides | "This account cannot sign in here." | AUTH (impl: AUTH-16, docs/44 §6.1) |
@@ -38,7 +38,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.session_revoked` | 401 | Refresh token revoked or rotation reuse detected | "Your session has ended. Please log in again." | AUTH (impl: AUTH-07) |
 | `auth.user_not_found` | 404 | Suspend/unsuspend target missing | "User not found." | AUTH (impl: AUTH-20, AUTH-43) |
 | `auth.user_not_suspended` | 409 | Unsuspend on a non-suspended user | "This user is not suspended." | AUTH (impl: AUTH-43) |
-| `auth.cannot_suspend_self` | 400 | Admin suspending own account | "You cannot suspend your own account." | AUTH (impl: AUTH-20) — rule — TODO — needs owner decision |
+| `auth.cannot_suspend_self` | 400 | Admin suspending own account | "You cannot suspend your own account." | AUTH (impl: AUTH-20) — **resolved 2026-09-20**: the rule is a caller-identity guard on `POST /v1/auth/users/{user_id}/suspend` (docs/02 §7 endpoint table): the acting admin's own identity can never be the `user_id` target — self-suspension would lock the admin out of the console with no in-product recovery path, so the guard returns 400 (a client error the UI can show, not a 403 that looks like a permission bug). |
 
 ## Tenant (TEN)
 
@@ -53,10 +53,10 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
 | `catalog.challenge_not_found` | 404 | Challenge not in tenant catalog | "This challenge is no longer available." | CHK (impl: CHK-01) |
-| `checkout.coupon_invalid` | 400 | Coupon rejected at session reservation | "This coupon code is not valid." | CHK (impl: CHK-02 coupon reservation; earlier draft `checkout.invalid_coupon`/CHK-11 is NOT a V1 row — code naming — TODO — needs owner decision) |
+| `checkout.coupon_invalid` | 400 | Coupon rejected at session reservation | "This coupon code is not valid." | CHK (impl: CHK-02 coupon reservation) — **resolved 2026-09-20 (D75, docs/62)**: V1 name is `checkout.coupon_invalid`; the earlier draft `checkout.invalid_coupon` (CHK-11) is retired from the V1 sheet — the code now matches the dotted `domain.state` convention (the *coupon* is *invalid*, not an "invalid coupon object"). |
 | `checkout.session_expired` | 410 | Price/coupon reservation window elapsed | "Your checkout session expired. Please start again." | CHK (impl: CHK-02) |
 | `checkout.session_not_found` | 404 | Checkout session unknown or not owned by caller | "Checkout session not found." | CHK (impl: CHK-44 identity scoping) |
-| `checkout.session_not_cancellable` | 409 | Session already completed or expired — nothing to cancel | "This checkout session can no longer be cancelled." | CHK (impl: CHK-44 "pending checkout session"; state guard — TODO — needs owner decision) |
+| `checkout.session_not_cancellable` | 409 | Session already completed or expired — nothing to cancel | "This checkout session can no longer be cancelled." | CHK (impl: CHK-44 "pending checkout session") — **resolved 2026-09-20**: the guard set comes straight from the V1 `checkout_sessions.state` DDL (docs/32): `DELETE /v1/checkout/sessions/{id}` is valid only from `reserved` (a live, unpaid reservation); from `completed`, `cancelled`, or `expired` it returns 409 — cancellation releases the price/coupon reservation, and once the session has left `reserved` there is nothing left to release. |
 | `order.not_found` | 404 | Order unknown or not owned by caller | "Order not found." | CHK (impl: CHK-16, CHK-40) |
 | `order.not_retryable` | 409 | Payment not in a recoverable state | "This payment cannot be retried." | CHK (impl: CHK-16) |
 | `receipt.not_ready` | 409 | PDF generation pending | "Your receipt is being prepared." | CHK/DOC (impl: CHK-17, DOC-01) |
@@ -66,9 +66,9 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
-| `payout.ineligible` | 422 | Failed an eligibility check; sub-reasons from PAY-03: KYC not approved (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max limits, account status | "You are not eligible for a payout yet: {reason}." | PAY (impl: PAY-03, KYC-08) |
-| `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." | KYC/PAY (impl: KYC-08; code naming — TODO — needs owner decision: dedicated code vs `payout.ineligible` sub-reason) |
-| `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." | PAY (impl: PAY-04, RSK-11) — HTTP status — TODO — needs owner decision |
+| `payout.ineligible` | 422 | Failed an eligibility check; **closed sub-reason enum (D72, docs/62 — extended only at freeze):** `kyc_not_approved`, `min_trading_days`, `consistency`, `trading_day_threshold`, `first_payout_delay`, `next_payout_date`, `min_amount`, `max_amount`, `account_status`, `risk_hold` | "You are not eligible for a payout yet: {reason}." | PAY (impl: PAY-03, KYC-08) |
+| ~~`payout.kyc_required`~~ | — | **Not a V1 code** — KYC-blocked payouts return `payout.ineligible` with sub-reason `kyc_not_approved` (the closed D72 enum above). **Resolved 2026-09-20 by propagation of D72 (docs/62)**: D72 already ruled "one shape for all failures — no dedicated top-level code"; this row existed before D72 landed. Propagation note: docs/11 §6.1 and docs/30 §11 carry the same pre-D72 row and must drop it at the next registry regeneration; docs/13 §3.2's "code naming open" note is closed by D72. |
+| `payout.risk_hold` | 423 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." | PAY (impl: PAY-04, RSK-11) — **resolved 2026-09-20: 423 Locked** — the master registry (docs/30 §11) already registers 423, and the semantics fit the status: the payout is *temporarily* blocked by an external condition (an open case / suspension) that will lift, which is exactly what 423 signals (403 would tell the client the request is permanently forbidden). No client action fixes it; the hold lifts when the case resolves. |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." | PAY (impl: PAY-01, LCC-02) |
 | `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — docs/11 §3.2) | "Amount exceeds your available profit." | PAY (impl: PAY-02) |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached | "Your next payout is available on {date}." | PAY (impl: PAY-21, LCC-20) |
@@ -79,7 +79,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `payout.not_approved` | 409 | Execution recording on a non-approved payout | "This payout is not approved for execution." | PAY (impl: PAY-12, PAY-13) |
 | `payout.reason_required` | 400 | Reject without recorded reason | "A reason is required." | PAY (impl: PAY-09) |
 | `payout.no_approved_payouts` | 422 | Batch export contains no approved payouts | "Nothing to export." | PAY (impl: PAY-44) |
-| `payout.execution_mismatch` | 400 | Recorded execution amount ≠ approved amount | "Recorded amount does not match the approved payout." | PAY (impl: PAY-12) — rule — TODO — needs owner decision |
+| `payout.execution_mismatch` | 400 | Recorded execution amount ≠ approved amount | "Recorded amount does not match the approved payout." | PAY (impl: PAY-12) — **resolved 2026-09-20**: the rule is docs/11 §3.7 guard 3 — the recorded execution amount must equal the approved amount **to the cent**; on mismatch the recording call is rejected with 400, the payout **stays in `approved`** (not executed, not cancelled), and **no ledger entry is written** — a mismatched execution is a provider anomaly to be investigated, never a partial truth to book. |
 | `payout.policy_invalid` | 400 | Payout policy configuration invalid | "Please check the payout policy values." | PAY (impl: PAY-38) |
 
 ## KYC (KYC)
@@ -87,7 +87,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
 | `kyc.country_restricted` | 403 | Registration/verification from restricted jurisdiction | "Verification is not available in your country." | KYC (impl: KYC-13) |
-| `kyc.already_in_progress` | 409 | Session creation while one is active | "You already have a verification in progress." | KYC (impl: KYC-06) — rule — TODO — needs owner decision |
+| `kyc.already_in_progress` | 409 | Session creation while one is active | "You already have a verification in progress." | KYC (impl: KYC-06) — **resolved 2026-09-20**: the guard set is the KYC-06 state machine (docs/13 §3.1, D43): creating a session returns 409 only while the trader's current session is in a **live** state — `PENDING` or `IN_REVIEW` (manual review is a flag, not a separate state). From terminal states a new session is always allowed: `REJECTED` → new session behind the 24 h re-initiation cooldown (`kyc.reinitial_cooldown`), `EXPIRED` (24 h TTL) → new session freely. `APPROVED` never re-opens — the gates (funding/payout) just pass. |
 | `kyc.upload_failed` | 400 | Manual upload failed (retriable) | "Upload failed. Please try again." | KYC (impl: KYC-36) |
 | `kyc.case_not_reviewable` | 409 | Manual decision on a case not in review | "This case is no longer reviewable." | KYC (impl: KYC-11, KYC-06) |
 | `account.underage` | 403 | Verified age under 18 | "You must be 18 or older." | KYC (impl: KYC-14) |
@@ -103,8 +103,8 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `override.action_unknown` | 400 | Manual override action not in pass/fail/reset | "Unknown override action." | EVL (impl: EVL-20) |
 | `override.reason_required` | 400 | Manual override without recorded reason | "A reason is required." | EVL (impl: EVL-20) |
 | `account.not_found` | 404 | Account unknown or not owned by caller | "Account not found." | LCC (impl: LCC-01; used across EVL/LCC/PAY) |
-| `account.not_active` | 409 | Action invalid from current state | "This action is not available for this account." | LCC (impl: LCC-02) — guard set — TODO — needs owner decision |
-| `account.terminal_state` | 409 | Operation on FAILED/TERMINATED account | "This account is closed." | LCC (impl: LCC-02) — TODO — needs owner decision |
+| `account.not_active` | 409 | Action invalid from current state | "This action is not available for this account." | LCC (impl: LCC-02) — **resolved 2026-09-20**: the V1 guard set, enumerated from the LCC-02 transition table (docs/07 §3.2) for the only V1 surface that returns it — `POST /v1/admin/accounts/{id}/suspend` (LCC-11): suspend is valid **only from `ACTIVE` or `FUNDED`** (the two states with `→ SUSPENDED` edges); from every other non-terminal state (`CREATED`, `PASS_PENDING`, `VERIFICATION`, `AWAITING_ACTIVATION`, `BREACH_DETECTED`, `CLOSING`) it returns 409 `account.not_active`; from the terminal states it returns the more specific `account.terminal_state` instead. |
+| `account.terminal_state` | 409 | Operation on FAILED/TERMINATED account | "This account is closed." | LCC (impl: LCC-02) — **resolved 2026-09-20**: the guard set is exactly `{FAILED, TERMINATED}` (docs/07 §3.1/§5). Nuance: `TERMINATED` is terminal-only with no outgoing edges at all; `FAILED` is terminal **except** for the single EVL-20 breach-override edge (D29) — so a "force re-evaluation" (EVL-36) on a FAILED account is the one legitimate operation, and any *other* operation on either state returns 409 `account.terminal_state`. |
 | `account.not_suspended` | 409 | Resume on non-suspended account | "This account is not suspended." | LCC (impl: LCC-11) |
 
 ## Console (CON)
@@ -112,14 +112,14 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
 | `console.session_not_found` | 404 | Session id unknown | "Session not found." | CON (impl: CON-30) |
-| `console.cannot_revoke_self` | 400 | Revoking own session via admin endpoint | "You cannot revoke your own session here." | CON (impl: CON-30) — rule — TODO — needs owner decision |
+| `console.cannot_revoke_self` | 400 | Revoking own session via admin endpoint | "You cannot revoke your own session here." | CON (impl: CON-30) — **resolved 2026-09-20**: the rule is in the console endpoint table itself (docs/21 §7): `POST /v1/console/sessions/{session_id}/revoke` is callable by "Super Admin **(a different one)**" — the acting session may not be the session being revoked; revoking yourself is a client error (400, "you would lock yourself out mid-action"), distinct from `permission.denied` (403, "you lack the role"). Use the self-logout endpoint (`POST /v1/console/auth/logout`) to end your own session. |
 
 ## Risk (RSK)
 
 | Code | HTTP | Meaning | User-facing message pattern | Module |
 |---|---|---|---|---|
 | `risk.account_not_found` | 404 | Case target account unknown | "Account not found." | RSK (impl: RSK-01) |
-| `risk.case_already_open` | 409 | Second open case on same account | "A review case is already open." | RSK (impl: RSK-10) — rule — TODO — needs owner decision |
+| `risk.case_already_open` | 409 | Second open case on same account | "A review case is already open." | RSK (impl: RSK-10) — **resolved 2026-09-20 (D71, docs/60)**: **one open case per account** — a second open attempt (manual or auto) on an account that already has an open case returns 409. Enforcement is a transactional check under a per-trader advisory lock (no plain unique index works because `account_ids` is an array). Auto-open on breach is idempotent per breach-verdict id via the `dedup_key` (D68), so a retried `AccountBreached` never double-opens. |
 
 ## Documents (DOC)
 
@@ -128,16 +128,16 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `document.not_found` | 404 | Document unknown or not owned | "Document not found." | DOC (impl: DOC-06) |
 
 ## Notes
-- Earlier-draft codes with no V1 row: `checkout.duplicate_payment` (CHK-30), `checkout.invalid_coupon` (CHK-11), `module.not_entitled` (GW-22) — the closest V1 rows are CHK-07 idempotency (prevents duplicates at the state level), CHK-02 coupon reservation, and TEN-08 entitlements. Naming decisions — TODO — needs owner decision.
-- Error codes for worker-internal failures (relay, command queue, sync) are not in the V1 sheet — no client-facing surface exists for them.
+- Earlier-draft codes with no V1 row: `checkout.duplicate_payment` (CHK-30), `checkout.invalid_coupon` (CHK-11), `module.not_entitled` (GW-22) — **resolved 2026-09-20**: all three stay out of the V1 sheet. `checkout.duplicate_payment` is covered structurally by CHK-07 idempotency (duplicate payment = the idempotency key replays, not a distinct error); `checkout.invalid_coupon` was renamed to `checkout.coupon_invalid` (D75); `module.not_entitled` was folded into `tenant.not_entitled` (the code namespaces under the tenant whose entitlement was checked — docs/55 §4.7).
+- Error codes for worker-internal failures (relay, command queue, sync) are not in the V1 sheet — no client-facing surface exists for them (docs/06 §6: BRG-10/BRG-11 FAILED semantics stay internal, surfaced only via ADM alerts and the AUD log, per D36).
 
-## Open contract questions
-- TODO — needs owner decision: `payout.kyc_required` as a dedicated code vs a `payout.ineligible` sub-reason (PAY-03 models KYC as one check among many).
-- TODO — needs owner decision: HTTP status for `payout.risk_hold` (423 Locked vs 403).
-- TODO — needs owner decision: `tenant.not_entitled` vs `module.not_entitled` naming and the enforcement point (gateway middleware vs module).
-- TODO — needs owner decision: enumeration-safety for registration duplicate-email responses (mirror AUTH-04 login treatment or not).
-- TODO — needs owner decision: full sub-reason code list for `payout.ineligible` (eight checks named in PAY-03; code scheme open).
-- TODO — needs owner decision: whether worker/command failures surface any error codes to admins (BRG-10/BRG-11 FAILED semantics are internal).
+## Resolved questions (2026-09-20, gap-closure pass — every marker above closed by citation; zero new D-numbers)
+1. **`payout.kyc_required`** — propagation fix, not a new decision: D72 (docs/62) already ruled "one shape for all failures — no dedicated top-level code"; the KYC gate returns `payout.ineligible` / `kyc_not_approved`. Struck through above.
+2. **`payout.risk_hold` status** — 423 Locked (docs/30 §11 master line; temporary-block semantics, not a permission denial).
+3. **`tenant.not_entitled` vs `module.not_entitled` + enforcement point** — keep `tenant.not_entitled`; enforced once at gateway step 6 (docs/55 §4.7); modules do not re-check.
+4. **Registration duplicate-email enumeration** — no extra treatment needed: V1 registration is the ZITADEL hosted surface (ADR-13, docs/02 §3.2); there is no first-party oracle to enumerate.
+5. **`payout.ineligible` sub-reason list** — closed by D72 (docs/62): the ten-value enum in the row above, extended only at contract freeze.
+6. **Worker/command failure codes** — none in V1: BRG-10/BRG-11 FAILED semantics are internal (docs/06 §6, D36); admins see ADM alerts + the AUD log, not HTTP error codes.
 
 
 ---

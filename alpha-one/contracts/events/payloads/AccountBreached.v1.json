@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "AccountBreached.v1.json",
   "title": "Alpha One \u2014 event AccountBreached v1",
-  "description": "V1 catalog event `AccountBreached` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: breach), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `AccountBreached` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01 (template: breach), ANA-01. Derived from: docs/07 \u00a73.2 (ACTIVE\u2192BREACH_DETECTED side effect 'AccountBreached (LCC-23)'); verdict fields per docs/09 \u00a73.3/\u00a73.4 (rule, limit_cents, tolerance_cents, input_hash) and docs/32 `evaluations`. Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -27,20 +27,24 @@
             },
             "rule": {
               "type": "string",
-              "description": "the breached rule (e.g. daily drawdown, max drawdown, profit target breach path)"
+              "description": "the breached rule id (e.g. max_daily_loss, max_total_loss, time_limit \u2014 D30)"
             },
             "verdict_id": {
               "$ref": "envelope.schema.json#/$defs/ULID"
             },
             "evidence_ref": {
               "type": "string",
-              "description": "pointer to the EVL evidence snapshot (verdict input: tick data, rule state)"
+              "description": "pointer to the EVL evidence snapshot (evaluations.detail: metrics at decision time)"
             },
-            "observed": {
-              "type": "number"
+            "observed_cents": {
+              "type": "integer"
             },
-            "limit": {
-              "type": "number"
+            "limit_cents": {
+              "type": "integer"
+            },
+            "tolerance_cents": {
+              "type": "integer",
+              "description": "EVL-53 comparison tolerance (default 1\u00a2, docs/09 \u00a73.3)"
             },
             "breached_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"

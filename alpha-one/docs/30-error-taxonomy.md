@@ -223,7 +223,7 @@
 | Code | HTTP | Meaning (from doc 11 §6) | Tier |
 |---|---|---|---|
 | `payout.ineligible` | 422 | Failed an eligibility check; sub-reasons from PAY-03: KYC not approved (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal... | V1 |
-| `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval — "Verify your identity before requesting a payout." | V1 |
+| ~~`payout.kyc_required`~~ | — | (not a V1 code — D72, docs/62: the KYC payout gate returns `payout.ineligible` with sub-reason `kyc_not_approved`; this row predates D72 and is folded) | ext (folded) |
 | `payout.risk_hold` | 423 | Open risk case (RSK-11) or active suspension (PAY-04) — "Payouts are temporarily held for review." | V1 |
 | `payout.not_funded` | 409 | Account not in FUNDED state — "Payouts are only available on funded accounts." | V1 |
 | `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — §3.2) — "Amount exceeds your available profit." | V1 |

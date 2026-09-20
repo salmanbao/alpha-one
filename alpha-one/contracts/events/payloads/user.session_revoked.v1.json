@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.session_revoked.v1.json",
-  "title": "Alpha One — event user.session_revoked v1",
-  "description": "V1 catalog event `user.session_revoked` (v1). Envelope per EVT-03. Consumers: AUD (all revocations are audited; AUTH-20/39, AUTH-27 in V2).",
+  "title": "Alpha One \u2014 event user.session_revoked v1",
+  "description": "V1 catalog event `user.session_revoked` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = AUD. Derived from: docs/02 \u00a74.1 (user.session_revoked: AUTH-39 logout, AUTH-20 suspension; D6 concurrency-limit eviction) + docs/32 `auth_sessions` (id). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,9 +15,6 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
@@ -29,18 +26,11 @@
             },
             "reason": {
               "type": "string",
-              "enum": [
-                "logout",
-                "suspension",
-                "password_change",
-                "reuse_detected",
-                "admin_action",
-                "concurrency_limit",
-                "tenant_suspended"
-              ]
+              "description": "logout|suspended|concurrency_limit|admin_revoked (AUTH-27, V2)"
             },
             "revoked_by": {
-              "type": "string"
+              "type": "string",
+              "description": "actor identity or 'system'"
             },
             "revoked_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -54,7 +44,12 @@
             "revoked_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

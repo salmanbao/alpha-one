@@ -1,6 +1,6 @@
 # kyc-state — render to PDF/PNG
 
-The KYC-06 state machine. States are exactly those named by KYC-06. Edge conditions marked TODO are not enumerated in the sheet.
+The KYC-06 state machine. States are exactly those named by KYC-06. All edge conditions are enumerated — the three open edges (EXPIRED trigger, APPROVED expiry, manual review) were resolved by D43 (docs/53) on 2026-09-19; there are no TODO edges in this machine.
 
 ```mermaid
 stateDiagram-v2

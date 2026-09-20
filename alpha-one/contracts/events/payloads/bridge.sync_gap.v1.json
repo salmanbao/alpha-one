@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "bridge.sync_gap.v1.json",
   "title": "Alpha One \u2014 event bridge.sync_gap v1",
-  "description": "V1 catalog event `bridge.sync_gap` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ADM (manual review), AUD, EVL (gap_flagged verdict). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `bridge.sync_gap` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ADM (manual review), AUD, EVL (gap_flagged verdict). Derived from: docs/08 \u00a73.3 (D33 history-window deals-count reconciliation: history API count vs rows written). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"

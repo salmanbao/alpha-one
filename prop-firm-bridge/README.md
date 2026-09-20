@@ -1,3 +1,13 @@
+> **⚠ Research scaffold — not a production design.** This repository is
+> architecture research with cited prior art and a verified prototype, *not*
+> the production system. The **binding specification is `alpha-one/docs/`**
+> (the Alpha One spec + its contract pack). Where this research disagrees with
+> the binding docs — e.g. **Kafka vs Redis Streams**, **WebSocket push vs
+> poll-only REST**, or **platform-recomputed PnL vs broker-sole-truth** —
+> **the binding docs win** (see `alpha-one/docs/51-brg-review.md` §F9 for the
+> full cross-walk). Nothing here should be read as a V1 implementation
+> decision.
+
 # Prop Firm Bridge — A–Z Architecture & Implementation Research
 
 Enterprise-grade research document + architecture for building a **Rules & Trading Platform Bridge** for a prop firm-as-a-service platform (target languages: TypeScript, JavaScript, Go, Rust).

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.activated.v1.json",
-  "title": "Alpha One — event user.activated v1",
-  "description": "V1 catalog event `user.activated` (v1). Envelope per EVT-03. Consumers: NOT, AUD (AUTH-43 unsuspend).",
+  "title": "Alpha One \u2014 event user.activated v1",
+  "description": "V1 catalog event `user.activated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = NOT-01, AUD. Derived from: docs/02 \u00a74.1 (user.activated, AUTH-43 / idp-sync) + docs/32 `tenant_memberships` (status active). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -14,9 +14,6 @@
         },
         "version": {
           "const": 1
-        },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
         },
         "payload": {
           "type": "object",
@@ -40,7 +37,12 @@
             "activated_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

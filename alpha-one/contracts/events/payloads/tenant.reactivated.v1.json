@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.reactivated.v1.json",
-  "title": "Alpha One — event tenant.reactivated v1",
-  "description": "V1 catalog event `tenant.reactivated` (v1). Envelope per EVT-03. Consumers: GW, NOT, AUD, AUTH (sessions still require a fresh login).",
+  "title": "Alpha One \u2014 event tenant.reactivated v1",
+  "description": "V1 catalog event `tenant.reactivated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = GW, NOT-01, AUD, AUTH. Derived from: docs/03 \u00a74.1 (tenant.reactivated, TEN-15). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -15,15 +15,9 @@
         "version": {
           "const": 1
         },
-        "correlation_id": {
-          "$ref": "envelope.schema.json#/$defs/ULID"
-        },
         "payload": {
           "type": "object",
           "properties": {
-            "tenant_id_ref": {
-              "$ref": "envelope.schema.json#/$defs/ULID"
-            },
             "actor": {
               "type": "string"
             },
@@ -33,11 +27,15 @@
           },
           "additionalProperties": false,
           "required": [
-            "tenant_id_ref",
             "reactivated_at"
           ]
         }
-      }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
     }
   ]
 }

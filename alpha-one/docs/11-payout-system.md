@@ -63,7 +63,7 @@ Components (from the research, adapted):
 | Check | Source | Fail code |
 |---|---|---|
 | Account is `funded` and `active` (not paused/suspended/failed) | LCC | `payout.not_funded` / `payout.account_state` |
-| KYC payout-level verified (KYC-08 gate; L2 + wallet name match V2) | KYC | `payout.kyc_required` |
+| KYC payout-level verified (KYC-08 gate; L2 + wallet name match V2) | KYC | `payout.ineligible` (sub-reason `kyc_not_approved` — D72, docs/62: one shape for all failures, no dedicated top-level code) |
 | No open risk case with payout hold (RSK-10) | RSK | `payout.risk_hold` |
 | Frequency window elapsed since last settled payout (funded terms: `payout_frequency_days`, `first_payout_delay_days`) — PAY-21 | funded_terms + payout history | `pay.frequency` |
 | Amount ≥ `min_amount_cents` (terms) | terms | `payout.below_min` |
@@ -292,7 +292,7 @@ From `contracts/errors/taxonomy.md` (the V1 execution sheet; module PAY). These 
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
 | `payout.ineligible` | 422 | Failed an eligibility check; **sub-reason enum (D72, docs/62 — closed, extended only at freeze):** `kyc_not_approved`, `min_trading_days`, `consistency`, `trading_day_threshold`, `first_payout_delay`, `next_payout_date`, `min_amount`, `max_amount`, `account_status`, `risk_hold` | "You are not eligible for a payout yet: {reason}." |
-| `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." |
+| ~~`payout.kyc_required`~~ | — | (not a V1 code — D72: the KYC gate returns `payout.ineligible` / `kyc_not_approved`; the dedicated-code row predates D72) |
 | `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." |
 | `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — §3.2) | "Amount exceeds your available profit." |
@@ -319,7 +319,7 @@ template registry, NOT):
 |---|---|---|
 | `pay.not_eligible` (with `details.checks[]`) | 422 | Eligibility failed (each failed check named) |
 | `payout.not_funded` / `payout.account_state` | 422 | — |
-| `payout.kyc_required` | 422 | KYC payout gate |
+| `payout.kyc_required` | 422 | (folded — the V1 shape per D72 is `payout.ineligible` / `kyc_not_approved`; this extended variant predates D72) |
 | `payout.risk_hold` | 423 | Open risk case (reason class only) |
 | `pay.frequency` | 422 | Window not elapsed (`details.next_eligible_at`) |
 | `payout.below_min` | 422 | `details.min_cents` |

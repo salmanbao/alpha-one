@@ -36,6 +36,25 @@ operations.
 cross-cutting reference material, `99` = the development plan (read last, then
 constantly).
 
+## Spec website (interactive)
+
+The whole specification is browsable as a single-page website in
+[`site/`](site/index.html) — a developer UI over the entire corpus: all 65 docs,
+the contract pack (event catalog, the 39 payload schemas with their
+derived-from citations, the error taxonomy, 36 API contracts, the 8 committed
+diagrams) and the decision registers (D1–D76 design decisions, the 205 PRD
+questions, and the owner triage).
+
+- **Browse:** open `site/index.html` in any browser — grouped sidebar navigation,
+  full-text search (`/`), "on this page" rail, code blocks with copy buttons,
+  light/dark themes, prev/next navigation. Fully offline: the one dependency
+  (the marked.js markdown renderer) is vendored in `site/vendor/`.
+- **Rebuild after doc changes:** `python3 site/build_site.py` — regenerates
+  `site/data/site-data.json`, `site/app.js` and `site/styles.css` from the
+  sources in `docs/`, `contracts/` and `scripts/`. It never edits a source doc.
+  The two committed state-machine diagrams in `docs/07`/`docs/13` render from
+  `contracts/diagrams/*.png` (the Mermaid sources live there too).
+
 ---
 
 ## Document map

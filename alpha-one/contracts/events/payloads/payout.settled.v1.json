@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "payout.settled.v1.json",
   "title": "Alpha One \u2014 event payout.settled v1",
-  "description": "V1 catalog event `payout.settled` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LED-08 (settlement posting), DOC-04 (receipt), ANA-01. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `payout.settled` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LED-08 (settlement posting), DOC-04 (receipt), ANA-01. Derived from: docs/11 \u00a74.1 (payout.settled \u2014 Decision 6, renamed from the sheet's PayoutPaid by D60, docs/58) + docs/32 `payout_executions` (provider, reference, amount, timestamp, actor). Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -28,10 +28,12 @@
               "$ref": "envelope.schema.json#/$defs/Money"
             },
             "provider": {
-              "type": "string"
+              "type": "string",
+              "description": "payout_executions.provider"
             },
             "reference": {
-              "type": "string"
+              "type": "string",
+              "description": "payout_executions.reference (the provider's transfer ref \u2014 'proof it actually left', docs/11 \u00a73.3)"
             },
             "executed_by": {
               "$ref": "envelope.schema.json#/$defs/ULID"
