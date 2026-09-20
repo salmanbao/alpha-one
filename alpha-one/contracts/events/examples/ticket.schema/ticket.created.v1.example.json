@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `ticket.created` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/ticket.schema.json ($defs/ticket_created). Per-event payload. Producer: 18 (SUP). When: created (surface: trader/staff). Consumers: NOT (email ack to trader; staff notify), AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `ticket.created` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/ticket.schema.json ($defs/ticket_created). Per-event payload. Producer: 18 (SUP). When: created (surface: trader/staff). Consumers: NOT (email ack to trader; staff notify), AUD. Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "6QHZNDM7M5BYG46M6PYBPQC8D1",
   "type": "ticket.created",
   "version": 1,
   "tenant_id": "P89T91T9929N8JHJS2797QN7FT",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

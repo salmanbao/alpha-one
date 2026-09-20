@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "account.activated.v1.json",
+  "title": "Alpha One \u2014 event account.activated v1",
+  "description": "V1 catalog event `account.activated` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "account.activated"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "broker_account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "server": {
+              "type": "string",
+              "description": "broker server id (ADR-12 day-boundary authority)"
+            },
+            "phase": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "broker_account_id",
+            "server",
+            "phase"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

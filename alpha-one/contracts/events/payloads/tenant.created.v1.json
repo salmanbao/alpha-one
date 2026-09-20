@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tenant.created.v1.json",
-  "title": "Alpha One \u2014 event tenant.created v1",
+  "title": "Alpha One — event tenant.created v1",
   "description": "V1 catalog event `tenant.created` (v1). Envelope per EVT-03. Consumers: AUD, CON, NOT (owner invite).",
   "allOf": [
     {
@@ -14,6 +14,9 @@
         },
         "version": {
           "const": 1
+        },
+        "correlation_id": {
+          "$ref": "envelope.schema.json#/$defs/ULID"
         },
         "payload": {
           "type": "object",

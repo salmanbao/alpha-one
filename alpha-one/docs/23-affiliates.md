@@ -52,10 +52,12 @@ Requirement coverage: `AFF-01..30` (all V3.0).
    card-less funnels (AFF-04)
 
  events:
-   payments.intent_captured (with order.affiliate_id) ─►
+   order.paid (with order.affiliate_id — the extended
+     payment.intent_captured alias, docs/12) ─►
      AFF accrual: commission = f(rate card, order value, tier)
      → accrual row (status: accrued)
-   payments.refund_settled / chargeback (CHK) ─► accrual reversed
+   payment.refund_settled (the ext alias) / chargeback (CHK) ─►
+     accrual reversed
      (the row is corrected with a reversal entry — the LED-04 pattern;
      no delete: the clawback is itself the audit trail)
    the 30-d approval window (AFF-08): accrual → settled at window close
@@ -157,8 +159,9 @@ as the payout hold: the money doesn't move until a human says it can.
 | `affiliate.payout_settled` | execution complete | NOT (receipt), DOC, AUD (critical) |
 | `affiliate.conversion` (outbound, AFF-15) | the tenant's webhook (Hook0) | the tenant's system (V3 DVP surface) |
 
-Consumes: `identity.created` (attribution window), `payments.intent_
-captured` (accrual), `payments.refund_settled`/`chargeback` (reversal),
+Consumes: `identity.created` (attribution window), `order.paid`
+(accrual — the extended `payment.intent_captured` alias, docs/12),
+`payment.refund_settled`/`chargeback` (reversal),
 `account.breached`/`kyc.verified` (quality checks), `risk.case_decided`
 (hold release).
 

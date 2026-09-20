@@ -10,17 +10,19 @@
 - **Provider adapter interface (KYC-01)** with **Veriff (KYC-02, SIGNED)** as
   the V1 provider; adapter = the same strategy pattern as BRG/CHK/PAY/KYC rails,
   so provider failover (KYC-34 V2) or a second provider is config, not code.
-- **Two gates (FunderBlu TTS parity):**
-  - **L1 — funding/activation gate (KYC-07):** government ID + selfie →
-    name/DOB/country extracted, **age ≥ 18 (KYC-14)**, **country not restricted
-    (KYC-13, tenant config)**. Required before a challenge account activates.
-  - **L2 — payout gate (KYC-08):** L1 + proof of address (tenant-configurable
-    set) → required before a payout can be approved/executed. V2 adds wallet
-    name match (PAY-07) on top.
-  - Per-tenant level config (TEN): `kyc: {l1: {required: true, docs:[…]},
-    l2: {required: true, docs:[…]}}` — a tenant could set L1 only (crypto-native
-    trader base) or stricter.
-- **Manual fallback (KYC-11/12, V1):** provider `undecided`/failed-with-docs →
+- **Gates (FunderBlu TTS parity — the L1/L2 split is the V2 multi-level
+  model; V1 runs ONE verification flow per tenant and both gates read its
+  state):**
+  - **Funding/activation gate (KYC-07):** verification approved → required
+    before a challenge account activates (age ≥ 18 — KYC-14 V1.1; country not
+    restricted — KYC-13 V1.1, tenant config).
+  - **Payout gate (KYC-08):** same verification approved → required before a
+    payout can be approved/executed. V2 adds the L2 doc set (proof of
+    address) and wallet name match (PAY-07).
+  - Per-tenant level config (TEN): `kyc: {l1: {…}, l2: {…}}` exists as the V2
+    config shape; V1's single flow collects the tenant's one configured doc
+    set.
+- **Manual fallback (KYC-11/12, V1.1):** provider `undecided`/failed-with-docs →
   ADM manual review queue with manual document upload; override decision
   (V2 KYC-18 formalizes, V1 has it — manual review *is* the override).
 - **Verified identity record (KYC-09):** the canonical stored identity (see §9).
@@ -70,11 +72,21 @@ stateDiagram-v2
     IN_REVIEW --> REJECTED: provider rejects (KYC-05)
     IN_REVIEW --> NEEDS_RESUBMISSION: provider requests resubmission
     NEEDS_RESUBMISSION --> PENDING: trader resubmits
-    PENDING --> EXPIRED: open question — V1 expiry trigger undefined
-    APPROVED --> EXPIRED: open question — document-expiry triggers are P2
-    REJECTED --> PENDING: manual resubmission path — open question
+    PENDING --> EXPIRED: 24 h session TTL (worker — D43)
     APPROVED --> [*]: gates open (KYC-07 funding, KYC-08 payout)
 ```
+
+**Edge semantics (D43, docs/53 — resolves the three open edges):**
+`EXPIRED` fires from the **24 h session TTL only** (CHK-43-style worker; a
+trader re-initiates a new session). `APPROVED` **never expires in V1** —
+re-verification/document expiry is KYC-21/25 (V2), so the `APPROVED →
+EXPIRED` edge does not exist in V1. `REJECTED` is **terminal in-session** —
+retry = a new session (governed by the 24 h re-initiation cooldown,
+`kyc.reinitial_cooldown`), not an edge. **Manual review is not a state**:
+provider-undecided/manual-upload cases sit in `IN_REVIEW` with an
+`is_manual_review` queue flag (KYC-11/12 V1.1 — decisions land in the same
+machine from `IN_REVIEW`: approve → APPROVED, reject → REJECTED,
+request-resubmission → NEEDS_RESUBMISSION).
 
 - **One provider per tenant in V1** (Out Of Scope: no multi-jurisdiction
   routing); the provider runs on the tenant's own Veriff keys (KYC-02,
@@ -82,11 +94,12 @@ stateDiagram-v2
   provider dashboard is the staff's deep-dive view; our ADM queue is the
   workflow).
 - **Manual fallback (V1.1):** trader uploads documents (KYC-12: ID + proof of
-  address); tenant admin reviews and decides (KYC-11) — decisions land in the
+  address); tenant admin reviews and decides (KYC-11) — the case sits in
+  `IN_REVIEW` with the `is_manual_review` flag (D43); decisions land in the
   same state machine. Under-18 rejected (KYC-14). Verified identity stored on
   approval (KYC-09).
-- **Open questions** (from the research): the V1 `EXPIRED` trigger; the
-  `REJECTED → PENDING` retry path; which state manual-review cases enter.
+- **Resolved (D43, docs/53):** `EXPIRED` = session TTL; `REJECTED` is
+  terminal (new session via cooldown); manual review = `IN_REVIEW` + flag.
 - **Upload progress (KYC-36):** TD UI polls session status (provider progress
   passed through) — no fake percentages; states only.
 
@@ -95,21 +108,13 @@ stateDiagram-v2
 > can't be paid out) — is the V2 multi-level design. V1 runs a single
 > verification flow per tenant; the gates below read its states.
 
-### 3.2 Gate semantics (how consumers read)
+### 3.2 Gate semantics (how consumers read — one table; the duplicate was a merge artifact, docs/53 M3)
 
 | Gate | Read | Fail behavior |
 |---|---|---|
-| Funding (LCC-07, V1) | `kyc.state == APPROVED` when the challenge's `kyc_timing` requires it before funded creation (LCC-07) | funded account creation blocked until APPROVED (synchronous status check — **not** event consumption) |
-| Payout (KYC-08 → PAY-03, V1) | `kyc.state == APPROVED` when timing requires it | `payout.ineligible` (KYC sub-reason) / `payout.kyc_required` (code naming is an open question, contracts/errors/taxonomy.md) — **at request time AND re-checked at approval** (state can change between) |
-| Purchase (extended — not a V1 KYC row) | `l1 == APPROVED`-flavored check (TTS parity: buy needs L1) | `kyc.required`-flavored error on intent create (extended surface) |
-
-### 3.2 Gate semantics (how consumers read)
-
-| Gate | Read | Fail behavior |
-|---|---|---|
-| Purchase (CHK-10 gate, TTS parity: buy needs L1) | `kyc.status(tenant, identity, l1) == verified` | `kyc.required` on intent create (with level + what's missing) |
-| Activation (LCC) | same | account stays `kyc_pending`-flavored `opening` note (LCC owns the state; KYC status surfaces in TD) |
-| Payout (PAY-08 gate) | `l2 == verified` | `pay.kyc_required` (PAY §3.1) — **at request time AND re-checked at approval** (identity can expire between) |
+| Funding/activation (LCC-07/KYC-07, V1) | `kyc.state == APPROVED` when the challenge's `kyc_timing` requires it before funded creation | funded account creation blocked until APPROVED (synchronous status check — **not** event consumption; LCC owns the state, KYC status surfaces in TD) |
+| Payout (KYC-08 → PAY-03, V1) | `kyc.state == APPROVED` when timing requires it | `payout.ineligible` (KYC sub-reason) / `payout.kyc_required` (code naming open, taxonomy) — **at request time AND re-checked at approval** (D39, docs/52) |
+| Purchase (V2 — **no V1 purchase gate**, D44) | V2: tenant-configured level read at session create | V2: `kyc.required` on session create; **V1 control = login-first checkout** (docs/12 §1) |
 
 ### 3.3 Verified identity record (KYC-09)
 
@@ -154,7 +159,7 @@ the provider asks for more.
 
 ### 4.1 V1 baseline events — authoritative
 
-From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `payload`); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
+From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `correlation_id`, `payload` — correlation_id required since docs/49 C1); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
 
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
@@ -180,8 +185,8 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | `kyc.consent_recorded` (V2 KYC-27) | consent captured | AUD (compliance) |
 ## 5. Lifecycles
 
-- **Session:** §3.1 machine (per level); session TTL 24 h (expired →
-  `rejected {reason: session_expired}`, re-initiate).
+- **Session:** §3.1 machine; session TTL 24 h → `EXPIRED` (D43 — the worker
+  transitions it; re-initiate a new session, cooldown rules apply).
 - **Verified record:** `active → (V2 re-verify) superseded` — old rows retained
   (disputes: "what did we verify on the day of that payout").
 - **Manual upload:** `uploaded → (reviewed) → archived (retention)`.
@@ -241,12 +246,13 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/kyc.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/kyc/status` (both levels, what's missing, next action),
-`POST /v1/kyc/sessions` `{level, country}` → `{session_id, checkout_url,
+Trader (TD): `GET /v1/trader/kyc/status` (both levels, what's missing, next action),
+`POST /v1/trader/kyc/sessions` `{level, country}` → `{session_id, checkout_url,
 expires_at}` (KYC-04 V2 names it; V1 has it),
-`GET /v1/kyc/sessions/{id}` (progress, KYC-36),
-`POST /v1/kyc/sessions/{id}/documents` (manual upload, KYC-12),
-`GET /v1/kyc/sessions/{id}/documents` (own uploaded docs).
+`GET /v1/trader/kyc/sessions/{id}` (progress, KYC-36),
+`POST /v1/trader/kyc/sessions/{id}/documents` (manual upload, KYC-12),
+`GET /v1/trader/kyc/sessions/{id}/documents` (own uploaded docs).
+(Paths normalized to the GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/kyc/queue` (manual_review sessions),
 `GET /v1/admin/kyc/sessions/{id}` (detail: provider verdict, docs [audited
@@ -280,10 +286,14 @@ CREATE TABLE kyc_sessions (
   id             ULID PRIMARY KEY,
   tenant_id      ULID NOT NULL,
   identity_id    ULID NOT NULL,
-  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),
-  state          TEXT NOT NULL DEFAULT 'in_session'
-    CHECK (state IN ('in_session','in_review','manual_review','verified',
-                     'rejected','expired','re_verification_required')),
+  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),   -- level machinery is V2; V1 uses one flow (docs/53)
+  is_manual_review BOOLEAN NOT NULL DEFAULT false,  -- queue flag, NOT a state (D43, KYC-11/12)
+  state          TEXT NOT NULL DEFAULT 'not_started'
+    CHECK (state IN ('not_started','pending','in_review','approved',
+                     'rejected','needs_resubmission','expired')),
+    -- KYC-06's exact seven states (docs/53: the DDL's invented in_session/
+    -- manual_review/verified/re_verification_required removed; manual review
+    -- = in_review + is_manual_review)
   provider       TEXT NOT NULL DEFAULT 'veriff',
   provider_case_id TEXT,                     -- Veriff object id
   country_declared CHAR(2), country_ip CHAR(2),
@@ -299,7 +309,7 @@ CREATE TABLE kyc_sessions (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_kyc_tenant_identity ON kyc_sessions(tenant_id, identity_id, level, created_at DESC);
-CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'manual_review';
+CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'in_review' AND is_manual_review;
 
 CREATE TABLE kyc_documents (
   id         ULID PRIMARY KEY,
@@ -376,7 +386,7 @@ provider latency, manual-queue age); Sentry.
 
 | Module | How |
 |---|---|
-| **CHK** | intent create reads L1 gate (`kyc.required` → `CHK`-wrapped code + level detail) |
+| **CHK** | no V1 purchase gate (D44 — login-first checkout is the control); V2 may gate session create on the verification status |
 | **LCC** | activation reads L1; TD "account opening" screen shows the KYC step |
 | **PAY** | L2 gate at request + re-check at approval (PAY §3.1); V2 name match (PAY-07) via hash-equality |
 | **RSK** | (V2) country self-declare vs IP mismatch → signal input; chargeback + KYC age proximity → EDD trigger (KYC-22) |
@@ -398,7 +408,7 @@ Postmark (via NOT), Sentry, Prometheus/Grafana.
 | 1. Schemas + field encryption + R2 upload path (tenant-prefixed, 10 MB) | BE-2 | 1.5 d | OPS, AUTH (encryption) | upload → encrypted rows + R2 object with tenant prefix |
 | 2. Veriff adapter (session create, checkout URL, status) + circuit state | BE-2 | 2 d | 1 | sandbox: session created, URL opens Veriff checkout |
 | 3. Webhook (EVT-10) + state machine + idempotency + mismatch anomaly | BE-2 | 2 d | 2, EVT-10 | replayed webhook → one transition; bogus webhook → anomaly, no state change |
-| 4. Gates: L1 (CHK intent, LCC activation) + L2 (PAY request + approval re-check) + age/country at decision | BE-2 | 2 d | 3, CHK, LCC, PAY | each gate fail code triggerable in staging |
+| 4. Gates: funding (LCC activation) + payout (PAY request + approval re-check) reading the single V1 verification; age/country at decision (purchase gate is V2 — D44) | BE-2 | 2 d | 3, LCC, PAY | each gate fail code triggerable in staging |
 | 5. TD KYC UI (status, embed, upload, progress) + ADM manual queue (decide, docs viewer) | FE-01 | 4 d | 3–4 | end-to-end in staging: trader verifies L1 in-browser, gate opens |
 | 6. Manual review flow (needs_docs → manual upload → staff decide, 2FA) + notices | BE-2 + FE-01 | 2.5 d | 5 | undecided session lands in queue, docs viewable (audited), decision closes it |
 | 7. Masking/audit hardening pass + retention job skeleton + ANA funnel | BE-2 | 1.5 d | 4–6 | property: no PII in any event/log sample; doc access 100% audited |

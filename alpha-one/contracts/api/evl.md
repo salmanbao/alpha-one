@@ -17,11 +17,11 @@ Challenge/rule-set admin endpoints sit in the admin route group (GW-01), Tenant 
 From domain (GW-02). Rule sets and accounts are tenant-scoped (TEN-03).
 
 ## Permissions
-- Challenge and rule set management: `challenge.write`, `ruleset.write` # keys derived from EVL-01/EVL-34 stories — TODO — needs owner decision on exact key names
+- Challenge and rule set management: `challenge.write`, `ruleset.write` # registered (D14-era registry: EVL-01, EVL-02/EVL-34) — resolved 2026-09-20 (docs/62)
 - Manual pass/fail/reset: `account.manual_override` # EVL-20 (compare working-session draft `account.force_pass` — that Req ID LCC-12 is not in the sheet)
 
 ## Idempotency
-Mutating requests accept an idempotency key per GW-12. Evaluation triggers are idempotent by (account, snapshot) inputs — TODO — needs owner decision on the exact dedupe key.
+Mutating requests accept an idempotency key per GW-12. Evaluation triggers are idempotent by (account, snapshot) inputs — the dedupe key is (account_id, tick_event_id) with the input_hash recorded on the `evaluations` row (docs/09 §9) — resolved 2026-09-20 (docs/62).
 
 ## Endpoints
 
@@ -42,7 +42,7 @@ Response 201:
 ```
 
 Errors:
-- `challenge.invalid_config` 400 — phases/rules/pricing inconsistent # implied by EVL-01; exact validation set TODO — needs owner decision
+- `challenge.invalid_config` 400 — phases/rules/pricing inconsistent # the validation set = the §3.1 versioned rulepack schema (docs/09: phases ≥ 1, pricing consistency, rule params in bounds) — resolved 2026-09-20 (docs/62)
 
 ### PATCH /v1/admin/challenges/{challenge_id}
 Auth: Tenant Admin — EVL-01
@@ -62,7 +62,7 @@ Response 200:
 
 Errors:
 - `challenge.not_found` 404 # implied by EVL-01
-- Pricing edit interaction with in-flight checkout sessions (CHK-02 price reservation) — TODO — needs owner decision
+- Pricing edit interaction with in-flight checkout sessions (CHK-02 price reservation) — resolved 2026-09-20 (docs/62): the price is frozen into the session/order snapshot (docs/12 §3.1) — catalog edits never touch in-flight sessions; a rule-pack re-bind (EVL-34) shows the impact view before the manual re-bind
 
 ### POST /v1/admin/rule-sets
 Auth: Tenant Admin — EVL-02
@@ -101,7 +101,7 @@ Response 201:
 
 Errors:
 - `ruleset.not_found` 404 # implied by EVL-02
-- Migration policy options and preview payload — TODO — needs owner decision (EVL-34 promises an impact view and a chosen policy; shapes unspecified)
+- Migration policy options and preview payload — resolved 2026-09-20 (docs/62): the policy is keep-current-version (default) or manual re-bind with reason, never automatic (docs/09 §2/§3.1); the preview is the ADM rule-pack builder's diff view (docs/99 task 1.3) — exact payload shape at build
 
 ### POST /v1/admin/accounts/{account_id}/evaluate
 Auth: support staff (V1.1) — EVL-36
@@ -121,7 +121,7 @@ Response 202:
 
 Errors:
 - `account.not_found` 404 # implied by LCC-01 aggregate
-- `account.terminal_state` 409 — evaluating a FAILED/TERMINATED account — TODO — needs owner decision (rule not in sheet)
+- `account.terminal_state` 409 — evaluating a FAILED/TERMINATED account # registered V1 (docs/30); the rule is the LCC §5.1 matrix — evaluate() runs on ACTIVE/FUNDED only — resolved 2026-09-20 (docs/62)
 
 ### POST /v1/admin/accounts/{account_id}/override
 Auth: Tenant Admin (V1.1) — EVL-20
@@ -146,7 +146,7 @@ Errors:
 
 ## Internal contracts (no HTTP)
 - Pure evaluation function (EVL-04): inputs = snapshot + rule set version; outputs = per-rule results with observed values and reasons. Deterministic; golden-case regression suite proves no drift (EVL-35).
-- Triggers (EVL-05): on sync snapshot (BRG-07), on trade close (BRG-08), daily schedule, admin demand. Schedule time — TODO — needs owner decision.
+- Triggers (EVL-05): on sync snapshot (BRG-07), on trade close (BRG-08), daily schedule, admin demand. Schedule time: the broker-server midnight rollover (ADR-12; `day_start: broker_rollover`, docs/09 §3.1) — resolved 2026-09-20 (docs/62).
 - Trailing HWM (EVL-29): persisted per account; ratchets only upward; balance-vs-equity basis locked per account at creation (EVL-08). Basis flag storage — see `data/schemas/accounts.sql`.
 - Hard breach (EVL-17): transition to BREACH_DETECTED + enqueue disable-then-close commands (BRG-10 via EVT-20).
 - Pass detection (EVL-19): all objectives + day requirements met => PASS_PENDING; auto-advance or queue for verification per config.
@@ -157,9 +157,9 @@ Errors:
 - Emits: pass/breach outcomes surface as AccountPassed, AccountBreached, AccountFailed — lifecycle events are LCC-emitted (LCC-23).
 
 ## Open contract questions
-- TODO — needs owner decision: exact rule parameters set (EVL-06/07/08 name rule families; full parameter list per rule needs the rule-set schema).
-- TODO — needs owner decision: daily reset time and timezone handling for EVL-07 daily starting balance.
-- TODO — needs owner decision: trailing HWM ratchet basis enum values and where the basis is configured (EVL-29 says explicit, sheet does not enumerate).
-- TODO — needs owner decision: auto-advance vs verification-queue config location (EVL-19 per config — challenge-level or tenant-level?).
-- TODO — needs owner decision: minimum trading days and consistency checks (referenced by PAY-03 eligibility; not defined as EVL rules in V1 sheet).
-- TODO — needs owner decision: evaluation audit storage table ownership (EVL-16 writes; AUD module owns schema?).
+- Resolved 2026-09-20 (docs/62): the rule parameters = the §3.1 versioned rulepack block (docs/09 — per-phase params: target, daily/max DD, trailing HWM `basis: equity|balance`, `min_trading_days`, `day_start: broker_rollover`); the schema is the source of truth at freeze.
+- Resolved 2026-09-20 (docs/62): daily reset = the broker-server midnight (ADR-12) via `account.day_rolled`; the rollover pushes `day_start_equity` (docs/09 §3.3) — no wall-clock timezone of our own.
+- Resolved 2026-09-20 (docs/62): the trailing-HWM basis enum = `equity | balance` (docs/09 §3.1), configured per phase in the rulepack.
+- Resolved 2026-09-20 (docs/62): EVL-19's pass gate (`min_trading_days`) is phase-level, configured in the rulepack — challenge-level by construction (the pack binds the challenge); no tenant-level override in V1.
+- Resolved 2026-09-20 (docs/62): minimum trading days and consistency are **PAY-03 eligibility sub-reasons** (docs/11 §3.1 — the frozen checks), not EVL rules; EVL only computes `trading_days` (the rollover counter).
+- Resolved 2026-09-20 (docs/62): the evaluation audit storage is EVL-owned (`evaluations`/`evaluation_state`/`evaluation_overrides`, docs/09 §9 + docs/32); the audit mirror rides the events per docs/05 §14 — AUD owns no EVL schema.

@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `migration.cutover_complete` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/migration.schema.json ($defs/migration_cutover_complete). Per-event payload. Producer: 25 (MIG). When: T_date flip done. Consumers: CON, AUD (critical \u2014 the platform's biggest audit event of the year). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `migration.cutover_complete` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/migration.schema.json ($defs/migration_cutover_complete). Per-event payload. Producer: 25 (MIG). When: T_date flip done. Consumers: CON, AUD (critical — the platform's biggest audit event of the year). Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "WVJZC33FCF22FRXFQ349DJH49N",
   "type": "migration.cutover_complete",
   "version": 1,
   "tenant_id": "HCB3P8CV3TMK8KSD8YRFSRFDF5",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

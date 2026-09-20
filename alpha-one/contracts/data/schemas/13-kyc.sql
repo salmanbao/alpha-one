@@ -3,10 +3,14 @@ CREATE TABLE kyc_sessions (
   id             ULID PRIMARY KEY,
   tenant_id      ULID NOT NULL,
   identity_id    ULID NOT NULL,
-  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),
-  state          TEXT NOT NULL DEFAULT 'in_session'
-    CHECK (state IN ('in_session','in_review','manual_review','verified',
-                     'rejected','expired','re_verification_required')),
+  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),   -- level machinery is V2; V1 uses one flow (docs/53)
+  is_manual_review BOOLEAN NOT NULL DEFAULT false,  -- queue flag, NOT a state (D43, KYC-11/12)
+  state          TEXT NOT NULL DEFAULT 'not_started'
+    CHECK (state IN ('not_started','pending','in_review','approved',
+                     'rejected','needs_resubmission','expired')),
+    -- KYC-06's exact seven states (docs/53: the DDL's invented in_session/
+    -- manual_review/verified/re_verification_required removed; manual review
+    -- = in_review + is_manual_review)
   provider       TEXT NOT NULL DEFAULT 'veriff',
   provider_case_id TEXT,                     -- Veriff object id
   country_declared CHAR(2), country_ip CHAR(2),
@@ -22,7 +26,7 @@ CREATE TABLE kyc_sessions (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_kyc_tenant_identity ON kyc_sessions(tenant_id, identity_id, level, created_at DESC);
-CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'manual_review';
+CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'in_review' AND is_manual_review;
 
 CREATE TABLE kyc_documents (
   id         ULID PRIMARY KEY,

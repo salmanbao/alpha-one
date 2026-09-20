@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `tenant.reactivated` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/tenant.schema.json ($defs/tenant_reactivated). Per-event payload. Producer: 03 (TEN). When: TEN-15. Consumers: GW, NOT, AUD, AUTH (identities stay active; sessions require a new login). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `tenant.reactivated` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/tenant.schema.json ($defs/tenant_reactivated). Per-event payload. Producer: 03 (TEN). When: TEN-15. Consumers: GW, NOT, AUD, AUTH (identities stay active; sessions require a new login). Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "F4AZ008F3RJS24B0CE7HZJYB0G",
   "type": "tenant.reactivated",
   "version": 1,
   "tenant_id": "XDWDZDFBZ94EMTBYDBEQ0WEGDM",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

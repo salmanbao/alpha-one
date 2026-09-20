@@ -70,7 +70,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." | KYC/PAY (impl: KYC-08; code naming — TODO — needs owner decision: dedicated code vs `payout.ineligible` sub-reason) |
 | `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." | PAY (impl: PAY-04, RSK-11) — HTTP status — TODO — needs owner decision |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." | PAY (impl: PAY-01, LCC-02) |
-| `payout.amount_exceeds_available` | 422 | Beyond available profit (balance+equity − initial − prior payouts) | "Amount exceeds your available profit." | PAY (impl: PAY-02) |
+| `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — docs/11 §3.2) | "Amount exceeds your available profit." | PAY (impl: PAY-02) |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached | "Your next payout is available on {date}." | PAY (impl: PAY-21, LCC-20) |
 | `payout.method_not_confirmed` | 400 | Payout method not confirmed | "Confirm your payout method first." | PAY (impl: PAY-05) |
 | `payout.invalid_address` | 400 | Chain-specific crypto address validation failed | "That wallet address is not valid for {chain}." | PAY (impl: PAY-45) |
@@ -177,7 +177,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | Code | HTTP | Meaning |
 |---|---|---|
 | `tenant.suspended` | 403 | Tenant traffic denied (reason in details) |
-| `tenant.not_live` | 403 | `onboarding` tenant, trader-facing route |
+| `tenant.not_live` | 403 | Pre-`active` tenant on a tenant-realm route (details.state: provisioning/provisioning_failed/onboarding — docs/47 M2) | |
 | `tenant.provisioning_failed` | 500 | Pipeline terminal failure (CON only, with step) |
 | `tenant.slug_taken` | 409 | Slug/subdomain conflict |
 | `tenant.domain_invalid` | 422 | DNS/verification failure (custom domain V1.1) |
@@ -199,12 +199,12 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `gw.rate_limited` | 429 | `Retry-After` set; scope in details (ip/user/tenant) |
 | `gw.quota_exceeded` | 429 | Plan quota; `details.metric` |
 | `gw.module_disabled` | 403 | Entitlement gate (module not enabled for tenant) |
-| `gw.idempotency_conflict` | 422 | Key reused with different body |
+| `gw.idempotency_conflict` | — | (folded — the V1 baseline code is `request.idempotency_conflict` **409**, GW-12; this extended variant predates the fold) |
 | `gw.payload_too_large` | 413 | Body over limit |
 | `gw.timeout` | 504 | Handler exceeded budget |
 | `gw.maintenance` | 503 | Maintenance mode |
 | `gw.method_not_allowed` | 405 | — |
-| `evt.webhook_signature_invalid` | 401 | Ingress: bad provider signature |
+| `evt.webhook_signature_invalid` | — | (folded — the V1 baseline code is `webhook.signature_invalid` **401**, EVT-10) |
 | `evt.webhook_schema_invalid` | 422 | Ingress: payload failed schema |
 | `evt.webhook_duplicate` | 200 | Ingress: already processed (idempotent 200) |
 | `evt.consumer_dlq` | — | Internal: consumer gave up (alert + DLQ row) |
@@ -338,7 +338,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 |---|---|---|
 | `not.template_not_found` | 500 | Mapping references missing template (deploy error — CRITICAL alert) |
 | `not.vars_invalid` | 500 | vars_selector produced empty/PII-guarded vars (alert + skip, never send half-rendered) |
-| `not.recipoent_unknown` | 500 | No email/identity (alert — usually a data bug) |
+| `not.recipient_unknown` | 500 | No email/identity (alert — usually a data bug) |
 | `not.provider_unavailable` | 503 | Postmark down (retry queue drains on recovery; critical templates page ops) |
 | `not.rate_limited` | 429 | (V2) Per-recipient/template cap hit (batched into digest) |
 | `not.suppressed` | — | Info state (not an error) |
@@ -365,7 +365,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `auth.expired` | 401 | full-screen re-login (state preserved via query) |
 | `tenant.not_found` | 404 | "site not found" (04: 404-not-403 posture) |
 | `rate.limited` | 429 | inline "slow down, try in {n}s" |
-| `gw.internal` | — | error boundary: retry button + ticket pre-fill + Sentry id shown |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) |
 | `stream.lost` | — | polling fallback + amber chip (not an error screen) |
 | `render.stale` | — | amber "data from {time}" banner (honesty over polish) |
 

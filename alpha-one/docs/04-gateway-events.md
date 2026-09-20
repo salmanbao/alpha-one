@@ -57,17 +57,24 @@ separation enforced at the routing layer:
 | `/v1/admin/*` | tenant admin | staff (JWT + TOTP 2FA, AUTH-09) |
 | `/v1/console/*` | platform console | separate console realm, Super Admin only, mandatory 2FA (CON-01, AUTH-16) |
 | `/v1/webhooks/*` | provider webhooks (payments CHK-07, KYC KYC-05) | provider signature (EVT-10) |
+| `/internal/*` (compose network only) | service-to-service (BRG/EVL command + engine paths) | static per-service bearer (step 3); never edge-routed |
 
-The exact URL plan beyond the V1 baseline is an owner decision
-(`contracts/api/gw.md` open question); the V1 endpoints per module are in
-each doc's §7.1.
+The URL plan beyond the V1 baseline groups is resolved (D46, docs/54): module
+paths normalize under the four groups (each doc's §7.1/§7.2).
+
+**Transport (D64, docs/59):** the browser surfaces (TD/ADM/CON) authenticate
+with the **HttpOnly session cookie** (the `auth_sessions` projection is the
+session of record — docs/02 §3.3; the ZITADEL refresh flow sits behind it);
+non-browser clients present the bearer JWT. Cookie-authenticated state
+changes pass the **origin check** in this chain — the docs/28 T8 CSRF
+defense, now written into the chain rather than cited.
 
 | # | Step | Behavior | Req |
 |---|---|---|---|
 | 1 | Edge handoff | Trust Cloudflare: `CF-Connecting-IP` (only if CF proxy chain verified, GW-33), WAF/DDoS done at edge | GW-20, GW-33 |
-| 2 | Tenant resolution | **V1: domain/subdomain only** on the public edge (TEN-02; rejected before auth runs; unknown → `404 tenant.unknown_host`). **Internal routes** (`internal` group) are never edge-routed: they are reachable only on the compose network and resolve the tenant from `X-Tenant-Id` (§02 §3.3 order) | GW-02, TEN-02 |
+| 2 | Tenant resolution | **V1: domain/subdomain only** on the public edge (TEN-02; rejected before auth runs; unknown → `404 tenant.unknown_host`). **Internal routes** (`internal` group) are never edge-routed: they are reachable only on the compose network and resolve the tenant from `X-Tenant-Id` (docs/02 §3.3 order) | GW-02, TEN-02 |
 | 3 | Authn | **V1:** JWT (trader/staff) or console realm session verified on every protected route; invalid → `401 auth.invalid_credentials`. **Internal routes:** static per-service bearer token from SOPS (one per service, 90 d rotation) — never user tokens; every call logged with the service identity + `correlation_id` (docs/44 §7; HMAC/mTLS is the V2 upgrade). **API keys:** primitives exist in V1 but have **no tenant-facing surface** until AUTH-21 (decision D18) | GW-03, GW-16 |
-| 3.5 | **Status gate** (docs/44 §7) | a) tenant state → `tenant.suspended` / `tenant.not_ready`; b) identity state → `auth.account_suspended`; c) membership state for `(identity, tenant)` → `auth.membership_suspended` (console realm skips c). Resolved in this order so the error never reveals which layer failed beyond what the host already discloses; cached in Redis ≤ 5 s keyed by `(identity, tenant)`, invalidated by `user.suspended` / `user.activated` / membership events | GW-04, AUTH-20/43, TEN-15 |
+| 3.5 | **Status gate** (docs/44 §7) | a) tenant state → `tenant.suspended`, or `tenant.not_live` for a pre-`active` tenant on a trader-facing route (`details.state` names it — corrected from the unregistered `tenant.not_ready`, docs/47 M2); b) identity state → `auth.account_suspended`; c) membership state for `(identity, tenant)` → `auth.membership_suspended` (console realm skips c). Resolved in this order so the error never reveals which layer failed beyond what the host already discloses; cached in Redis ≤ 5 s keyed by `(identity, tenant)`, invalidated by `user.suspended` / `user.activated` / membership events. **Route-class aware** (docs/47 §5): the pre-`active` deny (`tenant.not_live`) applies to trader-facing routes only — an `onboarding` tenant's staff surfaces pass the gate by design (the checklist state); `tenant.suspended` denies every surface. The state × surface × code cell set is `contracts/tenants/state-capabilities.yaml` (I-20 test source, gate 16) | GW-04, AUTH-20/43, TEN-15 |
 | 4 | Authz | **V1:** module-declared `resource.action` permission keys (AUTH-13) enforced per route; registry `contracts/permissions/registry.md` + bindings `contracts/permissions/roles.yaml` (role → key, seeded into Casbin — D14/D15); denied → `403 permission.denied`. Engine: policy evaluation behind `authorizer.Check` (Casbin embedded — ADR-14; an implementation detail, the contract is the key model). Console realm separate (CON-01) | GW-04, AUTH-13 |
 | 5 | Rate limit | edge (per-IP) → per-user (Redis 100 rpm default) → per-route (auth 10/5 min, payout 5/h) | GW-05 |
 | 6 | Tenant quota + entitlement | plan limits (RPM, concurrency) + module entitlement gate; suspended tenant → 403 | GW-06, GW-22, GW-23 |
@@ -75,9 +82,9 @@ each doc's §7.1.
 | 8 | Correlation | `X-Correlation-Id` in or new ULID; propagated: logs, events (`correlation_id`), engine calls, webhooks | GW-09, GW-36 |
 | 9 | Hygiene | body ≤ 1 MB (uploads 10 MB via presigned R2 — GW-26); handler timeout 10 s; sensitive header redaction in logs (Authorization, tokens — GW-35) | GW-13, GW-35 |
 | 10 | Handler | domain package | — |
-| 11 | Response | success envelope (working draft `{data, meta{request_id, version}}` — exact shape is an owner decision, `contracts/api/gw.md` open question); error contract (GW-18 — `code`, `message`, `correlation_id`); pagination standard (GW-21); `Retry-After` on 429 (GW-29); `Deprecation`/`Sunset` headers (GW-28) | GW-18..21,28,29,30 |
+| 11 | Response | success envelope (**binding — D45, docs/54**): `{data, meta{request_id, version, pagination{cursor, has_more}}}`; error contract (GW-18 — `code`, `message`, `correlation_id`); pagination standard (GW-21, cursor); `Retry-After` on 429 (GW-29); `Deprecation`/`Sunset` headers (GW-28, V3) | GW-18..21,28,29,30 |
 | — | Audit flag | sensitive routes registered in a route table → mandatory audit write on success + failure (GW-17) | GW-17 |
-| — | Probes | `/healthz` (liveness: process up), `/readyz` (readiness: PG ping + Redis ping + relay lag < 60 s) | GW-14 |
+| — | Probes | `/healthz` (liveness: process up), `/readyz` (readiness: PG ping + Redis ping + relay lag < 60 s; schema version reported, deploy blocks on drift — docs/06 §2.3) | GW-14 |
 | — | OpenAPI | `/v1/openapi.json` per route group, served by api (GW-15); docs at `docs.alpha1.io` (CMS) | GW-15 |
 | — | Maintenance | `maintenance_mode` flag (Flipt) → 503 + `Retry-After` for all non-probe routes (GW-32) | GW-32 |
 | — | Caching | GET-only, cacheable routes declared per route (`Cache-Control: private, max-age=N` + tenant-tagged keys; invalidation by domain events) (GW-24, V2) | GW-24 |
@@ -109,7 +116,7 @@ Rule: **a domain event exists iff the DB transaction that caused it committed.**
 
 ```go
 // inside any domain write transaction
-tx.Events().Append(ctx, "checkout.order_paid", map[string]any{
+tx.Events().Append(ctx, "order.paid", map[string]any{
   "order_id": o.ID, "amount_cents": o.AmountCents, ...
 })
 tx.Commit()   // INSERT row + INSERT outbox row — atomic
@@ -127,8 +134,9 @@ Single instance (PG advisory lock `relay:lock`, steal after 30 s heartbeat):
    field `event_id` for dedupe; set `published_at = now()`.
 3. On XADD failure: leave `published_at NULL`, `publish_attempt++`; 5 failures →
    CRITICAL alert (relay is the only bridge — its failure = platform-wide event halt).
-4. **Pruning** (EVT-33): published events older than 7 d deleted nightly (they live
-   in `events` table forever).
+4. **Pruning** (a V1 necessity — the outbox must not grow unbounded; EVT-33's
+   V2 retention ops formalize the policy): published events older than 7 d
+   deleted nightly (they live in the `events` table forever).
 
 ### 3.4 Event log (EVT-08)
 
@@ -146,6 +154,14 @@ consumer_state`, `max_attempts: 5` with backoff 1 s ×2^k, `timeout: 30 s`.
 Worker supervisor: per-consumer goroutine pool (per-entity serial lanes via
 `entity_id` hash → N lanes, ordering preserved per entity, EVT-25 V2 formalizes).
 **At-least-once + idempotent = effectively-once for side effects.**
+**DLQ operations (V1 — D47, docs/54):** after `max_attempts` the event lands in
+`dlq.{consumer}` + alert; recovery is the relay's `dlq` subcommand —
+`relay dlq list --consumer=X`, `relay dlq retry --consumer=X --id=...`
+(re-publishes the original envelope; consumers dedupe), `relay dlq purge`
+— run by ops with the SOPS service identity; every action is logged to AUD
+(`security.replay` class). The CON DLQ screen (list/filter/bulk-retry) is the
+V2 UX (blueprint step 10); the V1 rule is: no dead event without either a
+retry or a recorded purge decision.
 
 ### 3.6 Ingress webhooks (EVT-10, V1)
 
@@ -155,8 +171,9 @@ Provider → us (MetaApi, Veriff, NOWPayments/Match2Pay/Interkasa):
   (b) validates schema, (c) **idempotent on provider event id** (`provider_events`
   table: provider, provider_event_id, payload_hash, status → unique key),
   (d) processes inline if < 200 ms else `202` + async handler.
-- Provider event processing emits **our** domain events (e.g. Veriff decision →
-  `kyc.provider_decision` → our outbox → consumers). Never call providers from
+- Provider event processing emits **our** domain events (e.g. a Veriff decision
+  → the producer module's V1 events `kyc.approved`/`kyc.rejected`, docs/13
+  §4.1 — never an event name invented at the ingress) → our outbox → consumers. Never call providers from
   consumer paths without a circuit breaker.
 
 ### 3.7 Outbound tenant webhooks (EVT-11..16, 26, 31, 34 — V2)
@@ -178,13 +195,24 @@ read-model rebuilds (ANA-22), cutover verification (MIG).
 
 ## 4. Events (produced by this module)
 
+### 4.1 V1 baseline events — authoritative
+
+**None.** The spine emits no V1 catalog events: provider truth surfaces as the
+*producer modules'* V1 events (`order.paid`, `kyc.*` — docs/12/13 §4.1), and
+command traffic is the `account_commands` table (EVT-20), never events. (The
+docs/31 generator's 4.1/4.2 scan requires this section to exist — docs/54 M5.)
+
+### 4.2 Extended (post-V1) event model — design-level
+
 | Event | Producer | Consumers |
 |---|---|---|
 | `gateway.maintenance_entered/exited` | GW | CON, NOT (tenant owners) |
 | `gateway.rate_limit_breached` (sampled 1%) | GW | ANA, CON |
 | `webhook.delivered / webhook.failed / webhook.endpoint_disabled` | EVT (V2) | ADM (tenant), AUD, CON |
-| `relay.lag` (metric, not event) | relay | Prometheus; CON gauge |
 | `outbox.pruned` (daily summary) | relay | AUD |
+
+(`relay.lag` is a Prometheus metric + CON gauge, not an event — it never
+enters the outbox.)
 
 ## 5. Lifecycles
 
@@ -228,12 +256,12 @@ Namespace `GW` (+ `EVT` for webhook/ingress):
 | `gw.rate_limited` | 429 | `Retry-After` set; scope in details (ip/user/tenant) |
 | `gw.quota_exceeded` | 429 | Plan quota; `details.metric` |
 | `gw.module_disabled` | 403 | Entitlement gate (module not enabled for tenant) |
-| `gw.idempotency_conflict` | 422 | Key reused with different body |
+| `gw.idempotency_conflict` | — | (folded — the V1 baseline code is `request.idempotency_conflict` **409**, GW-12; this extended variant predates the fold) |
 | `gw.payload_too_large` | 413 | Body over limit |
 | `gw.timeout` | 504 | Handler exceeded budget |
 | `gw.maintenance` | 503 | Maintenance mode |
 | `gw.method_not_allowed` | 405 | — |
-| `evt.webhook_signature_invalid` | 401 | Ingress: bad provider signature |
+| `evt.webhook_signature_invalid` | — | (folded — the V1 baseline code is `webhook.signature_invalid` **401**, EVT-10) |
 | `evt.webhook_schema_invalid` | 422 | Ingress: payload failed schema |
 | `evt.webhook_duplicate` | 200 | Ingress: already processed (idempotent 200) |
 | `evt.consumer_dlq` | — | Internal: consumer gave up (alert + DLQ row) |
@@ -249,7 +277,7 @@ a non-registered code fails CI (`error_registry_test`).
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level. **URL plan resolved (D46, docs/54): the GW-01 groups are the plan** — every module's extended surface normalizes into `/v1/trader/*`, `/v1/admin/*`, `/v1/console/*`, `/v1/webhooks/*` (or the compose-only `/internal/*`); the un-grouped paths in other modules' §7.2 lists are pre-normalization illustrations. Shown for platform completeness (V2/V3 phases, docs/99).
 
 Public/system:
 
@@ -273,17 +301,19 @@ Every domain module's endpoints inherit the GW envelope, pagination
 ## 8. Schema (key shapes)
 
 ```jsonc
-// success envelope (working draft — owner decision, contracts/api/gw.md)
+// success envelope — BINDING (D45, docs/54): every 2xx response
 { "data": { ... }, "meta": { "request_id": "01J9...", "version": "v1",
-    "pagination": { "cursor": "eyJpZCI6...", "has_more": true } } }
+    "pagination": { "cursor": "eyJpZCI6...", "has_more": true } } }  // pagination on lists only
 
 // error envelope (GW-18) — exact V1 shape, see §3.1
 { "code": "...", "message": "...", "correlation_id": "01J9..." }
 
 // event envelope (EVT-03) — canonical: contracts/events/payloads/envelope.schema.json
-// exactly: id, type, version, tenant_id, occurred_at, payload
-// Extended (post-V1) internal enrichment goes inside `payload`:
-// correlation_id, causation_id, actor{kind,id,tenant_id}
+// exactly: id, type, version, tenant_id, occurred_at, correlation_id, payload
+// correlation_id is REQUIRED from the ninth pass (docs/49 C1): GW step 8's
+// propagation promise ("events (correlation_id)") is now part of the envelope
+// contract; workers mint one at job start. Actor context stays payload-level
+// (`*_by` fields) extended by causation_id/actor{kind,id,tenant_id} post-V1.
 
 // GET /v1/console/relay
 { "data": { "lag_seconds": 1.2, "queue_depth": 42, "publish_rate_per_min": 3200,
@@ -308,7 +338,11 @@ CREATE INDEX idx_outbox_unpublished ON outbox(id) WHERE published_at IS NULL;
 
 CREATE TABLE events (
   event_id      ULID,
-  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- per-topic seq in app (Redis INCR on publish)
+  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- global append order, assigned by the
+                                                       -- INSERT (the relay is the single writer;
+                                                       -- NO Redis counter in the durable path —
+                                                       -- the D27 lesson, docs/48); V2 CON replay
+                                                       -- addresses seq ranges
   topic         TEXT NOT NULL,
   tenant_id     ULID NOT NULL,
   entity_id     TEXT NOT NULL,
@@ -389,7 +423,7 @@ relay lock is PG-side.
 | DLQ | per-consumer stream + CON screen | DLQ depth alert > 100 |
 | Replay | from PG `events` — O(range), no stream scan | 13-month window |
 | Failure: relay down | outbox accumulates (bounded by tx rate); **trading continues** (bridge→PG direct for enforcement-critical paths — sync ticks are PG writes, events are derived) | RTO for relay = restart (< 1 min) |
-| Failure: Redis down | GW: authn falls to PG (degraded); rate limits fail-open with alert; EVT: relay pauses (outbox accumulates) | documented degradation matrix in 29 |
+| Failure: Redis down | GW: authn falls to PG (degraded); rate limits fail-open with alert; EVT: relay pauses (outbox accumulates) | the failure rows above + 29 §6 load numbers |
 
 ## 12. Open-source solutions
 
@@ -407,7 +441,7 @@ relay lock is PG-side.
 Go (`api` middleware package, `relay` service, `workers` consumers), Redis 7
 (streams + idempotency + rate limits), Postgres (outbox/events), Hook0,
 Flipt (maintenance flag), Cloudflare (edge), Prometheus (relay lag, DLQ depth,
-IdP-sync lag/stall, rate-limit hits), Sentry (consumer crashes), Uptime Kuma (probe `/readyz`).
+IdP-sync lag/stall, rate-limit hits), Sentry (consumer crashes), Uptime Kuma from the standby host + the external checker (D57, docs/57) (probe `/readyz`).
 
 ## 14. Integration — internal modules (glue)
 
@@ -427,14 +461,14 @@ IdP-sync lag/stall, rate-limit hits), Sentry (consumer crashes), Uptime Kuma (pr
 ## 15. Integration — external tools
 
 MetaApi, Veriff, NOWPayments, Match2Pay, Interkasa (ingress), Hook0 (outbound),
-Cloudflare (edge), Prometheus/Grafana, Sentry, Uptime Kuma, Flipt.
+Cloudflare (edge), Prometheus/Grafana, Sentry, Uptime Kuma (standby-hosted — D57, docs/57), Flipt.
 
 ## 16. Implementation blueprint
 
 | Step | Owner | Est | Depends | Exit criteria |
 |---|---|---|---|---|
 | 1. Outbox + envelope + `tx.Events()` helper in go-shared | BE-1 | 2 d | OPS, DB | unit: event exists iff tx commits |
-| 2. Relay service + lock + pruning + metrics | BE-1 | 3 d | 1 | kill relay 5 min → restart → zero events lost, zero dupes (consumer-side count) |
+| 2. Relay service + lock + pruning + metrics + `dlq list/retry/purge` subcommand (D47) | BE-1 | 3 d | 1 | kill relay 5 min → restart → zero events lost, zero dupes; a poisoned event is retried/purged via the CLI with an AUD row |
 | 3. Event log table + partitioning + retention job | BE-1 | 1 d | 2 | 13-month retention verified by test clock |
 | 4. Consumer framework (groups, DLQ, backoff, idempotency, lanes) + supervisor | BE-2 | 4 d | 2 | chaos test: consumer crash mid-batch → no loss, no dup side effects |
 | 5. GW chain steps 1–9 + error contract + envelope + pagination | BE-1 | 5 d | AUTH, TEN | contract tests: every registered route returns registered codes only |

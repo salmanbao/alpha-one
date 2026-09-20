@@ -15,8 +15,8 @@
 - **Account list (ADM-05)** — filterable (state, package, trader, date),
   the ops starting point; row → detail.
 - **Core queues (V1-justified, V2-completed):**
-  - **Payout queue** (PAY-08/09: approve/reject with reason, 2FA, export
-    PAY-44) — V1 payouts are manual, so this screen is critical path.
+  - **Payout queue** (PAY-08/09: approve/reject with reason, 2FA; export is
+    PAY-44, V1.1) — V1 payouts are manual, so this screen is critical path.
   - **KYC manual review** (KYC-11/12) — the undecided/needs-docs queue.
   - **Risk cases** (RSK-10/12 V1 flow: open, decide, hold release).
   - **Trader management (ADM-03/04 minimum):** find trader → detail →
@@ -38,8 +38,10 @@ Requirement coverage: `ADM-05` (V1.0) + `01,02,03,04,06..41` (V2.0; the payout/K
 
 ```
  Next.js 15 (web/adm) — same monorepo, different app + different realm
-   │  · subdomain console.alphaone.example (SEPARATE from TD — PRD
-   │    non-negotiable: own auth realm, separate session storage)
+   │  · the tenant's own host under /admin (e.g. {slug}.alpha1.io/admin —
+   │    D67, docs/59: one host per firm; the session realm decides which
+   │    portal renders; realm-name-separated cookies; the separate platform
+   │    subdomain is the CONSOLE's — docs/21)
    │  · staff roles only (firm:*) — a trader identity cannot render ADM
    │    (AUTH realm split + Casbin: no policy grants firm:* to user:*)
    │  · RSC data pages + client islands (queue tables, composer, detail
@@ -66,9 +68,9 @@ updates (no polling storms).
 | **Queue home** | unprocessed counts (payout, KYC, risk, support-triage), SLA aging columns (V2 config; V1 fixed: > 24 h amber, > 72 h red) | per-queue count endpoints |
 | **Accounts (ADM-05)** | list: id, trader, package, state, phase, opened date, equity (observed), breach flag; filters: state, package, trader name/id, date range; export CSV (V2 ADM-25; V1: the list only) | LCC admin account-list reads (07 §7) |
 | **Account detail (ADM-06)** | tabs: Overview (state machine timeline — `account_state_history`), Metrics (observed vs evaluated — the EVL-49 pair, side by side, for dispute triage), Positions/Deals (BRG read), Payouts, Documents (signed URL fetch), Events (the audit mirror for this entity), Actions (pause/resume, request halt, open risk case, note) | LCC/BRG/PAY/DOC/AUD reads + LCC command endpoints |
-| **Payout queue** | table: trader, account, amount, rail, age, eligibility re-check badge (live), risk flag; approve (2FA dialog) / reject (reason taxonomy) / detail (calc snapshot, executions, method version) / export (PAY-44) | PAY admin API (11 §7) |
+| **Payout queue** | table: trader, account, amount, rail, age, eligibility re-check badge (live), risk flag; approve (2FA dialog) / reject (reason taxonomy) / detail (calc snapshot, executions, method version) / export (PAY-44, V1.1 — not in V1) | PAY admin API (11 §7) |
 | **KYC queue** | manual_review sessions: trader, level, provider verdict, reason class, doc viewer (sensitive-read audited), decide (2FA + reason) | KYC admin API (13 §7) |
-| **Risk cases** | open/reopened cases: severity, signals summary, trader, accounts, payout hold state; decide (outcome + note; actions execute per RSK §3.4); V1 auto-opened breach cases appear here | RSK API (10 §7) |
+| **Risk cases** | open/reopened cases: severity, signals summary, trader, accounts, payout hold state; decide (outcome + note; **2FA step-up** — D70; actions execute per RSK §3.4); V1 auto-opened breach cases appear here (D68 — the hold flag rides along, dormant until V1.1) | RSK API (10 §7; `risk.case.read` / `risk.case.decide`) |
 | **Traders (ADM-03/04)** | list + detail (identities, accounts, KYC status, payout history, notes); actions: suspend/resume identity (2FA), note | AUTH identity admin + read joins |
 | **Settings (V1 minimum)** | tenant profile basics, brand assets (TEN-05/06), payout policy display (read-only V1; edit = TEN API, 2FA), provider rail matrix display | TEN APIs (03) |
 
@@ -117,7 +119,7 @@ dispute without escalating to the dev team, from one screen.
 | `kyc.status_changed` (manual_review) | KYC queue |
 | `risk.case_opened/decided` | risk queue |
 | `account.state_changed` | account list badges + SSE |
-| `notification.failed_final` / `system.*` ops events | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) |
+| `notification.failed_final` / `ops.*` signals (docs/56 §4) | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) |
 | `audit.access_denied` (V2) | security tab (V2) |
 
 ## 5. Lifecycles
@@ -129,7 +131,7 @@ dispute without escalating to the dev team, from one screen.
 - **Export (V2 ADM-25/31):** `requested → running → available (R2 URL, 24 h)
   → expired`.
 - **Broadcast (V2 ADM-15):** `draft → preview → sent` (NOT-14 contract).
-- **Session:** staff sessions (AUTH realm split); idle 15 min (stricter than
+- **Session:** staff sessions (AUTH realm split); idle 15 min (D66 — docs/02 §9's staff realm carve-out; stricter than
   TD's 30 — money actions); concurrent admin sessions allowed (audit
   distinguishes actors).
 
@@ -141,7 +143,7 @@ plus:
 | Class | Trigger | UI |
 |---|---|---|
 | `CONFLICT` | 409 on any action button | toast + auto row-refresh (someone else acted) |
-| `stepup.expired` | 403 `auth.mfa_required` after 5 min | 2FA dialog reopens (object preserved) |
+| `stepup.expired` | 403 `authz.step_up_required` after 5 min (the registered code, D38; `auth.mfa_required` 401 is the missing-`amr` case) | 2FA dialog reopens (object preserved) |
 | `forbidden.role` | 403 Casbin denial | "you need {role}" + link to settings (ADM-17 V2) |
 | `export.busy` | 429 concurrent export cap | queue position shown (V2) |
 
@@ -152,7 +154,7 @@ plus:
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54 — the admin group). Shown for platform completeness (V2/V3 phases, docs/99).
 
 ADM consumes: LCC admin (account-list reads, detail reads, command triggers —
 07 §7), PAY admin (11 §7), KYC admin (13 §7), RSK admin (10 §7), CHK

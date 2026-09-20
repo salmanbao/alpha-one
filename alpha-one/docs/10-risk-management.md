@@ -51,7 +51,7 @@ manifest for dashboards.
 
 ```
 signals:
-  id · tenant_id · kind (enum registry — V1: breach_ref, manual)
+  id · tenant_id · kind (enum registry — V1: breach, manual)
   scope { trader_id, account_id? }
   detector_id (V2: which detector; V1: 'manual'|'breach')
   severity (info|low|medium|high|critical)
@@ -79,12 +79,18 @@ status · severity (max of signals) · signals[] (ids) · trader_id · accounts[
 payout_hold (bool — the V1 action) · decided_by · decided_at · decision_note ·
 actions JSONB (what was executed: hold_id, suspend refs) · SLA fields (V2)`.
 
-**Opening a case (V1)** is exactly: `POST /v1/risk/cases` (ADM, risk role) with
-signals (≥ 1) or a direct reason; the only V1 side effect:
-`payout_hold` set → PAY eligibility check fails until released. Breach cases are
-opened **automatically** on `account.breached` (V1: kind=breach, payout_hold per
-tenant policy default true) — the "open risk case blocks payouts" default
-becomes concrete here.
+**Opening a case (V1)** is exactly: `POST /v1/admin/risk/cases` (ADM, the
+`risk.case.create` role set) with signals (≥ 1) or a direct reason; the V1
+side effect: the `payout_hold` flag is set on the case (breach cases: tenant
+policy default true). The flag is **dormant in V1.0** — the PAY-04 eligibility
+interlock (an open case fails the payout check with `payout.risk_hold` 423)
+wires in V1.1 (RSK-11, task 2.1 — D68, docs/60). Breach cases open
+**automatically** on `AccountBreached` (the V1 catalog name; `account.breached`
+is the extended-model name — docs/07 §4 mapping), kind=breach, idempotent per
+breach verdict id (the `dedup_key`). **One open case per account** (D71,
+docs/60): a second open attempt on an account that already has an open case →
+`risk.case_already_open` 409 — enforced as a transactional check under a
+per-trader advisory lock (`account_ids` is an array; no plain unique index).
 
 ### 3.3 V2 detectors (design now, build in Phase 4 wave 3)
 
@@ -123,7 +129,7 @@ RSK uses Redis **only for ephemerals** (all rebuildable; PG is the record):
 | `rsk:dedup:{detector}:{dedup_key}` | SETNX + TTL = detector window | signal dedupe (best-effort; the PG `dedup_key` unique constraint is the correctness backstop) |
 | `rsk:count:{detector}:{account}:{bucket_min}` | INCR + EXPIRE 2× window | sliding-window counters (velocity, cycling pre-filters) without PG write pressure |
 | `rsk:runlock:{detector}:{shard}` | SET NX PX = run timeout | single-execution per detector run (the OPS-27 pattern; a crashed run's lock expires and the next schedule re-runs) |
-| `rsk:claim:{case_id}` | SET NX PX 30 s | staff claim race on case assignment (loser gets `rsk.case_claimed`) |
+| `rsk:claim:{case_id}` | SET NX PX 30 s | staff claim race on case assignment — **V2** (ADM-36; V1 has no assignment, docs/17 §3.2; the loser gets `risk.case_claimed`) |
 
 **Explicit non-goal:** no account/position/equity hot state in Redis. The
 research §6.3 real-time layout (account hashes, price hashes, risk-utilization
@@ -135,21 +141,37 @@ it can never corrupt a case.
 
 ## 4. Events (topic `risk`)
 
+### 4.1 V1 baseline events — authoritative
+
+Promoted 2026-09-20 (D65, docs/59): the
+case spine is V1 (RSK-01/10) and the risk queue is a committed V1 ADM screen
+(docs/17 §3.1) — the two lifecycle events are V1; the risk-case EMAIL
+templates stay V2 reserves (docs/58, D61).
+
+| Event | When | Consumers |
+|---|---|---|
+| `risk.case_opened` | manual open (RSK-10) / breach auto-open on `AccountBreached` (D68) | ADM (queue), AUD, ANA (risk_summary daily counts) |
+| `risk.case_decided` | decision | PAY (hold release/keep — the interlock from V1.1), LCC (if action), AUD (sensitive — docs/05 §14), ANA (risk_summary daily counts) |
+
+### 4.2 Extended (post-V1) events — design-level
+
 | Event | When | Consumers |
 |---|---|---|
 | `risk.signal_created` | any signal | ANA (V2), AUD (standard) |
-| `risk.case_opened` | manual/auto/after breach | NOT (owner/risk), ADM (queue), AUD |
-| `risk.case_decided` | decision | PAY (hold release/keep), LCC (if action), NOT, AUD |
-| `risk.case_escalated` (V2) | SLA breach | NOT (owner + CON), AUD |
-| `risk.case_appealed` (V2) | trader appeal | ADM, AUD |
-| `risk.payout_hold_set` / `risk.payout_hold_released` | hold lifecycle | PAY, NOT, AUD |
+| `risk.case_escalated` | SLA breach | NOT (owner + CON), AUD |
+| `risk.case_appealed` | trader appeal | ADM, AUD |
+| `risk.payout_hold_set` / `risk.payout_hold_released` | hold lifecycle (RSK-11/PAY-04, V1.1+) | PAY, NOT, AUD |
+
+V2 promotions to expect: NOT joins the case_opened/decided consumers when the
+risk-case templates ship (docs/58 §3.4 reserves).
 
 ## 5. Lifecycles
 
 - **Signal:** `created → deduped (merged) | attached (case) | aged (90 d, then
   archive; RSK-19 retention + audit of deletions)`.
 - **Case:** `open → decided → (appeal → reopened) → closed (30 d after decision,
-  V2 SLA fields)`. V1: `open → decided` (+auto-close at case decision).
+  V2 SLA fields)`. V1: `open → decided` — decided is terminal in V1.0 (the 30-d
+  close and the appeal reopen arrive with the V2 SLA job).
 - **Payout hold:** `set (by case) → released (by decision | expiry | manual)`.
 - **Watchlist (V2):** `added → active → removed` (trader-level, ADM-managed).
 - **Detector (V2):** `enabled → scheduled → (disabled)`, with manifest row.
@@ -172,37 +194,46 @@ Namespace `RSK`:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `rsk.case_not_found` | 404 | — |
-| `rsk.case_closed` | 409 | Action on decided case (use appeal, V2) |
-| `rsk.signal_required` | 422 | Open case without signal/reason |
-| `rsk.decision_conflict` | 409 | Concurrent decision (optimistic lock) |
-| `rsk.hold_not_active` | 409 | Release without hold |
-| `rsk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed |
-| `rsk.detector_disabled` | 422 | (V2) Trigger detector that's disabled |
+| `risk.case_not_found` | 404 | Case unknown |
+| `risk.case_closed` | 409 | Action on decided case (use appeal, V2) |
+| `risk.signal_required` | 422 | Open case without signal/reason |
+| `risk.decision_conflict` | 409 | Concurrent decision (optimistic lock) |
+| `risk.case_claimed` | 409 | Another staff claimed the case (V2 claim race, §3.5) |
+| `risk.hold_not_active` | 409 | Release without hold |
+| `risk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed |
+| `risk.detector_disabled` | 422 | (V2) Trigger detector that's disabled |
+
+Namespaced `risk.*` per D69 (docs/60): the V1 codes, the event topic and the
+permission keys already say `risk` — the extended rows follow (`risk.case_claimed`
+added from §3.5).
 
 ## 7. API endpoints
 ### 7.1 V1 baseline — `rsk` (authoritative: `contracts/api/rsk.md`)
 
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
-| `POST /v1/admin/risk/cases` | staff — RSK-10 (manual opening) | `risk.case.create` # RSK-10 | required | `risk.account_not_found`, `risk.case_already_open` |
+| `POST /v1/admin/risk/cases` | staff — RSK-10 (manual opening) | `risk.case.create` # RSK-10 | required | `risk.account_not_found`, `risk.case_already_open` (the D71 rule) |
+| `GET /v1/admin/risk/cases` | staff — the ADM risk queue (docs/17 §3.1, V1-era thin view) | `risk.case.read` | none | — |
+| `GET /v1/admin/risk/cases/{id}` | staff — case detail (signals summary, hold state) | `risk.case.read` | none | `risk.case_not_found` |
+| `POST /v1/admin/risk/cases/{id}/decide` | staff — the case machine (§5; task 1.4's exit walk) | `risk.case.decide` + **2FA step-up** (D70) | required | `risk.case_not_found`, `risk.case_closed`, `risk.decision_conflict` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/rsk.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Beyond the §7.1 D46 baseline. Design-level; the module sits in the
+tenant-admin group (`/v1/admin/risk/*` — D46, docs/54). Shown for platform
+completeness (V1.1/V2/V3 phases, docs/99).
 
-V1: `GET|POST /v1/risk/cases` (ADM), `GET /v1/risk/cases/{id}`,
-`POST /v1/risk/cases/{id}/decide` `{outcome, note}`,
-`POST /v1/risk/cases/{id}/hold-release` (manual release, reason),
-`GET /v1/risk/cases/{id}/signals`.
+V1.1: `POST /v1/admin/risk/cases/{id}/hold-release` (manual release, reason —
+the PAY-04 interlock era, task 2.1/D68) + `GET .../signals` (the signal-level
+evidence view; V1.0 evidence lives in the case detail read).
 
 V2: signals endpoints, detector manifest/controls, watchlist, allowlist,
-appeals, five-account compare (RSK-15), IP/device views (RSK-16/17), SLA
-config. Trader (TD): none — traders see **outcomes** (payout hold notice via
-NOT), never the case internals (PRD: traders don't see risk internals; appeal
-surface V2 RSK-41).
+appeals + claim/assignment (`risk.case_claimed`), five-account compare
+(RSK-15), IP/device views (RSK-16/17), SLA config. Trader (TD): none — traders
+see **outcomes** (payout hold notice via NOT), never the case internals (PRD:
+traders don't see risk internals; appeal surface V2 RSK-41).
 ## 8. Schema (key shapes)
 
 ```jsonc
@@ -254,8 +285,8 @@ CREATE TABLE risk_cases (
   status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','decided','reopened','closed')),
   severity      TEXT NOT NULL,
   trader_id     ULID NOT NULL,
-  account_ids   ULID[],
-  payout_hold   BOOLEAN NOT NULL DEFAULT false,
+  account_ids   ULID[],                     -- one open case per account (D71): transactional check under a per-trader advisory lock (§3.2)
+  payout_hold   BOOLEAN NOT NULL DEFAULT false,  -- dormant in V1.0; the PAY-04 interlock reads it from V1.1 (D68)
   hold_until    TIMESTAMPTZ,                -- RSK-31 (V2 expiry)
   decision_note TEXT,
   actions       JSONB NOT NULL DEFAULT '[]',
@@ -274,9 +305,13 @@ CREATE INDEX idx_rcase_trader ON risk_cases(tenant_id, trader_id, status);
 - **Evidence hygiene:** no KYC content, no wallet strings, no full documents in
   `evidence` — hashes and pointers; the case detail view fetches originals
   behind sensitive-read audit (AUD-23).
-- **Access:** `firm:risk` + `firm:owner` only; decisions require 2FA when they
-  release a hold or keep it past 72 h (V2 SLA); all case ops audited
-  (critical tier for suspend actions).
+- **Access:** `firm:owner`, `firm:admin`, `firm:risk` (the `risk.case.*` role
+  set — roles.yaml); **case decisions require the 2FA step-up, always, from
+  V1.0** (D70, docs/60 — the same family treatment as the payout approval and
+  the KYC decide; the D38 `authz.step_up_required` chain). The V2 SLA adds the
+  72-h escalation (RSK-29). **Audit tiers (docs/05 §14):** `risk.case_decided`
+  mirrors as **sensitive** (money-adjacent: the hold keep/release),
+  `risk.case_opened` as standard; the V2 suspend action path audits critical.
 - **Trader fairness:** the payout-hold notice names the *class* of issue
   ("under review"), never detector internals; appeal (V2) is the fairness
   mechanism; FunderBlu legal reviewed the hold-notice template (Phase 1 item).
@@ -319,13 +354,13 @@ runtime, case aging), Sentry.
 
 | Module | How |
 |---|---|
-| **EVL** | `account.breached` → auto case (V1); V2 conduct verdicts → signals |
-| **PAY** | eligibility: open case → `payout.eligibility_failed {reason: risk_case}`; hold release re-checks eligibility |
+| **EVL** | `AccountBreached` (the V1 name; `account.breached` = the extended-model name, docs/07 §4) → breach case auto-open (D68: V1.0, hold flag dormant until V1.1); V2 conduct verdicts → signals |
+| **PAY** | eligibility (V1.1 — RSK-11/PAY-04, task 2.1): open case → the check fails with `payout.risk_hold` 423 (the trader notice rides `payout.eligibility_failed {reason: risk_case}`); hold release re-checks eligibility |
 | **LCC** | (V2 action path) suspend/reinstate via `account_commands` |
 | **AUTH** | (V2) trader suspension on confirmed cases |
 | **ADM** | risk queue (ADM-11 V2), decisions, context on payout queue (RSK-35) |
 | **NOT** | hold notices, decision notices, owner escalations |
-| **ANA** | (V2) risk KPIs: cases/week, confirmed rate, blocked payout $ |
+| **ANA** | `risk_summary` daily counts (V1 — the case events feed it, docs/19 §3.1); (V2) risk KPIs: cases/week, confirmed rate, blocked payout $ |
 | **AUD** | full case lifecycle mirror |
 | **TD** | trader sees payout status reason (TD-10) — never case internals |
 

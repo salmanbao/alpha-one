@@ -36,7 +36,7 @@ Requirement coverage: `PAY-01,02,03,08,09,12,13,14,21,38` (V1.0) + `04,05,44,45`
                                             └► LED-07 obligation posted (PAY-14)
  COO ──record execution (provider, reference, amount, timestamp — PAY-12)
         (Build Strategy: "Manual for V1" — sending money is manual)
-        ──► paid (emits PayoutPaid via outbox — Decision 6)
+        ──► paid (emits payout.settled via outbox — Decision 6; renamed from PayoutPaid by D60, docs/58)
              └► LED-08 obligation settled · DOC-04 certificate · NOT-01
  reject path: reason recorded, payout.rejected, trader notified (NOT-05)
  nightly: reconciliation (V2 PAY-34) + reserves check (V2 PAY-37)
@@ -77,7 +77,7 @@ inputs (frozen into payout_requests.calc_snapshot at request time):
   initial_balance_cents          (from account terms)
   hwm_cents                      (EVL high_water_equity_cents — EVL-29)
   equity_cents_now               (latest verified snapshot; staleness guard:
-                                  tick age < 10 min else reject with PAY_STALE_DATA)
+                                  tick age < 10 min else reject with `pay.stale_data` (409))
   settled_paid_cents             (Σ final_payout_amount of settled payouts, this account)
   split_ratio_bps                (funded terms: e.g. 8000 = 80%)
   min_amount_cents, currency     (funded terms)
@@ -140,9 +140,15 @@ payout row is created; there is no `requested → rejected` edge in V1.
 The state list is fixed by PAY-13 (V1) — the states are not removed; V1 code
 simply never transitions into these three.
 
+**The hold flag (D32, docs/52):** an approved-but-unexecuted payout whose
+account breaches keeps `status='approved'` with `status_reason='on_hold'`
+(the RSK breach case also opens with `payout_hold`, docs/10 §3) and lands in
+the human queue — hold is a **flag, not a machine state** (PAY-13's list is
+fixed); the approver executes or rejects each held payout by hand.
+
 **Ledger coupling:** approval posts the payout obligation (LED-07, PAY-14);
 recorded execution settles it (LED-08). Both are event-driven:
-`payout.approved` → LED-07; `PayoutPaid` (emitted by PAY-12 through the
+`payout.approved` → LED-07; `payout.settled` (emitted by PAY-12 through the
 outbox — Decision 6, 2026-09-16) → LED-08 + DOC-04 + ANA-01.
 
 **Execution recording (PAY-12):** every recorded execution is appended to
@@ -162,6 +168,10 @@ each with field-encrypted details (wallet address / account ref). Rules:
 - **Address validation (V1):** per-chain format check (length/charset/base58/bech32
   as applicable) + checksum where the chain has one (EIP-55 for ERC20 addresses);
   V2: test-transfer verification (PAY-35) + name match (PAY-07).
+- **Method confirmation (PAY-05, V1.1 — D73, docs/62):** confirm-once — a new
+  method version must be confirmed by the trader in TD (the method view +
+  an explicit confirm action) before its first payout; no per-payout
+  re-confirmation.
 - **Method change cooldown (PAY-06, V2):** a method edited < 72 h before payout
   request triggers a warning flag on the request (fraud pattern: compromised
   trader account).
@@ -185,31 +195,44 @@ SLA tracking (PAY-40).
 Nightly (V2): import provider settlement report → match `payout_executions`
 external refs → exceptions to ADM finance (LED-13 pattern); fee reconciliation
 (PAY-48: actual provider fee vs `fee` in calc → ledger adjustment entry).
-Reserves check (PAY-37): tenant's collected-challenge-funds balance (LED `cash`
+Reserves (PAY-37, V2): tenant's collected-challenge-funds balance (LED `cash`
 account) ≥ pending obligations (Σ approved+processing) → breach = CON CRITICAL
 (the platform never promises a payout the tenant's collected funds can't cover —
-FunderBlu's TTS-parity rule).
+FunderBlu's TTS-parity rule). **V1 (D38, docs/52): visibility only** — the CON
+dashboard plots `cash` vs open obligations nightly and the ADM queue shows a
+reserve banner; there is **no hard block in V1** (human approvers in the loop
+at ~50 payouts/day).
 
 ### 3.7 Execution safety (exactly-once per payout)
 
-The executor (one worker, V1) processes `approved → processing → settled`
-under three guards (adapted from the payout research §10 — Redlock replaced
-by PG-native primitives, below):
+V1 execution is **manual** (PAY-12, Build Strategy "Manual for V1"): the COO
+sends via the provider's dashboard and records the result. The three guards
+below bind the **approval and recording paths in V1** and are the same guards
+the V2 rail executor (PAY-24) carries forward — the `approved → processing →
+settled` rail-worker narrative (sweeper, retries, provider idempotency keys)
+is the V2 design, not a V1 state path (V1 terminal is `paid`; `processing` has
+no V1 entry — §3.3):
 
 1. **Per-payout mutex (PG advisory lock):**
    `SELECT pg_advisory_xact_lock(hashtext('payout:' || payout_id))` — held
    for the whole approve→execute transaction. Two workers can never execute
    the same payout concurrently, and the lock dies with the transaction
    (no orphan-lock sweeper needed).
-2. **Status CAS:** `UPDATE payouts SET status='processing' WHERE id=? AND
-   status='approved'` — 0 rows affected means another worker won; the loser
-   exits quietly. The **eligibility re-check (PAY-03) runs inside the lock**,
-   so two concurrent approvals of the same profit can't both pass (the second
-   sees the first's obligation row).
-3. **Rail idempotency:** the provider idempotency key is the payout ULID
-   (stable across retries); `payout_executions` records the provider ref on
-   success. A retried rail call with the same key returns the original
-   transfer — never a second one.
+2. **Status CAS:** V1 approve path: `UPDATE payout_requests SET
+   status='approved' WHERE id=? AND status='pending_approval'` — 0 rows
+   affected means a concurrent approver won; the loser exits quietly. The
+   **eligibility re-check (PAY-03) runs inside the lock**, so two concurrent
+   approvals of the same profit can't both pass (the second sees the first's
+   obligation row). A failed re-check returns `payout.ineligible` and the
+   payout **stays `pending_approval`** — no state change; the approver may
+   reject manually with a reason (D39, docs/52). V2 executor: the same CAS
+   moves `approved → processing` (PAY-24).
+3. **Recording CAS (V1) / rail idempotency (V2):** V1 recording is
+   `UPDATE payout_requests SET status='paid' WHERE id=? AND
+   status='approved'` under the GW-12 idempotency key — recording twice can
+   never double-settle (LED-08 posts once; the duplicate returns the first
+   result). V2: the provider idempotency key is the payout ULID; a retried
+   rail call returns the original transfer.
 
 **Redlock (research §10) explicitly rejected:** at one PG box, advisory
 locks are transactional *with the state change they guard* — a Redis fence
@@ -223,15 +246,15 @@ to the manual ticket (no unbounded auto-retry, §3.5).
 
 ### 4.1 V1 baseline events — authoritative
 
-From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `payload`); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
+From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `correlation_id`, `payload` — correlation_id required since docs/49 C1); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
 
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
 | `payout.approved` | PAY-09 | LED-07 (payout obligation posting), NOT-01 (template: payout approved), ANA-01 |
 | `payout.rejected` | PAY-09 | NOT-01 (template: payout rejected), ANA-01 |
-| `PayoutPaid` | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 |
+| `payout.settled` | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (receipt), ANA-01 |
 
-**Mapping to the extended model below:** `payout.approved` / `payout.rejected` are the same events (their extended-table rows are folded into the baseline table above); `PayoutPaid` = the extended `payout.settled` (Decision 6, 2026-09-16: emitted by PAY-12 through the outbox). The extended `payout.requested` has no V1 counterpart — whether a request event exists is an open question (contracts/api/not.md, template 7).
+**Mapping to the extended model below:** `payout.approved` / `payout.rejected` are the same events (their extended-table rows are folded into the baseline table above); the settlement event is **`payout.settled`** (Decision 6, 2026-09-16, emitted by PAY-12 through the outbox; renamed from the sheet's PascalCase `PayoutPaid` by **D60, docs/58** — the dotted name matches the `payout.*` family and the ten-plus docs that already used it). The extended `payout.requested` has no V1 counterpart — resolved D37 (docs/52): no V1 request event (the 201 + TD status is the ack; the finance queue reads the table, PAY-08); template 7 is a V2 reserve.
 
 ### 4.2 Extended (post-V1) event model — design-level
 
@@ -268,11 +291,11 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 From `contracts/errors/taxonomy.md` (the V1 execution sheet; module PAY). These are the exact codes the V1 surfaces return; the envelope is GW-18 (`code`, `message`, `correlation_id`).
 | Code | HTTP | Meaning | User-facing message |
 |---|---|---|---|
-| `payout.ineligible` | 422 | Failed an eligibility check; sub-reasons from PAY-03: KYC not approved (KYC-08), minimum trading days, consistency, trading day threshold, first withdrawal delay, next withdrawal date, min/max limits, account status | "You are not eligible for a payout yet: {reason}." |
+| `payout.ineligible` | 422 | Failed an eligibility check; **sub-reason enum (D72, docs/62 — closed, extended only at freeze):** `kyc_not_approved`, `min_trading_days`, `consistency`, `trading_day_threshold`, `first_payout_delay`, `next_payout_date`, `min_amount`, `max_amount`, `account_status`, `risk_hold` | "You are not eligible for a payout yet: {reason}." |
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval | "Verify your identity before requesting a payout." |
 | `payout.risk_hold` | 423/403 | Open risk case (RSK-11) or active suspension (PAY-04) | "Payouts are temporarily held for review." |
 | `payout.not_funded` | 409 | Account not in FUNDED state | "Payouts are only available on funded accounts." |
-| `payout.amount_exceeds_available` | 422 | Beyond available profit (balance+equity − initial − prior payouts) | "Amount exceeds your available profit." |
+| `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — §3.2) | "Amount exceeds your available profit." |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached | "Your next payout is available on {date}." |
 | `payout.method_not_confirmed` | 400 | Payout method not confirmed | "Confirm your payout method first." |
 | `payout.invalid_address` | 400 | Chain-specific crypto address validation failed | "That wallet address is not valid for {chain}." |
@@ -332,15 +355,16 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/pay.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/payouts/eligibility?account_id=` (the TD-26 preview:
+Trader (TD): `GET /v1/trader/payouts/eligibility?account_id=` (the TD-26 preview:
 payoutable amount, next eligible time, method list),
-`POST /v1/payouts/requests` `{account_id, method_id, amount_cents?}` (amount
+`POST /v1/trader/payouts/requests` `{account_id, method_id, amount_cents?}` (amount
 optional = "everything available"; idempotency key mandatory),
-`GET /v1/payouts` (own, history + status), `GET /v1/payouts/{id}`
+`GET /v1/trader/payouts` (own, history + status), `GET /v1/trader/payouts/{id}`
 (status + calc summary + receipt link when settled),
-`DELETE /v1/payouts/requests/{id}` (cancel pre-approval),
-`GET|POST /v1/payouts/methods`, `DELETE /v1/payouts/methods/{id}` (PAY-05),
-`POST /v1/payouts/methods/{id}/default` (V2).
+`DELETE /v1/trader/payouts/requests/{id}` (cancel pre-approval),
+`GET|POST /v1/trader/payouts/methods`, `DELETE /v1/trader/payouts/methods/{id}` (PAY-05),
+`POST /v1/trader/payouts/methods/{id}/default` (V2). (Paths normalized to the
+GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/payouts/queue?status=`,
 `POST /v1/admin/payouts/{id}/approve` (2FA, note),
@@ -407,8 +431,11 @@ CREATE TABLE payout_requests (
   method_version_at INT NOT NULL,             -- which method row version (disputes)
   requested_cents   BIGINT,                   -- NULL = everything available
   status            TEXT NOT NULL DEFAULT 'requested'
-    CHECK (status IN ('requested','pending_approval','approved','processing',
-                      'settled','failed','failed_final','rejected','cancelled','on_hold')),
+    CHECK (status IN ('requested','eligibility_checked','pending_approval','approved',
+                      'processing','paid','failed','cancelled','rejected')),
+    -- PAY-13's exact list (docs/52: 'settled'→'paid'; 'failed_final' is a V2
+    -- terminal reason within 'failed'; holds are status_reason='on_hold' flags on
+    -- 'approved' — never states, D32)
   status_reason     TEXT,
   -- frozen calc (PAY-02, §3.2)
   calc_snapshot     JSONB NOT NULL,           -- steps + inputs + snapshot versions
@@ -472,9 +499,10 @@ CREATE INDEX idx_pexec_payout ON payout_executions(payout_id, attempt);
 - **Provider trust boundary:** NOWPayments webhooks verified (EVT-10), amounts
   from webhooks **never trusted over our own** (mismatch → exception, not
   auto-accept).
-- **Reserves (V2 PAY-37):** tenant cash ≥ obligations enforced nightly + at
-  approval (fast path: read LED balance) — the "we don't pay what the tenant
-  hasn't collected" rule (FunderBlu parity with TTS).
+- **Reserves:** V1 = visibility only (CON dashboard + queue banner — D38);
+  V2 PAY-37 enforces nightly + at approval (fast path: read LED balance) —
+  the "we don't pay what the tenant hasn't collected" rule (FunderBlu parity
+  with TTS).
 - **PCI:** card-rail payouts (V2) keep card data provider-side (SAQ-A posture,
   AUD-26); V1 crypto/local rails store no card data at all.
 - **Compliance evidence:** `calc_snapshot` + `payout_executions` + audit mirror
@@ -493,7 +521,7 @@ CREATE INDEX idx_pexec_payout ON payout_executions(payout_id, attempt);
 - `payout_requests` growth: ~20k rows/tenant/year — trivial; partitions only
   if > 10M platform-wide.
 - Reconciliation (V2): provider CSV import O(settled that day) — seconds.
-- **Money safety over speed:** the staleness guard (PAY_STALE_DATA) and the
+- **Money safety over speed:** the staleness guard (`pay.stale_data`) and the
   pre-execution fresh read (PAY-29 V2) intentionally make payouts *slower*;
   that is the correct trade.
 
@@ -548,10 +576,10 @@ Postmark (via NOT), Sentry, Prometheus/Grafana.
 | 2. Profit calculator (pure) + calc_snapshot + property tests (HWM, split, fee, floor) | BE-2 | 2 d | 1, EVL-29 | recompute-from-snapshot test: stored steps == recomputed |
 | 3. Eligibility service (5 checks) + preview endpoint | BE-2 | 2 d | 2, KYC, RSK-10, LED | each fail code triggerable in staging |
 | 4. Request lifecycle: create → pending_approval → ADM queue → approve/reject (2FA) | BE-2 + FE-1 | 4 d | 3, AUTH step-up | end-to-end in staging: request appears in queue, approve posts LED obligation |
-| 5. NOWPayments rail adapter + executor worker + webhooks (EVT-10) + settlement + retry policy | BE-2 | 4 d | 4, EVT-10, LED-08 | testnet USDC payout settles; webhook replay = no double settlement |
+| 5. Manual execution path: provider dashboard procedure (COO) + ADM record + `payout.settled` (outbox) + LED-08 settlement + receipt | BE-2 | 4 d | 4, LED-08 | settled payout posts LED-08 exactly once; duplicate record = idempotent no-op (the V2 rail adapter + executor + webhooks are PAY-24, step 10) |
 | 6. Method management (TD UI) + versioning + cooldown flag + default | FE-01 + BE-2 | 3 d | 1 | edit wallet → new version visible in next request's snapshot |
-| 7. Receipt (DOC) + notifications + batch export (PAY-44) + staleness guard | BE-2 | 2 d | 5 | settled payout → branded PDF + email; stale tick → PAY_STALE_DATA |
-| 8. Reserves fast-check at approval + nightly check (V2 PAY-37 early) | BE-2 | 1 d | 5, LED | injected shortfall blocks approve with clear reason |
+| 7. Receipt (DOC) + notifications + batch export (PAY-44) + staleness guard | BE-2 | 2 d | 5 | settled payout → branded PDF + email; stale tick → `pay.stale_data` |
+| 8. Reserves visibility: CON dashboard (`cash` vs open obligations) + ADM queue banner (V1 — D38; the PAY-37 hard block stays V2) | BE-2 | 1 d | 4, LED | dashboard shows a shortfall injected on a synthetic tenant |
 | 9. MIG import: FunderBlu settled-history seeding + first-week reconciliation plan | BE-2 | 2 d | 4, MIG | dry run: "paid_out" per account matches TTS export |
 | 10. V2: second approval, batch, auto-approve rules, instant option, multi-network, test transfers, name match, SLA, adjustment workflow, reconciliation jobs, fee recon | BE-2 + FE-1 | 3 wks | 8–9 | each behind Flipt flag per tenant |
 

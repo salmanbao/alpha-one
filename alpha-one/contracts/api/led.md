@@ -39,9 +39,9 @@ Event consumption. No synchronous calls. **LED-04 consumes `order.paid`. LED-07 
 
 ## Open contract questions
 - Resolved 2026-09-17: ledger delivery mechanism — event consumption (LED-04 ← order.paid, LED-07 ← payout.approved, LED-08 ← PayoutPaid); no synchronous calls. Remaining sub-items: account codes, refund/fee/adjustment posting triggers, balance read path for analytics.
-- TODO — needs owner decision: ledger account codes and naming for the fixed V1 chart (LED-01 lists categories, not codes).
-- TODO — needs owner decision: refund posting — chart includes "refunds" but no V1 refund requirement exists (Out Of Scope: chargebacks recorded only); when is the refund account used?
-- TODO — needs owner decision: fee posting trigger (chart includes "fees"; provider fee capture is not a V1 row).
-- TODO — needs owner decision: adjustment posting authorization (who can post reversing adjustments and with what permission).
-- TODO — needs owner decision: ledger balance read path for ANA-01 (real-time dashboards read from ledger balances per Out Of Scope note — interface shape open).
-- TODO — needs owner decision: CSV export ownership (Out Of Scope: QuickBooks/Xero out, CSV export only in V1 — no V1 row defines it).
+- Resolved 2026-09-20 (docs/62): the account codes are the docs/05 §5 chart slugs (`tenant:payout_liability`, `tenant:payout_paid`, `platform:revenue`, …) — the slug IS the code; the chart is seeded by the provisioning saga step 6b (D26, docs/48).
+- Resolved 2026-09-20 (docs/62): the refund account is used by **D40's minimal manual refund** (V1-Plus form, docs/53): a staff-approved refund posts the reversal pair against the original order lines; chargebacks stay record-only (Out Of Scope).
+- Resolved 2026-09-20 (docs/62): provider fees post with the settlement line — the LED-08 payout settlement carries the `fee_charged` line when the provider reports a fee (docs/05 §3.3); no standalone fee-capture trigger in V1.
+- Resolved 2026-09-20 (docs/62): **no manual adjustment surface in V1** — reversals post only through the owning flows (D40 refunds, the payout-failed path); the `adjustment` kind exists for worker-level corrections (provider settlement fixes); staff-facing adjustment tooling is V2 (LED-10/23 class, docs/05 §3.4).
+- Resolved 2026-09-20 (docs/62): balances read from the LED `balances` projection (docs/05 §3.4 — the 5-min refresh + on-demand), tenant-scoped and read-only for ANA/ADM reads; ANA-01 dashboards render from it plus the event-fed read models (docs/19 §3.1).
+- Resolved 2026-09-20 (docs/62): the V1 ledger export rides the **audit-export path** (`audit.export`, CON-13 — critical-audited CSV, docs/21 §3.3); the self-serve ANA CSV suite is V2 (ANA-11, docs/19 §2).

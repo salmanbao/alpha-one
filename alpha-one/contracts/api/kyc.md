@@ -11,7 +11,7 @@ Derived from the V1 Execution Sheet (V1.0 / V1.1). Nothing here is final until c
 Provider adapter interface (Veriff per tenant keys), webhook status handling, KYC state machine, funding gate, payout gate, verified identity record (V1.1), manual review fallback (V1.1), manual document upload (V1.1), country restrictions (V1.1), age verification (V1.1), upload progress/retry (V1.1), kyc.* event emission through the outbox (KYC-05 amended by Decision 5; KYC-16 in V1.0 / V1-Core). (KYC-01, KYC-02, KYC-05, KYC-06, KYC-07, KYC-08, KYC-09, KYC-11, KYC-12, KYC-13, KYC-14, KYC-16, KYC-36)
 
 ## KYC state machine (KYC-06)
-States: NOT_STARTED, PENDING, IN_REVIEW, APPROVED, REJECTED, NEEDS_RESUBMISSION, EXPIRED. See `contracts/diagrams/kyc-state.md`. Transition triggers — TODO — needs owner decision (states fixed; edges not enumerated).
+States: NOT_STARTED, PENDING, IN_REVIEW, APPROVED, REJECTED, NEEDS_RESUBMISSION, EXPIRED. See `contracts/diagrams/kyc-state.md`. Edges (resolved D43, docs/53): webhook transitions per docs/13 §3.1; PENDING→EXPIRED by the 24 h session-TTL worker; APPROVED never expires in V1; REJECTED terminal in-session (retry = new session via the 24 h cooldown); manual review = IN_REVIEW + is_manual_review flag.
 
 ## Auth
 Trader routes in trader group; manual review in admin group (GW-01). KYC applies to traders only (Out Of Scope: no KYC for staff/super admins).
@@ -20,7 +20,7 @@ Trader routes in trader group; manual review in admin group (GW-01). KYC applies
 From domain (GW-02). One provider per tenant in V1 (Out Of Scope: no multi-jurisdiction routing). Provider runs on the tenant's own Veriff keys (KYC-02, TEN-11 config).
 
 ## Permissions
-- `kyc.review` — manual review decisions # KYC-11 — TODO — needs owner decision on key naming
+- `kyc.review` — manual review decisions # KYC-11 (key bound in roles.yaml/registry)
 - `kyc.restrictions.write` — maintain restricted country list # KYC-13
 - Trader session creation/status/upload: self-action
 
@@ -47,7 +47,7 @@ Response 201:
 
 Errors:
 - `kyc.country_restricted` 403 — trader jurisdiction on tenant restricted list # implied by KYC-13 (V1.1)
-- `kyc.already_in_progress` 409 # implied by KYC-06 states; rule TODO — needs owner decision
+- `kyc.already_in_progress` 409 # one active (non-terminal) session per identity — a new session require the previous one terminal (docs/13 §6.1)
 
 ### POST /v1/webhooks/kyc/{provider}
 Auth: provider signature (EVT-10 shared verification utilities) — KYC-05
@@ -55,7 +55,7 @@ Tenant: from request subdomain (GW-02, TEN-02). Provider webhook URLs are provis
 Permission: none (signature-authenticated)
 Idempotency: required — dedupe by provider event id # KYC-05, EVT-10
 
-Request: provider-specific payload (Veriff) — TODO — needs owner decision
+Request: provider-specific payload (Veriff) — schema defined at adapter freeze (EVT-10 shared ingress; fields are the provider's, mirrored into provider_events)
 
 Response 200:
 ```json
@@ -84,9 +84,9 @@ Errors: none beyond standard gateway errors
 Auth: Trader — KYC-12 (V1.1 manual fallback upload: ID + proof of address)
 Tenant: from domain (GW-02)
 Permission: self-action
-Idempotency: required # GW-12; upload progress and retry per KYC-36 (mechanics — TODO — needs owner decision: resumable upload protocol unspecified)
+Idempotency: required # GW-12; upload progress and retry per KYC-36 (states only, no fake percentages — docs/13 §3.1; resumable protocol = owner TODO at freeze)
 
-Request: multipart upload — TODO — needs owner decision (size limits, formats unspecified)
+Request: multipart upload — 10 MB max per file (PRD attachment default, docs/13 §3.5); format list = owner TODO at freeze
 
 Response 201:
 ```json
@@ -128,7 +128,7 @@ Response 200:
 
 Errors:
 - `kyc.case_not_reviewable` 409 # implied by KYC-06 states
-- Decision enum (approve/reject/request-resubmission) — TODO — needs owner decision
+- Decision enum: approve → APPROVED, reject → REJECTED, request-resubmission → NEEDS_RESUBMISSION (the three IN_REVIEW exits — D43/docs/13 §3.1)
 - Sensitive data access is audited with actor, reason, permission, entity (AUD-23 records the audit; the gating permission is a working-session item) # implied by AUD-23
 
 ### PUT /v1/admin/kyc/restricted-countries
@@ -156,6 +156,6 @@ Errors: none beyond standard gateway errors # KYC-13
 
 ## Open contract questions
 - Resolved 2026-09-17: KYC timing enum = `{at_creation, after_evaluation, at_first_payout, skipped}` — per KYC-03's timing description; stored as `challenges.kyc_timing` (see `data/dictionary.md`, `api/lcc.md`). Note: KYC-03 (the config UI row) is V2.0 in the Master Backlog — V1 timing is per-challenge config data enforced by the V1 gates KYC-07/KYC-08.
-- TODO — needs owner decision: EXPIRED state trigger (document expiry triggers mentioned in Out Of Scope as "trigger-based re-verification arrives at P2" — what makes V1 expire?).
-- TODO — needs owner decision: manual document review retention and access rules (AUD-23 audit exists; access permission granularity open).
-- TODO — needs owner decision: identity record fields exactness (KYC-09: full name, DOB, country, provider reference — types and name-match rules for payout methods open).
+- Resolved 2026-09-19 (D43, docs/53): EXPIRED fires from the 24 h session TTL only; APPROVED never expires in V1 (re-verification = KYC-21/25 V2).
+- Resolved 2026-09-19 (docs/53): retention = 7 yr then deletion job (docs/13 §5); access = `kyc.document.read` (roles-bound, firm:owner/admin/compliance) with AUD-23 audit on every read.
+- Resolved 2026-09-20 (docs/62): the verified-identity record fields = docs/13 §3.3 (full legal name, DOB, nationality, address, provider reference — field-encrypted per docs/13 §9); the payout-method name-match = the docs/13 §3.3 comparison rule (normalized legal name vs method holder, tenant-configurable threshold — mismatches route to the manual queue).

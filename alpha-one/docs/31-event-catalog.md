@@ -4,7 +4,7 @@
 > doc's §4). This is the catalog the CI gate checks against (docs/04 §5.7,
 > docs/28 §11): an event emitted but not cataloged, or a consumer that never
 > handled it, fails the build. The V1 event schemas live in
-> `contracts/events/payloads/` (envelope + 31 V1 event schemas) and the extended
+> `contracts/events/payloads/` (envelope + 39 V1 event schemas) and the extended
 > set in `contracts/events/extended/`; this table is the
 > producer/consumer map. `when`/`consumers` are condensed from the owning
 > doc's row; the owning doc is the authority. Tier: **V1** = the V1
@@ -20,12 +20,13 @@
   live in `command_queue` and never appear in this catalog.
 - **Every event carries** (EVT-03, exactly): `id` (ULID), `type` (event
   name), `version` (integer, starts 1), `tenant_id` (ULID), `occurred_at`
-  (int64 epoch ms, UTC), `payload` (event-specific, per-event schema in
-  `contracts/events/payloads/`).
+  (int64 epoch ms, UTC), `correlation_id` (ULID — the originating request's
+  correlation, required since the ninth pass: docs/49 C1), `payload`
+  (event-specific, per-event schema in `contracts/events/payloads/`).
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (158 events — 31 V1 baseline, 127 extended — across 34 topics)
+## 2. The catalog (160 events — 42 V1 baseline, 118 extended — across 33 topics)
 
 ### `user.*`
 
@@ -78,12 +79,6 @@
 |---|---|---|---|---|
 | `gateway.rate_limit_breached` | 04 (GW+EVT) | GW | ANA, CON | ext |
 
-### `relay.*`
-
-| Event | Producer | When / V1 producer | Consumers | Tier |
-|---|---|---|---|---|
-| `relay.lag` | 04 (GW+EVT) | relay | Prometheus; CON gauge | ext |
-
 ### `outbox.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
@@ -94,46 +89,54 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `ledger.entry_posted` | 05 (LED/AUD) | LED | AUD (mirror), ANA, CON (platform finance) | ext |
-| `ledger.entry_reversed` | 05 (LED/AUD) | LED | AUD, ANA, NOT (tenant finance) | ext |
-| `ledger.reconciliation_exception` | 05 (LED/AUD) | worker | NOT (tenant owner + CON), ADM queue | ext |
+| `ledger.entry_posted` | 05 (LED/AUD) | LED | ext | ext |
+| `ledger.entry_reversed` | 05 (LED/AUD) | LED | ext | ext |
+| `ledger.reconciliation_exception` | 05 (LED/AUD) | worker | ext | ext |
 
 ### `audit.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `audit.critical_action` | 05 (LED/AUD) | AUD (tiered) | NOT (owner/CON), RSK (V2 correlation) | ext |
-| `audit.export_completed` | 05 (LED/AUD) | AUD | AUD self (meta), CON | ext |
+| `audit.critical_action` | 05 (LED/AUD) | AUD (tiered) | ext | ext |
+| `audit.export_completed` | 05 (LED/AUD) | AUD | ext | ext |
 | `audit.access_denied` | 17 (ADM) | security tab (V2) | security tab (V2) | ext |
 
-### V1 PascalCase events (LCC-23, PayoutPaid)
+### `ops.*`
+
+| Event | Producer | When / V1 producer | Consumers | Tier |
+|---|---|---|---|---|
+| `ops.deploy_started` | 06 (OPS) | every deploy step | CON (internal dashboard), NOT (staff channel on failure) | ext |
+| `ops.backup_completed` | 06 (OPS) | nightly base backup (03:00 UTC) | CON, NOT (staff channel on failure) | ext |
+| `ops.restore_drill_completed` | 06 (OPS) | monthly restore drill (OPS-38) | CON (drill report filed) | ext |
+| `ops.provider_health` | 08 (BRG) | 5 min | CON, dashboards | ext |
+
+### V1 PascalCase events (LCC-23)
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
 | `AccountCreated` | 07 (LCC) | LCC-23 | NOT-01 (template: account created), ANA-01 | V1 |
 | `PhaseAdvanced` | 07 (LCC) | LCC-23 | ANA-01 | V1 |
 | `AccountPassed` | 07 (LCC) | LCC-23 | NOT-01 (template: phase passed), DOC-04 (certificate), ANA-01 | V1 |
-| `AccountBreached` | 07 (LCC) | LCC-23 | NOT-01 (template: breach), ANA-01 | V1 |
+| `AccountBreached` | 07 (LCC) | LCC-23 | NOT-01 (template: breach), ANA-01, RSK (breach case auto-open — D68: V1.0, hold flag dormant until V1.1, docs/60) | V1 |
 | `AccountFailed` | 07 (LCC) | LCC-23 | NOT-01 (template: phase failed), ANA-01 | V1 |
 | `FundedCreated` | 07 (LCC) | LCC-23 | DOC-04 (certificate), ANA-01 | V1 |
 | `Suspended` | 07 (LCC) | LCC-23 | PAY-04 (payout hold while open), ANA-01 | V1 |
 | `Resumed` | 07 (LCC) | LCC-23 | ANA-01 | V1 |
-| `PayoutPaid` | 11 (PAY) | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 | V1 |
 
 ### `account.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
+| `account.activated` | 07 (LCC) | LCC (CREATED → ACTIVE on the completed provisioning command; the V2 event form is bridge.account_created) | BRG (start sync), EVL (start evaluation + create evaluation_state), NOT-01, AUD | V1 |
+| `account.day_rolled` | 07 (LCC) | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA | V1 |
 | `account.purchased` | 07 (LCC) | order.paid | NOT, ANA, CON | ext |
-| `account.provisioning_failed` | 07 (LCC) | broker.failed | NOT, CON (manual retry), AUD | ext |
-| `account.activated` | 07 (LCC) | broker.created | BRG (start sync), EVL (start eval), NOT, DOC, AUD | ext |
-| `account.day_rolled` | 07 (LCC) | rollover job | EVL (reset dailies) | ext |
-| `account.breached` | 07 (LCC) | verdict.breach | NOT, AUD (critical), RSK (case open V2), BRG (enforce cmd), TD (breach report) | ext |
+| `account.provisioning_failed` | 07 (LCC) | provisioning-command failure (the V2 event form is bridge.account_create_failed) | NOT, CON (manual retry), AUD | ext |
+| `account.breached` | 07 (LCC) | verdict.breach | NOT, AUD (critical), RSK (case open — V1 for kind=breach, docs/10 §3), BRG (enforce cmd), TD (breach report), PAY (hold in-flight approved payouts... | ext |
 | `account.phase_completed` | 07 (LCC) | target_hit | NOT, DOC (cert), ANA | ext |
 | `account.funded` | 07 (LCC) | funded.activated | NOT, DOC, ANA, PAY (eligibility on) | ext |
 | `account.paused` | 07 (LCC) | tenant | NOT, BRG, AUD | ext |
-| `account.suspended` | 07 (LCC) | risk | NOT, BRG, PAY (block), AUD | ext |
-| `account.expired` | 07 (LCC) | expiry | NOT, ANA | ext |
+| `account.suspended` | 07 (LCC) | admin suspend (LCC-11, V1.1); risk (V2 reinstate) | NOT, BRG, PAY (block), AUD (critical) | ext |
+| `account.expired` | 07 (LCC) | time-limit expiry (mirror of the breach(time_limit) verdict — D30) | NOT, ANA | ext |
 | `account.closed` | 07 (LCC) | close | BRG (archive), NOT, AUD | ext |
 | `account.state_changed` | 17 (ADM) | account list badges + SSE | account list badges + SSE | ext |
 
@@ -141,42 +144,36 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `bridge.tick` | 08 (BRG) | every sync tx | EVL (trigger eval), ANA (equity points), web SSE fan-out (TD live) | ext |
+| `bridge.tick` | 08 (BRG) | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) | V1 |
+| `bridge.sync_gap` | 08 (BRG) | BRG (history-window count mismatch — D33) | ADM (manual review), AUD, EVL (gap_flagged verdict) | V1 |
 | `bridge.account_created` | 08 (BRG) | provisioning | LCC, NOT, CON | ext |
 | `bridge.trading_disabled` | 08 (BRG) | after confirmed command | LCC (confirm transition), AUD | ext |
 | `bridge.positions_closed` | 08 (BRG) | after confirmed close-all | LCC, AUD, NOT (breach evidence) | ext |
-| `bridge.sync_gap` | 08 (BRG) | ticket discontinuity | ADM (manual review), AUD | ext |
 | `bridge.reconciliation_exception` | 08 (BRG) | nightly mismatch | ADM, AUD, CON | ext |
 | `bridge.command_dead` | 08 (BRG) | terminal command failure | CON (CRITICAL), AUD | ext |
-
-### `ops.*`
-
-| Event | Producer | When / V1 producer | Consumers | Tier |
-|---|---|---|---|---|
-| `ops.provider_health` | 08 (BRG) | 5 min | CON, dashboards | ext |
 
 ### `evaluation.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `evaluation.verdict` | 09 (EVL) | every non-ok verdict (and daily ok-summary at rollover) | LCC (transitions), NOT, DOC (breach report), AUD (critical on breach), RSK (V2 case open) | ext |
+| `evaluation.verdict` | 09 (EVL) | EVL (every non-ok verdict) | LCC (transitions; dedupe on (account_id, verdict_id), LCC-43), NOT-01, DOC-04 (breach report TD-25), AUD (critical on breach), RSK (V2 case open) | V1 |
+| `evaluation.daily_reset` | 09 (EVL) | EVL (rollover) | ANA (daily P&L points), AUD (standard) | V1 |
 | `evaluation.risk_guard` | 09 (EVL) | buffer breach | ADM (page), AUD | ext |
 | `evaluation.override` | 09 (EVL) | manual clear | LCC, NOT, AUD (critical) | ext |
 | `evaluation.manual_run` | 09 (EVL) | ADM trigger | AUD | ext |
 | `evaluation.emergency` | 09 (EVL) | CON stop | LCC, AUD (critical), NOT | ext |
-| `evaluation.daily_reset` | 09 (EVL) | rollover | ANA (daily P&L points), AUD (standard) | ext |
 | `evaluation.recomputed` | 09 (EVL) | backfill changed history | AUD (critical), CON | ext |
 
 ### `risk.*`
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
+| `risk.case_opened` | 10 (RSK) | manual open (RSK-10) / breach auto-open on AccountBreached (D68) | ADM (queue), AUD, ANA (risk_summary daily counts) | V1 |
+| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep — the interlock from V1.1), LCC (if action), AUD (sensitive — docs/05 §14), ANA (risk_summary daily counts) | V1 |
 | `risk.signal_created` | 10 (RSK) | any signal | ANA (V2), AUD (standard) | ext |
-| `risk.case_opened` | 10 (RSK) | manual/auto/after breach | NOT (owner/risk), ADM (queue), AUD | ext |
-| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep), LCC (if action), NOT, AUD | ext |
 | `risk.case_escalated` | 10 (RSK) | SLA breach | NOT (owner + CON), AUD | ext |
 | `risk.case_appealed` | 10 (RSK) | trader appeal | ADM, AUD | ext |
-| `risk.payout_hold_set` | 10 (RSK) | hold lifecycle | PAY, NOT, AUD | ext |
+| `risk.payout_hold_set` | 10 (RSK) | hold lifecycle (RSK-11/PAY-04, V1.1+) | PAY, NOT, AUD | ext |
 
 ### `payout.*`
 
@@ -184,6 +181,7 @@
 |---|---|---|---|---|
 | `payout.approved` | 11 (PAY) | PAY-09 | LED-07 (payout obligation posting), NOT-01 (template: payout approved), ANA-01 | V1 |
 | `payout.rejected` | 11 (PAY) | PAY-09 | NOT-01 (template: payout rejected), ANA-01 | V1 |
+| `payout.settled` | 11 (PAY) | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (receipt), ANA-01 | V1 |
 | `payout.requested` | 11 (PAY) | request created (eligible) | NOT (trader + finance), ANA | ext |
 | `payout.eligibility_failed` | 11 (PAY) | request rejected at validation | NOT (trader, reason template) | ext |
 | `payout.execution_attempted` | 11 (PAY) | each send/retry | AUD | ext |
@@ -237,9 +235,9 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `notification.sent` | 14 (NOT) | channel accept (provider ref) | AUD (low tier), ANA (V2) | ext |
+| `notification.sent` | 14 (NOT) | channel accept (provider ref) | AUD (low tier), ANA (V2) | V1 |
 | `notification.failed_final` | 17 (ADM) | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) | ext |
-| `notification.suppressed` | 14 (NOT) | dedupe/prefs/quiet-hours/bounce | AUD (low), ANA | ext |
+| `notification.suppressed` | 14 (NOT) | dedupe (V1); prefs/quiet-hours/bounce (V2) | AUD (low), ANA | V1 |
 | `notification.bounce` | 14 (NOT) | provider webhook | AUD | ext |
 | `notification.broadcast_sent` | 14 (NOT) | staff broadcast | AUD (critical) | ext |
 
@@ -248,7 +246,7 @@
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
 | `document.generated` | 16 (TD) | documents badge "new" (V2 in-app notification) | documents badge "new" (V2 in-app notification) | ext |
-| `document.failed` | 15 (DOC) | retries exhausted (DLQ) | ADM (ops alert), CON, AUD | ext |
+| `document.failed` | 15 (DOC) | retries exhausted (DLQ) | ADM (ops alert), CON, AUD | V1 |
 | `document.regenerated` | 15 (DOC) | admin action | AUD (critical-tier if it changes a money doc) | ext |
 | `document.verified_lookup` | 15 (DOC) | public verify page hit | ANA (marketing metric) | ext |
 

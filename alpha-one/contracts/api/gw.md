@@ -20,7 +20,7 @@ One API exposing four route groups, separation enforced at the routing layer:
 - `/v1/console/*` — platform console (separate auth realm, CON-01)
 - `/v1/webhooks/*` — provider webhooks (payments CHK-07, KYC KYC-05)
 
-Exact prefixes per module — TODO — needs owner decision (the sheet fixes the groups, not the URL plan).
+Exact prefixes per module — resolved 2026-09-19 (D46, docs/54): the GW-01 groups ARE the plan; module paths normalize under them (docs/04 §7.2; reviewed modules' §7.2 already normalized).
 
 ## Tenant resolution (GW-02)
 Tenant is resolved from request domain/subdomain before any handler runs. Unknown host => `404 tenant.unknown_host` (see errors taxonomy, TEN-02). No request executes without tenant context.
@@ -32,10 +32,10 @@ JWT (trader/staff) or console realm session verified on every protected route. I
 Module-declared `resource.action` permission keys enforced per route (AUTH-13). Denied => `403 permission.denied`. Key-to-route mapping lives in `contracts/permissions/registry.md`.
 
 ## Rate limiting (GW-05)
-Per-IP and per-user limits with `429 rate.limited` responses. Redis-backed (self-hosted). Numeric limits and headers — TODO — needs owner decision.
+Per-IP and per-user limits with `429 rate.limited` + `Retry-After` (GW-29) responses. Redis-backed (self-hosted). Numbers (docs/04 §3.1 step 5): per-user 100 rpm default (tenant-plan adjustable), auth routes 10/5 min, payout routes 5/h; edge per-IP at Cloudflare.
 
 ## Idempotency (GW-12)
-Clients MAY send an idempotency key on mutating requests. Retries never double-create orders, payouts, or accounts. Behavior on conflicting key reuse: `409 request.idempotency_conflict`. Key scope/TTL — TODO — needs owner decision.
+Clients MAY send an idempotency key on mutating requests. Retries never double-create orders, payouts, or accounts. Behavior on conflicting key reuse: `409 request.idempotency_conflict`. Scope/TTL (docs/04 §3.1 step 7): per (tenant, method, path, key), 24 h; body stored as hash only.
 
 ## Error envelope (GW-18)
 Every error response uses exactly this envelope (GW-18):
@@ -48,7 +48,7 @@ Every error response uses exactly this envelope (GW-18):
 - `message`: user-facing message pattern per taxonomy
 - `correlation_id`: request correlation id, also recorded in audit entries (AUD-01)
 
-Success envelopes and pagination conventions — TODO — needs owner decision.
+Success envelope — BINDING (D45, docs/54): `{data, meta{request_id, version, pagination{cursor, has_more}}}`; pagination is cursor-based (GW-21), `?limit≤100&cursor=`.
 
 ## Standard errors (cited per GW rows)
 - `tenant.unknown_host` 404 — domain does not resolve to a tenant # implied by GW-02, TEN-02
@@ -57,12 +57,12 @@ Success envelopes and pagination conventions — TODO — needs owner decision.
 - `rate.limited` 429 — per-IP/per-user limit exceeded # implied by GW-05
 - `request.idempotency_conflict` 409 — idempotency key reused with a different request # implied by GW-12
 - `tenant.suspended` 403 — tenant suspended (logins/orders/payouts stop) # implied by TEN-15 cascade
-- `tenant.not_entitled` 403 — module disabled for tenant # implied by TEN-08; the sheet names no error row for this: TODO — needs owner decision on code naming and status
+- `tenant.not_entitled` 403 — module disabled for tenant # the V1 baseline code (taxonomy; checked at the GW-06 entitlement middleware)
 
 ## Open contract questions
-- TODO — needs owner decision: full URL plan per route group and module prefixes.
-- TODO — needs owner decision: success envelope shape and pagination convention (cursor vs offset) for list endpoints.
-- TODO — needs owner decision: rate-limit numbers, bucketing, and response headers.
-- TODO — needs owner decision: idempotency key scope (per route? per tenant?) and retention window.
-- TODO — needs owner decision: correlation id source (inbound header vs generated) and propagation into event payloads and audit entries.
-- TODO — needs owner decision: error code for disabled-module access and where entitlements are checked (gateway middleware vs module).
+- Resolved 2026-09-19 (D46, docs/54): the GW-01 groups are the URL plan; module paths normalize under them (docs/04 §3.1/§7.2).
+- Resolved 2026-09-19 (D45, docs/54): `{data, meta{...}}` with cursor pagination.
+- Resolved 2026-09-19 (docs/54): numbers per docs/04 §3.1 step 5 (100 rpm default user, auth 10/5 min, payout 5/h); headers: `Retry-After` (GW-29).
+- Resolved 2026-09-19 (docs/54): scope = (tenant, method, path, key); TTL 24 h; body hash only.
+- Resolved 2026-09-19 (docs/54): `X-Correlation-Id` inbound or a minted ULID (GW-09); propagated to the event envelope's required `correlation_id` (docs/49 C1) and `audit_events.correlation_id`; workers mint one per job.
+- Resolved 2026-09-19 (docs/54): `tenant.not_entitled` 403, checked at the GW-06 entitlement middleware (step 6 of the chain), not per-module.

@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `developer.usage_alert` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/developer.schema.json ($defs/developer_usage_alert). Per-event payload. Producer: 27 (SDK/DVP/TRD/PLT/CS). When: the 80%/100% quota. Consumers: the NOT (the developer's email), the AUD (the low). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `developer.usage_alert` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/developer.schema.json ($defs/developer_usage_alert). Per-event payload. Producer: 27 (SDK/DVP/TRD/PLT/CS). When: the 80%/100% quota. Consumers: the NOT (the developer's email), the AUD (the low). Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "BKPT2RPR5J10B006ACPKTM2541",
   "type": "developer.usage_alert",
   "version": 1,
   "tenant_id": "6XKYJ0RAPA56FCYWN88JNBPB2K",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

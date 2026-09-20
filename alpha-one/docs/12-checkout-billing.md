@@ -15,10 +15,10 @@ bookings), **payment methods** (for purchases — V2 saved cards/local details),
 and **multi-currency** handling.
 
 Rails (V1): **Match2Pay** (card + PK local), **Interkasa** (IN + PK local),
-**NOWPayments** (crypto, same provider as payouts — deposit side),
-**bank wire** (manual capture, 72 h confirmation — CHK-20). No Stripe in V1
-(§4 decision). **Login-first checkout** (PRD default: you must be a signed-in
-trader to buy — no guest carts).
+**NOWPayments** (crypto, same provider as payouts — deposit side). **Bank
+wire is V2** (CHK-20 is a V2.0 row — D41, docs/53): no V1 wire capture, no
+72 h wire TTL. No Stripe in V1 (§4 decision). **Login-first checkout** (PRD
+default: you must be a signed-in trader to buy — no guest carts).
 
 Requirement coverage: `CHK-01,02,04,06,07,08,09,42,43,44` (V1.0) + `16,17,40` (V1.1) +
 `03,05,10,11,12,13,14,15,18,19,20,21,22,23,24,26,28,29,30,31,32,33,34,35,36,38,39,41,45,46` (V2.0) +
@@ -52,16 +52,19 @@ Components (research §3, adapted):
   conversion, V2 promos/affiliates/Aff-01 commission snapshot).
 - **Order + Intent**: Order = "what was bought" (frozen line items + price);
   Intent = "how it's paid" (provider, attempt state). One order, N intents
-  (retries on new rails).
-- **Orchestrator**: webhook-driven (no polling for cards/local; wire = manual
-  capture by finance).
-- **Refunds**: first-class objects (CHK-09 state machine below), never implicit.
+  (retries on new rails). **The order row is created at checkout submit**
+  (CHK-42: retries never double-create — idempotent submit), status `open`;
+  capture moves it to `paid` (D42, docs/53 — CHK-08's "order record on
+  capture" is the capture/fulfillment record on that order).
+- **Orchestrator**: webhook-driven (no polling; V2 wire would be manual
+  capture by finance — D41).
+- **Refunds**: first-class objects (the state machine below; the sheet row is CHK-15, V2.0 — V1 carries the D40 minimal manual form), never implicit.
 - **Reconciliation**: nightly job per provider (V2 formal jobs; V1: manual
   import + diff report to ADM).
 
 ## 3. System design
 
-### 3.1 Pricing snapshot (CHK-05)
+### 3.1 Pricing snapshot (CHK-02 — the session reserves price + coupon; the frozen order carries it)
 
 At intent creation, the price is **frozen** into the order:
 `{package_id, rule_set_id, base_cents, currency, fx_rate (if converted),
@@ -70,15 +73,18 @@ The PRD's multi-layer pricing engine (tenant overrides, promos, affiliate
 discounts, tax) is **V2+** (CHK-03/04/38/46 + AFF-01); V1 = base price +
 currency conversion only. The frozen snapshot means: a price change in TEN
 mid-purchase never affects an in-flight order; invoices and LCC terms cite the
-same numbers.
+same numbers. The **checkout session** (CHK-02/43/44) is the reservation
+wrapper in front of the order: `reserved` (price + coupon held,
+`reservation_expires_at`) → submit creates the order (idempotent, CHK-42) →
+session `completed` | `expired` (worker) | `cancelled` (trader, CHK-44).
 
-### 3.2 Intent state machine (CHK-15/16)
+### 3.2 Intent state machine (CHK-07 webhook transitions; retry CHK-16)
 
 ```
  created ──(trader goes to provider)──► pending
    pending ──webhook captured──► captured (terminal: success)
    pending ──webhook failed──► failed (trader may retry → new intent, same order)
-   pending ──TTL (card 15 min / crypto 24 h / wire 72 h)──► expired
+   pending ──TTL (card 15 min / crypto 24 h)──► expired
    captured ──(trader/ADM within window)──► refund_requested (see §3.4)
    captured ──webhook refunded──► refunded (terminal)
 ```
@@ -89,8 +95,8 @@ same numbers.
 - **Crypto specifics (NOWPayments):** min payment 100%, max 110% tolerance;
   underpaid → auto-fail at TTL (no partial captures); the 24 h window covers
   slow-chain confirmations.
-- **Wire (CHK-20):** finance enters `POST /v1/admin/payments/wire/{intent}/capture`
-  (manual, 2FA, bank ref) → captured. 72 h with no finance capture → expired.
+- **Wire:** V2 (CHK-20 — D41): finance manual capture with 2FA + bank ref,
+  72 h TTL. No V1 wire rail.
 - **Order state:** `open → (any intent captured) paid → (LCC saga started)
   provisioning → (LCC funded) fulfilled | (saga failed) failed_provisioning`
   (→ auto-refund, §3.4) `| (all intents expired/failed) abandoned`.
@@ -102,7 +108,7 @@ On `captured`: DOC renders the tenant-branded invoice (R2 object,
 from TD, invoice history, re-issuance on currency/fix (void + re-issue, the
 original retained — no mutation).
 
-### 3.4 Refunds (CHK-09 — binding state machine)
+### 3.4 Refunds (the sheet row is CHK-15, V2.0; V1 ships D40's minimal manual form)
 
 ```
  refund_requested ──(provider op)──► provider_pending ──webhook──► refunded
@@ -110,14 +116,15 @@ original retained — no mutation).
  provider_pending ──webhook failed──► failed ──(retry)──► provider_pending
 ```
 
-Triggers: (a) **auto-breach refund** — `account.breached` (LCC) with tenant
-policy `auto_refund: true` (FunderBlu default **false** — breaches don't auto-
-refund; the trader can request via support (CON) which creates the refund
-object) — the PRD's "challenge failed auto-refund" default is tenant-configurable
-and the config lives in TEN (`refunds.auto_refund`); (b) trader request
-(pre-funding, within window — the terms' refund policy, e.g. "challenge not
-started"); (c) finance/ADM manual (fraud, chargeback, support decision —
-reason + 2FA).
+Triggers: (a) **auto-breach refund** — V2 (tenant policy `refunds.auto_refund`,
+FunderBlu default **false**); (b) trader self-serve request window — V2 (the
+terms' refund policy machine, CHK-15); (c) **finance/ADM manual — the V1-Plus
+form (D40, docs/53)**: an ADM creates the refund object (reason + 2FA,
+critical audit, approver ≠ requester), finance executes it in the provider's
+dashboard, the provider webhook confirms → `refunded` + LED reversal. No
+trader-facing refund endpoint, no auto triggers, no provider-API automation
+in V1 — the machine and DDL below are shared so V2 lights up the other
+triggers without re-modeling.
 
 Every refund: provider op with ref, LED **reversal entry** (LED-04 pattern —
 never delete the capture entry), invoice marked `refunded`, trader notified
@@ -150,7 +157,7 @@ margin; FX gain/loss ledger accounts (LED CoA).
 
 ### 4.1 V1 baseline events — authoritative
 
-From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `payload`); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
+From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`id`, `type`, `version`, `tenant_id`, `occurred_at`, `correlation_id`, `payload` — correlation_id required since docs/49 C1); schemas in `contracts/events/payloads/`. Producers write the outbox (EVT-01); consumers are idempotent by event id (EVT-05).
 
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
@@ -175,7 +182,10 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 ## 5. Lifecycles
 
 - **Order:** `open → paid → provisioning → fulfilled | failed_provisioning →
-  (refund) | abandoned` (abandon = all intents dead, TTL 30 d then archive).
+  (refund, D40) | abandoned` (abandon = all intents dead, TTL 30 d then
+  archive). Created at checkout submit (D42).
+- **Checkout session:** `reserved → completed (order created) | expired
+  (CHK-43 worker) | cancelled (CHK-44)`.
 - **Intent:** §3.2.
 - **Refund:** §3.4.
 - **Invoice:** `issued → (refunded →) voided_by_refund | reissued (V2)` —
@@ -241,14 +251,15 @@ Scope, request/response shapes, and per-endpoint notes: `contracts/api/chk.md` (
 
 > Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/payments/catalog` (purchasable packages × rules ×
+Trader (TD): `GET /v1/trader/payments/catalog` (purchasable packages × rules ×
 pricing — from TEN, filtered by tenant policy),
-`POST /v1/payments/intents` `{order:{package_id, rule_set_id, currency},
+`POST /v1/trader/payments/intents` `{order:{package_id, rule_set_id, currency},
 method}` → `{intent_id, redirect_url|deposit_instructions|wire_details, ttl}`,
-`GET /v1/payments/intents/{id}` (status poll for the redirect-back UX),
-`GET /v1/payments/orders` (own history: orders + invoices + refund status),
-`POST /v1/payments/orders/{id}/refund-request` (policy-window check),
-`GET /v1/payments/methods` + `POST|DELETE` (V2 saved methods).
+`GET /v1/trader/payments/intents/{id}` (status poll for the redirect-back UX),
+`GET /v1/trader/payments/orders` (own history: orders + invoices + refund status),
+`POST /v1/trader/payments/orders/{id}/refund-request` (policy-window check),
+`GET /v1/trader/payments/methods` + `POST|DELETE` (V2 saved methods).
+(Paths normalized to the GW-01 groups — D46, docs/54.)
 
 Staff (ADM): `GET /v1/admin/payments?status=`, `GET /v1/admin/payments/intents/{id}`
 (full detail incl. provider refs, redacted),
@@ -282,6 +293,28 @@ PAY deposit rails — disambiguated by payload type).
 ## 9. Database design
 
 ```sql
+CREATE TABLE checkout_sessions (              -- CHK-02/43/44 (D42: added — was dictionary-only)
+  id              ULID PRIMARY KEY,
+  tenant_id       ULID NOT NULL,
+  identity_id     ULID NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'reserved'
+    CHECK (state IN ('reserved','completed','expired','cancelled')),
+  price_snapshot  JSONB NOT NULL,           -- package_id, rule_set_id, base_cents, currency
+  coupon_code     TEXT,                     -- reserved (CHK-02); released on expire/cancel
+-- Coupon model (D75, docs/62): tenant-managed catalog rows —
+--   coupons(code PK, percent_off|flat_cents, usage_limit, used_count, expires_at)
+-- maintained with the challenge pricing (challenge.write family); validated +
+-- usage-decremented at session reservation (checkout.coupon_invalid 400).
+-- Add-ons: V2 (the TD-09 catalog extension — no V1 rows).
+-- Numbering (D75): ORD-{TENANT}-{YY}-{seq6} at order creation;
+--   INV-{TENANT}-{YY}-{seq6} at invoice issue.
+  reservation_expires_at TIMESTAMPTZ NOT NULL,
+  order_id        ULID,                     -- set on submit (the idempotent CHK-42 create)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at    TIMESTAMPTZ, cancelled_at TIMESTAMPTZ
+);
+CREATE INDEX idx_csess_tenant ON checkout_sessions(tenant_id, identity_id, state);
+
 CREATE TABLE orders (
   id              ULID PRIMARY KEY,
   tenant_id       ULID NOT NULL,
@@ -420,7 +453,8 @@ rate, circuit state); Sentry.
 ## 15. Integration — external tools
 
 Match2Pay (card + PK local), Interkasa (IN + PK local), NOWPayments (crypto),
-manual wire (bank, human), R2, Postmark (via NOT), Sentry, Prometheus/Grafana.
+(V2 — D41) manual wire (bank, human), R2, Postmark (via NOT), Sentry,
+Prometheus/Grafana.
 
 ## 16. Implementation blueprint
 
@@ -431,8 +465,8 @@ manual wire (bank, human), R2, Postmark (via NOT), Sentry, Prometheus/Grafana.
 | 3. Webhook ingress (3 providers, EVT-10) + capture + idempotency + mismatch anomaly | BE-1 | 4 d | 2, EVT-10 | replayed webhook → exactly one capture; 1¢ mismatch → anomaly ticket |
 | 4. LCC saga wiring (captured → provisioning → fulfilled/failed→refund) | BE-1 | 3 d | 3, LCC | sandbox: pay → account opening visible → funded (or failed → refund offered) |
 | 5. Invoice (DOC) + receipt email + TD checkout UI (login-first) | FE-01 + BE-1 | 4 d | 3, DOC, NOT | end-to-end purchase in staging with real sandbox provider keys |
-| 6. Refund state machine + provider ops + trader request + ADM manual (2FA) | BE-1 | 3 d | 3 | full refund cycle in staging (provider sandbox); reversal entry posts |
-| 7. Wire manual capture (2FA + bank ref) + 72 h expiry | BE-1 | 1 d | 3 | finance captures a wire; mismatch note path works |
+| 6. Refund minimal manual form (D40): ADM create (2FA) → finance provider-dashboard op → webhook confirm → LED reversal | BE-1 | 3 d | 3 | manual refund cycle in staging (provider sandbox); reversal entry posts exactly once |
+| 7. (V2 — D41) Wire manual capture (2FA + bank ref) + 72 h expiry | BE-1 | 1 d | 3 | finance captures a wire; mismatch note path works |
 | 8. V1 recon: manual report import + diff report to ADM | BE-1 | 1.5 d | 3 | seeded 5-row report → 3 matched, 2 exceptions flagged |
 | 9. Crypto rail specifics (deposit URL, 110% tolerance, chain confirmations) | BE-1 | 2 d | 3 | testnet underpayment auto-fails at TTL |
 | 10. V2: saved methods, one-click, promos/affiliates wiring, tax (V2 flag), multi-currency margin, chargebacks, recon jobs, currency FX source | BE-1 + FE-01 | 3 wks | 8–9 | each behind Flipt flag per tenant |

@@ -39,7 +39,7 @@ Binding. "Enforced by" = who/what stops a violation.
 | BVR-05 | Do not build WAF/DDoS/bot filter → **Cloudflare** at the edge | all HTTP ingress | architecture review (OPS-15, GW-20) |
 | BVR-06 | Do not build a secret manager → **SOPS + age** in V1 | all secrets | code review (OPS-09) |
 | BVR-07 | Do not build a PDF renderer → **Puppeteer** | certificates, receipts, statements | code review (DOC-01) |
-| BVR-08 | Do not build an ORM/migration runner → **Drizzle ORM** (Prisma = acceptable fallback) | all DB migrations | code review (OPS-06) |
+| BVR-08 | Do not build an ORM/migration runner → **Drizzle ORM** (Prisma = acceptable fallback) — **superseded for backend services 2026-09-20 (docs/56): the Go/Rust stack (ADR-9) uses golang-migrate + sqlc (docs/99 0.4); no V1 service reads PG through a TS ORM** | all DB migrations | code review (OPS-06) |
 | BVR-09 | No message broker other than **Redis Streams** in V1 | events, queue, commands | architecture review (Kafka/Redpanda/NATS out of scope) |
 | BVR-10 | No Kubernetes/Nomad/Swarm in V1 → **Docker Compose** | orchestration | architecture review |
 | BVR-11 | No commercial APM → **Prometheus + Grafana + Loki + Sentry** | observability | architecture review |
@@ -98,7 +98,7 @@ needed — §9), **REJECTED** (never adopt).
 | Docker + Compose | Containerization + V1 orchestration | OPS-01/02/37 | SELF-HOSTED | DevOps | Compose is the V1 source of truth (BVR-10). CPU/mem limits per service. |
 | PgBouncer | PG connection pooling (tx mode) | OPS-25 | SELF-HOSTED | DevOps | Per-service pool sizing. |
 | SOPS + age | Secrets at rest, injected at deploy | OPS-09 | SELF-HOSTED | DevOps | No Vault in V1 (BVR-06). Infisical is the V2 path. |
-| Drizzle ORM | **Primary** ORM (SQL-fluent, pure-SQL migrations) | OPS-06 | EVALUATING | BE-1, DevOps | Adopt (BVR-08). Tenant-scoped query shape control. |
+| Drizzle ORM | N/A in V1 (superseded — docs/56: Go/Rust backend, golang-migrate + sqlc per docs/99 0.4) | OPS-06 | REJECTED (V1) | BE-1, DevOps | BVR-08 predates the stack decision; revisit only if a Node data plane appears. |
 | Prisma | Typed ORM, declarative schema — **fallback only** | OPS-06 | EVALUATING | BE-1 | Only if team prefers declarative schema. Never primary. |
 | BullMQ | Job queue + scheduler (sync, reconcilers, reports) | BRG-07/08, EVL-05, OPS-17/27 | EVALUATING | BE-1 | Adopt (BVR-19). + Dashboard for obs. |
 | Puppeteer | HTML→PDF (certificates) | DOC-01 | SELF-HOSTED | BE-2 | No DocRaptor/PDFMonkey (BVR-07). html-pdf-lite is the V2 candidate. |
@@ -106,7 +106,7 @@ needed — §9), **REJECTED** (never adopt).
 | Prometheus + Grafana + Loki + OTel | Metrics, dashboards, logs, tracing | OPS-10/12 (V2.0) | SELF-HOSTED | DevOps | No commercial APM (BVR-11). Verify Grafana/Loki AGPL distribution. |
 | TradingView Lightweight Charts | Equity/P&L charts (~45 KB) | TD-06/21 (V2.0) | EVALUATING | FE-1 | + Recharts for admin bars/lines. Confirm data contract pre-build. |
 | Flipt | Feature flags (Git-native, declarative) | TEN-10, CON-31 (V2.0) | EVALUATING | BE-2 | Adopt (BVR-20). Per-tenant + platform rollouts. |
-| Hook0 | Webhook delivery (retry, HMAC, logs, breakers) | EVT-11/13/14/15 (V2.0) | EVALUATING | BE-1 | Adopt with outbound webhooks (BVR-24). AGPL — verify. |
+| Hook0 | Webhook delivery (retry, HMAC, logs, breakers) — **V1 pipeline per D54 (docs/99 0.3/0.7 test it); the EVT-11/13/14/15 V2.0 rows = the productized per-tenant surface** | EVT-11/13/14/15 (V2.0) | ADOPT (V1) | BE-1 | BVR-24. AGPL — verify at adoption (§9 checklist). |
 | Uptime Kuma | External uptime probes (independent box) | OPS-31 (V2.0) | EVALUATING | DevOps | Detects total outages (runs off-platform). |
 
 ### 3.3 V2.0 consider-later adoptions
@@ -296,6 +296,10 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 - [ ] **SSO onboarding without group mapping (Phase 0)** — owner BE-1. Confirm the step-3a metadata exchange works with roles assigned by us, and that the registry surface no longer advertises group→role mapping (docs/45 G37, decision D22).
 - [ ] **ZITADEL admin-plane lockdown (Phase 0)** — owner DevOps. Reachability test from outside the network (must fail), the two `IAM_OWNER` holders named in the ops vault, sealed break-glass credential filed, quarterly review scheduled (docs/45 G39, decision D24).
 - [ ] **Contract permission coverage in CI (Phase 0)** — owner BE-1. `scripts/verify_roles.py` route check wired into the pipeline; the build fails on a V1 op without a declared permission or with an unbound key (docs/45 G41, gate 13).
+- [ ] **Authorization views render-fresh (Phase 0/1)** — owner BE-1. `scripts/verify_roles.py --write-matrix` output (`contracts/permissions/matrix.md`) is byte-identical in CI; the build fails on drift (docs/46, gate 15).
+- [ ] **Tenant state matrix machine-fresh (Phase 0/1)** — owner BE-2. `scripts/verify_tenant_states.py` green: `contracts/tenants/state-capabilities.yaml` renders docs/03 §5.1 byte-identical, states == the `tenants.status` DDL, every blocked cell's code registered (docs/47, gate 16; the file is also the I-20 table-driven test source).
+- [ ] **Workers tenant-scoped DB access (Phase 1)** — owner BE-1 + DevOps. Workers run `app_rw` with per-message `app.tenant_id`; the workers manifest names the platform-wide jobs allowed on the `app_platform` DSN (initially: DLQ sweep, cross-tenant session cleanup, report generation) and CI asserts only manifest jobs reference it (docs/47 §15, decision W).
+- [ ] **Journal invariants commit-enforced (Phase 1)** — owner BE-2. The deferred constraint trigger blocks unbalanced/mixed-currency entries at COMMIT, immutability triggers + INSERT-only privileges hold, the applier is idempotent on `idempotency_key`, and an unbalanced post rolls the business tx back (`led.entry_unbalanced`) (docs/48 §5, gate 17; decisions D25–D27).
 - [ ] **Auth-artifact retention job (Phase 1)** — owner BE-1 + DevOps. Nightly job scrubs IP/UA/geo from `auth_sessions` older than 90 days and purges expired backup codes (docs/45 G44, docs/28 §4 S2b).
 - [ ] **ZITADEL org-scope behaviour check (Phase 0)** — owner BE-1. Reproduce issue #11869 on the pinned version with a multi-org test user (docs/42 §3.1); record the outcome in docs/02 §3.1 either way.
 - [ ] **`idp-sync` spike (Phase 0)** — owner BE-1. Poll the event log (`admin/v1/events/_search`) from a sequence cursor on the pinned version: diff the live event-type list against docs/43 §4, prove catch-up + duplicate suppression, and run the kill-the-worker → alert → catch-up drill (docs/43 §3, §5).
@@ -304,7 +308,7 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 - [ ] **Staff-MFA enforcement check (Phase 0)** — owner BE-1. Confirm `amr`/`auth_time` carry the TOTP factor on hosted login and that `POST /v2/users/{id}/totp` with a **user** token binds the factor (docs/02 §3.2); if not, escalate to the custom-login-UI trade-off.
 - [ ] **IdP backup/restore rehearsal (Phase 0)** — owner DevOps. Restore the `zitadel` database into a scratch instance and log in against it; verify the master key is stored separately from the dump.
 - [ ] **DPO review of the IdP event-store limitation (Phase 0 exit)** — owner FunderBlu COO + legal. Upstream #7811 leaves PII in the IdP event stream after deletion; accept or add a compensating control (docs/02 §10.4, decision D9 in docs/37).
-- [ ] **Drizzle adopt (Phase 0)** — owners BE-1 + DevOps. Else Prisma fallback (BVR-08).
+- [x] **Drizzle adopt (Phase 0)** — closed 2026-09-20 (docs/56): N/A — the backend is Go/Rust with golang-migrate + sqlc (docs/99 0.4); BVR-08 superseded for backend services.
 - [ ] **Sentry SDKs day 1** — owner DevOps. Every service from the first deploy.
 - [ ] **AGPL distribution checks** (Hook0, UnKey, Comp AI, Grafana, Loki) — at each adoption.
 - [ ] **Accountant call (V2)** — owner FunderBlu COO. QuickBooks vs Xero at LED-20.

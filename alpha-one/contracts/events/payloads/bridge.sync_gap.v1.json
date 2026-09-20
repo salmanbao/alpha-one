@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bridge.sync_gap.v1.json",
+  "title": "Alpha One \u2014 event bridge.sync_gap v1",
+  "description": "V1 catalog event `bridge.sync_gap` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ADM (manual review), AUD, EVL (gap_flagged verdict). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "bridge.sync_gap"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "window_start": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            },
+            "expected_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "deals the history API reports in the window"
+            },
+            "got_count": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "rows written this window"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "window_start",
+            "expected_count",
+            "got_count"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

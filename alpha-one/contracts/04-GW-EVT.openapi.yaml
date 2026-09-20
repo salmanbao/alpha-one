@@ -16,10 +16,10 @@ servers:
 tags:
 - name: webhook
   description: Inbound provider webhook (signature-verified)
-- name: core
-  description: Core domain endpoints (trader + shared)
 - name: console
   description: Platform console (CON) surface
+- name: core
+  description: Core domain endpoints (trader + shared)
 paths:
   /healthz:
     get:

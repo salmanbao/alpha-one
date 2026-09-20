@@ -24,7 +24,7 @@ CREATE TABLE broker_accounts (
   cred_key_version   INT NOT NULL DEFAULT 1,
   leverage           TEXT,
   last_equity_cents  BIGINT, last_balance_cents BIGINT,
-  last_margin_cents  BIGINT,
+  last_margin_cents  BIGINT, last_free_margin_cents BIGINT,
   last_deal_ticket   BIGINT NOT NULL DEFAULT 0,
   last_synced_at     TIMESTAMPTZ,
   server_time        TIMESTAMPTZ,          -- last broker-attested time
@@ -67,6 +67,23 @@ CREATE TABLE broker_deals (
   PRIMARY KEY (login, deal_id)
 ) PARTITION BY RANGE (received_at);
 -- monthly partitions (high-volume table; same pattern as events)
+
+CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-day rolling (D35)
+  account_id      ULID NOT NULL,
+  bucket_ts       TIMESTAMPTZ NOT NULL,       -- minute bucket (UTC)
+  tenant_id       ULID NOT NULL,
+  login           TEXT NOT NULL,
+  equity_cents    BIGINT NOT NULL,
+  balance_cents   BIGINT NOT NULL,
+  margin_cents    BIGINT,
+  free_margin_cents BIGINT,
+  broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
+  received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, bucket_ts)
+) PARTITION BY RANGE (bucket_ts);
+-- daily partitions; retention = 14-day rolling (partition DROP; BRG job) with the
+-- daily rollup exported to the ANA read model first (docs/19). PAY eligibility and
+-- TD intraday equity curves read here (BRG-09 refreshes the latest row on demand).
 
 CREATE TABLE broker_executions (
   id            ULID PRIMARY KEY,

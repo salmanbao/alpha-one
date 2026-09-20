@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `developer.support_ticket` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/developer.schema.json ($defs/developer_support_ticket). Per-event payload. Producer: 27 (SDK/DVP/TRD/PLT/CS). When: the SUP category. Consumers: the SUP queue (the 18 pattern), the AUD (the low). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `developer.support_ticket` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/developer.schema.json ($defs/developer_support_ticket). Per-event payload. Producer: 27 (SDK/DVP/TRD/PLT/CS). When: the SUP category. Consumers: the SUP queue (the 18 pattern), the AUD (the low). Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "WKY4GYBVR8HKWDBREVP4P58N2G",
   "type": "developer.support_ticket",
   "version": 1,
   "tenant_id": "0R3E6GRYZ7MP7ZZTPAFYK0ZVFT",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

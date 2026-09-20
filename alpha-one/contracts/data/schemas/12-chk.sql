@@ -1,4 +1,19 @@
 -- 12 — CHK: DDL split from docs/32-database-design.md (source: docs/12-checkout-billing.md §9). docs/32 is the source of truth; delivered through versioned migrations (OPS-06, expand-contract discipline).
+CREATE TABLE checkout_sessions (              -- CHK-02/43/44 (D42: added — was dictionary-only)
+  id              ULID PRIMARY KEY,
+  tenant_id       ULID NOT NULL,
+  identity_id     ULID NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'reserved'
+    CHECK (state IN ('reserved','completed','expired','cancelled')),
+  price_snapshot  JSONB NOT NULL,           -- package_id, rule_set_id, base_cents, currency
+  coupon_code     TEXT,                     -- reserved (CHK-02); released on expire/cancel
+  reservation_expires_at TIMESTAMPTZ NOT NULL,
+  order_id        ULID,                     -- set on submit (the idempotent CHK-42 create)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at    TIMESTAMPTZ, cancelled_at TIMESTAMPTZ
+);
+CREATE INDEX idx_csess_tenant ON checkout_sessions(tenant_id, identity_id, state);
+
 CREATE TABLE orders (
   id              ULID PRIMARY KEY,
   tenant_id       ULID NOT NULL,

@@ -8,6 +8,8 @@ stateDiagram-v2
     CREATED --> ACTIVE: broker account provisioned + credentials delivered (BRG-05, BRG-06)
     ACTIVE --> PASS_PENDING: objectives met (EVL-19)
     ACTIVE --> BREACH_DETECTED: hard breach (EVL-17)
+    BREACH_DETECTED --> ACTIVE: breach override (EVL-20, V1.1 — D29)
+    FAILED --> ACTIVE: breach override (EVL-20, V1.1 — D29)
     ACTIVE --> SUSPENDED: admin suspend (LCC-11, V1.1)
     PASS_PENDING --> VERIFICATION: queued for verification per config (EVL-19)
     PASS_PENDING --> AWAITING_ACTIVATION: activation fee configured (LCC-08)
@@ -17,6 +19,7 @@ stateDiagram-v2
     BREACH_DETECTED --> CLOSING: disable-then-close commands enqueued (EVL-17, BRG-10)
     CLOSING --> FAILED: broker confirms closure (BRG-11)
     FUNDED --> SUSPENDED: admin suspend (LCC-11, V1.1)
+    FUNDED --> BREACH_DETECTED: hard breach (EVL-17 — D32)
     SUSPENDED --> ACTIVE: resume from evaluation-phase suspend (LCC-11)
     SUSPENDED --> FUNDED: resume from funded-phase suspend (LCC-11)
     FUNDED --> TERMINATED: end of engagement (LCC-27)
@@ -38,3 +41,7 @@ Citation note: the AWAITING_ACTIVATION hold-and-pay flow traces to LCC-08, which
 
 ## Open contract questions
 - LCC-08 (V2.0) is cited for the AWAITING_ACTIVATION hold-and-pay flow — confirm with PRD owners whether a V1 activation-fee product is intended (see `api/lcc.md`).
+
+> Render note (tenth pass, D29): the PNG predates the two breach-override
+> edges — re-render `account-state.png` from this source at the next doc
+> tooling pass (no mmdc in CI today).

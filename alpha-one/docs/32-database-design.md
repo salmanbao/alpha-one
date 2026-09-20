@@ -10,7 +10,7 @@
 
 - **`tenant_id ULID NOT NULL`** on every tenant-scoped table (the structural
   isolation, 28 §3.3); exceptions (the platform-level): `tenants`,
-  `identities`, `audit_log` (tenant + platform scope, 05 §9).
+  `identities`, `audit_events` (tenant + platform scope, 05 §9).
 - **ULIDs** everywhere (01 §2); the char-25 top-3-bits guard (02 §3.5);
   public surface uses `public_id_refs` (27 Part A §8), never raw ULIDs.
 - **Money**: `_cents BIGINT` + `currency` (no floats, 05 §9).
@@ -20,14 +20,14 @@
   (04 §5.4) → R2 archive (06 §3.2, 29 §3.2).
 - **Retention**: 7-yr financial/audit (00 §6, 05 §3.5), 2-yr tickets (18 §3.5),
   12-mo competition (24 Part B), 30-day sandbox (27 Part A §5).
-- **Append-only**: `ledger_entries`, `audit_log` — the `BEFORE UPDATE`/
+- **Append-only**: `ledger_entries`, `audit_events` — the `BEFORE UPDATE`/
   `BEFORE DELETE` triggers reject (05 §9, 28 §3.3).
 - **PII**: envelope-encrypted `pii_*` / `*_encrypted` columns (02 §3.7, 28 §3.3);
   documents in R2 (per-tenant prefix), the PG holds the ref only (13 §3.4).
 - **Indexes**: every `(tenant_id, …)` leading; the read-model tables (`*_ro`)
   are the query surface for reads (19 §3.1).
 
-## 2. The schema (122 tables in 29 DDL blocks, module-ordered)
+## 2. The schema (128 tables in 30 DDL blocks, module-ordered)
 
 ### 02 — AUTH (from docs/02-identity-access.md §9)
 
@@ -198,14 +198,14 @@ CREATE TABLE tenants (
   limits        JSONB NOT NULL DEFAULT '{}',
   settings      JSONB NOT NULL DEFAULT '{}',        -- validated vs contracts schema
   branding      JSONB NOT NULL DEFAULT '{}',
-  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot
+  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot; written only in the entitlement-change transaction (never a second write path, never read for authz)
   onboarding_state JSONB NOT NULL DEFAULT '{"completedSteps":[]}',
   data_region   VARCHAR(20) NOT NULL DEFAULT 'eu-hetzner',
   suspended_at  TIMESTAMPTZ, suspension_reason TEXT,
   created_by    ULID,                                -- platform staff identity
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  activated_at  TIMESTAMPTZ, suspended_reason TEXT,
+  activated_at  TIMESTAMPTZ                         -- set on the onboarding->active transition
   deletion_scheduled_at TIMESTAMPTZ
 );
 CREATE INDEX idx_tenants_status ON tenants(status);
@@ -215,6 +215,9 @@ CREATE TABLE domain_mappings (
   id            ULID PRIMARY KEY,
   tenant_id     ULID NOT NULL REFERENCES tenants(id),
   domain        VARCHAR(255) UNIQUE NOT NULL,
+  -- custom domains ONLY (decision D, docs/47 §15): the subdomain lives solely in
+  -- tenants.slug — resolution never reads this table for {slug}.alpha1.io, and the
+  -- 'subdomain' enum value is dropped at the V1.1 custom-domain freeze
   type          TEXT NOT NULL CHECK (type IN ('subdomain','custom')),
   verified      BOOLEAN NOT NULL DEFAULT false,
   verification_token TEXT,            -- TXT record token (custom domain)
@@ -259,9 +262,23 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   period_started_at TIMESTAMPTZ NOT NULL,
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
-  PRIMARY KEY (id)
-);
+  PRIMARY KEY (id, period_started_at)   -- partitioned table: PK must include the partition key
+) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
+
+-- Retention (decision U, 2026-09-19): raw rows are kept 25 months (monthly partitions
+-- dropped past the window by the scheduled-jobs worker); from month 13 onward the
+-- flusher also writes monthly rollups below, and BIL (V3) reads rollups for anything
+-- older. Tenant deletion purges both per §5.2 (rollups keep the anonymised totals).
+CREATE TABLE usage_rollups_monthly (
+  tenant_id        ULID NOT NULL,
+  metric_name      TEXT NOT NULL,
+  month            DATE NOT NULL,          -- first day of the month, UTC
+  value_total      NUMERIC(18,4) NOT NULL,
+  sample_count     BIGINT NOT NULL,
+  rolled_up_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, metric_name, month)
+);
 ```
 
 ### 04 — GW+EVT (from docs/04-gateway-events.md §9)
@@ -282,7 +299,11 @@ CREATE INDEX idx_outbox_unpublished ON outbox(id) WHERE published_at IS NULL;
 
 CREATE TABLE events (
   event_id      ULID,
-  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- per-topic seq in app (Redis INCR on publish)
+  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- global append order, assigned by the
+                                                       -- INSERT (the relay is the single writer;
+                                                       -- NO Redis counter in the durable path —
+                                                       -- the D27 lesson, docs/48); V2 CON replay
+                                                       -- addresses seq ranges
   topic         TEXT NOT NULL,
   tenant_id     ULID NOT NULL,
   entity_id     TEXT NOT NULL,
@@ -335,17 +356,28 @@ CREATE TABLE tenant_webhooks (           -- V2
 ### 05 — LED/AUD (from docs/05-ledger-audit.md §9)
 
 ```sql
-ALTER TABLE journal_entry ADD CONSTRAINT chk_entry_balanced
-  CHECK (true);  -- enforced by trigger:
 CREATE FUNCTION trg_entry_balance() RETURNS trigger AS $$
+DECLARE
+  eid ULID := COALESCE(NEW.entry_id, OLD.entry_id);
+  unbalanced int; mixed int;
 BEGIN
-  IF (SELECT COALESCE(SUM(debit_cents),0) - COALESCE(SUM(credit_cents),0)
-      FROM journal_line WHERE entry_id = NEW.id) <> 0 THEN
-    RAISE EXCEPTION 'journal entry % is not balanced', NEW.id;
+  SELECT COALESCE(SUM(debit_cents),0) - COALESCE(SUM(credit_cents),0),
+         COUNT(DISTINCT currency)
+    INTO unbalanced, mixed
+    FROM journal_line WHERE entry_id = eid;
+  IF unbalanced <> 0 OR mixed > 1 THEN
+    RAISE EXCEPTION 'journal entry % is unbalanced or mixed-currency', eid;
   END IF;
-  RETURN NEW;
+  RETURN NULL;  -- AFTER trigger
 END $$ LANGUAGE plpgsql;
--- trigger AFTER INSERT OR UPDATE OF entry on journal_entry (checks its lines)
+CREATE CONSTRAINT TRIGGER trg_lines_balance AFTER INSERT OR UPDATE OR DELETE ON journal_line
+  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION trg_entry_balance();
+-- Row-level + deferred = evaluated per touched entry at COMMIT: lines inserted after
+-- the entry row are all present when the check runs; statement-level shortcuts are
+-- what broke the earlier sketch (an AFTER INSERT trigger on journal_entry fires
+-- before any line exists — finding F1, docs/48).
+-- One currency per entry (§3.2 rule 4) rides the same check (F6).
+-- The app role also gets INSERT-only (§9): corrections are reversal entries, never edits.
 ```
 
 ```sql
@@ -391,7 +423,6 @@ CREATE INDEX idx_jline_account_time ON journal_line(account_id, entry_id);
 
 CREATE TABLE audit_events (
   id            BIGINT GENERATED ALWAYS AS IDENTITY,
-  seq           BIGINT NOT NULL,                  -- per-tenant monotonic (app-assigned via Redis INCR; V2: PG sequence per tenant for chain)
   tenant_id     ULID,                             -- NULL = platform-level
   actor_id      ULID,
   actor_kind    TEXT NOT NULL CHECK (actor_kind IN ('user','service','api_key','system')),
@@ -405,21 +436,72 @@ CREATE TABLE audit_events (
   request_id    TEXT,
   geo           JSONB,
   tier          TEXT NOT NULL DEFAULT 'standard' CHECK (tier IN ('standard','sensitive','critical')),
-  prev_hash     TEXT, entry_hash TEXT,            -- V2 hash chain
+  prev_hash     TEXT, entry_hash TEXT,            -- V2 hash chain; `seq BIGINT`
+                                                  -- (per-tenant monotonic) joins at chain
+                                                  -- init (AUD-14), backfilled in id order —
+                                                  -- decision D27, docs/48: V1 carries no seq,
+                                                  -- so the fail-closed audit write is one
+                                                  -- INSERT with no Redis dependency
   legal_hold    BOOLEAN NOT NULL DEFAULT false,   -- V2
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (id)
+  PRIMARY KEY (id, created_at)                    -- partitioned tables must carry the
+                                                  -- partition key in every unique/PK
+                                                  -- constraint (finding F2, docs/48)
 ) PARTITION BY RANGE (created_at);
 CREATE INDEX idx_audit_tenant_time ON audit_events(tenant_id, created_at DESC);
 CREATE INDEX idx_audit_actor ON audit_events(tenant_id, actor_id, created_at DESC);
 CREATE INDEX idx_audit_action ON audit_events(tenant_id, action, created_at DESC);
 CREATE INDEX idx_audit_resource ON audit_events(resource_type, resource_id, created_at DESC);
--- App role: INSERT only. UPDATE/DELETE revoked. REVOKE ALL FROM public.
+-- Immutability (docs/32 convention, 28 §3.3): BEFORE DELETE/UPDATE triggers raise,
+-- and the app role holds INSERT + SELECT only — the DDL the convention cites:
+CREATE FUNCTION trg_ledger_no_mutation() RETURNS trigger AS $$
+BEGIN RAISE EXCEPTION '% on % is not permitted', TG_OP, TG_TABLE_NAME; END
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER no_mutate_journal  BEFORE UPDATE OR DELETE ON journal_entry  FOR EACH STATEMENT EXECUTE FUNCTION trg_ledger_no_mutation();
+CREATE TRIGGER no_mutate_jline    BEFORE UPDATE OR DELETE ON journal_line    FOR EACH STATEMENT EXECUTE FUNCTION trg_ledger_no_mutation();
+CREATE TRIGGER no_mutate_audit    BEFORE UPDATE OR DELETE ON audit_events    FOR EACH STATEMENT EXECUTE FUNCTION trg_ledger_no_mutation();
+
+-- RLS (D16 model): journal_entry, journal_line and the tenant rows of audit_events
+-- are tenant-owned — ENABLE/FORCE ROW LEVEL SECURITY on app.tenant_id (fail-closed),
+-- written by the appliers with per-message context (decision W). Rows with
+-- tenant_id IS NULL (platform CoA accounts, platform audit rows) are guard-only and
+-- reachable through the app_platform services (audit-applier, CON read models) —
+-- the same named-exemption model as every other module (docs/44 §5, docs/47 §7).
 ```
 
 ### 06 — OPS (from docs/06-devops-deployment.md §9)
 
-_(no DDL in the module doc — the module is stateless or reuses another)_
+```sql
+CREATE TABLE backups (
+  id           ULID PRIMARY KEY,
+  kind         TEXT NOT NULL,          -- wal | base | r2_manifest
+  taken_at     TIMESTAMPTZ NOT NULL,
+  size_bytes   BIGINT NOT NULL,
+  checksum     TEXT NOT NULL,
+  verified_at  TIMESTAMPTZ,            -- weekly checksum verify (§5)
+  drill_report JSONB                   -- monthly restore drill (OPS-38)
+);
+CREATE INDEX idx_backups_kind_taken ON backups(kind, taken_at DESC);
+
+CREATE TABLE incidents (
+  id              ULID PRIMARY KEY,
+  severity        TEXT NOT NULL,       -- P1 | P2 | P3 (§5 ladder)
+  title           TEXT NOT NULL,
+  started_at      TIMESTAMPTZ NOT NULL,
+  resolved_at     TIMESTAMPTZ,
+  post_mortem_url TEXT                 -- ops/incidents/ (P1/P2 ≤ 48 h)
+);
+
+CREATE TABLE deploys (
+  id          ULID PRIMARY KEY,
+  env         TEXT NOT NULL,           -- staging | prod
+  sha         TEXT NOT NULL,           -- immutable GHCR tag
+  started_at  TIMESTAMPTZ NOT NULL,
+  finished_at TIMESTAMPTZ,
+  status      TEXT NOT NULL,           -- promoted | deployed | rolled_back | failed
+  actor       TEXT NOT NULL
+);
+```
 
 ### 07 — LCC (from docs/07-account-lifecycle.md §9)
 
@@ -514,7 +596,7 @@ CREATE TABLE broker_accounts (
   cred_key_version   INT NOT NULL DEFAULT 1,
   leverage           TEXT,
   last_equity_cents  BIGINT, last_balance_cents BIGINT,
-  last_margin_cents  BIGINT,
+  last_margin_cents  BIGINT, last_free_margin_cents BIGINT,
   last_deal_ticket   BIGINT NOT NULL DEFAULT 0,
   last_synced_at     TIMESTAMPTZ,
   server_time        TIMESTAMPTZ,          -- last broker-attested time
@@ -557,6 +639,23 @@ CREATE TABLE broker_deals (
   PRIMARY KEY (login, deal_id)
 ) PARTITION BY RANGE (received_at);
 -- monthly partitions (high-volume table; same pattern as events)
+
+CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-day rolling (D35)
+  account_id      ULID NOT NULL,
+  bucket_ts       TIMESTAMPTZ NOT NULL,       -- minute bucket (UTC)
+  tenant_id       ULID NOT NULL,
+  login           TEXT NOT NULL,
+  equity_cents    BIGINT NOT NULL,
+  balance_cents   BIGINT NOT NULL,
+  margin_cents    BIGINT,
+  free_margin_cents BIGINT,
+  broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
+  received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (account_id, bucket_ts)
+) PARTITION BY RANGE (bucket_ts);
+-- daily partitions; retention = 14-day rolling (partition DROP; BRG job) with the
+-- daily rollup exported to the ANA read model first (docs/19). PAY eligibility and
+-- TD intraday equity curves read here (BRG-09 refreshes the latest row on demand).
 
 CREATE TABLE broker_executions (
   id            ULID PRIMARY KEY,
@@ -676,8 +775,8 @@ CREATE TABLE risk_cases (
   status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','decided','reopened','closed')),
   severity      TEXT NOT NULL,
   trader_id     ULID NOT NULL,
-  account_ids   ULID[],
-  payout_hold   BOOLEAN NOT NULL DEFAULT false,
+  account_ids   ULID[],                     -- one open case per account (D71): transactional check under a per-trader advisory lock (§3.2)
+  payout_hold   BOOLEAN NOT NULL DEFAULT false,  -- dormant in V1.0; the PAY-04 interlock reads it from V1.1 (D68)
   hold_until    TIMESTAMPTZ,                -- RSK-31 (V2 expiry)
   decision_note TEXT,
   actions       JSONB NOT NULL DEFAULT '[]',
@@ -718,8 +817,11 @@ CREATE TABLE payout_requests (
   method_version_at INT NOT NULL,             -- which method row version (disputes)
   requested_cents   BIGINT,                   -- NULL = everything available
   status            TEXT NOT NULL DEFAULT 'requested'
-    CHECK (status IN ('requested','pending_approval','approved','processing',
-                      'settled','failed','failed_final','rejected','cancelled','on_hold')),
+    CHECK (status IN ('requested','eligibility_checked','pending_approval','approved',
+                      'processing','paid','failed','cancelled','rejected')),
+    -- PAY-13's exact list (docs/52: 'settled'→'paid'; 'failed_final' is a V2
+    -- terminal reason within 'failed'; holds are status_reason='on_hold' flags on
+    -- 'approved' — never states, D32)
   status_reason     TEXT,
   -- frozen calc (PAY-02, §3.2)
   calc_snapshot     JSONB NOT NULL,           -- steps + inputs + snapshot versions
@@ -769,6 +871,21 @@ CREATE INDEX idx_pexec_payout ON payout_executions(payout_id, attempt);
 ### 12 — CHK (from docs/12-checkout-billing.md §9)
 
 ```sql
+CREATE TABLE checkout_sessions (              -- CHK-02/43/44 (D42: added — was dictionary-only)
+  id              ULID PRIMARY KEY,
+  tenant_id       ULID NOT NULL,
+  identity_id     ULID NOT NULL,
+  state           TEXT NOT NULL DEFAULT 'reserved'
+    CHECK (state IN ('reserved','completed','expired','cancelled')),
+  price_snapshot  JSONB NOT NULL,           -- package_id, rule_set_id, base_cents, currency
+  coupon_code     TEXT,                     -- reserved (CHK-02); released on expire/cancel
+  reservation_expires_at TIMESTAMPTZ NOT NULL,
+  order_id        ULID,                     -- set on submit (the idempotent CHK-42 create)
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at    TIMESTAMPTZ, cancelled_at TIMESTAMPTZ
+);
+CREATE INDEX idx_csess_tenant ON checkout_sessions(tenant_id, identity_id, state);
+
 CREATE TABLE orders (
   id              ULID PRIMARY KEY,
   tenant_id       ULID NOT NULL,
@@ -840,10 +957,14 @@ CREATE TABLE kyc_sessions (
   id             ULID PRIMARY KEY,
   tenant_id      ULID NOT NULL,
   identity_id    ULID NOT NULL,
-  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),
-  state          TEXT NOT NULL DEFAULT 'in_session'
-    CHECK (state IN ('in_session','in_review','manual_review','verified',
-                     'rejected','expired','re_verification_required')),
+  level          TEXT NOT NULL CHECK (level IN ('l1','l2')),   -- level machinery is V2; V1 uses one flow (docs/53)
+  is_manual_review BOOLEAN NOT NULL DEFAULT false,  -- queue flag, NOT a state (D43, KYC-11/12)
+  state          TEXT NOT NULL DEFAULT 'not_started'
+    CHECK (state IN ('not_started','pending','in_review','approved',
+                     'rejected','needs_resubmission','expired')),
+    -- KYC-06's exact seven states (docs/53: the DDL's invented in_session/
+    -- manual_review/verified/re_verification_required removed; manual review
+    -- = in_review + is_manual_review)
   provider       TEXT NOT NULL DEFAULT 'veriff',
   provider_case_id TEXT,                     -- Veriff object id
   country_declared CHAR(2), country_ip CHAR(2),
@@ -859,7 +980,7 @@ CREATE TABLE kyc_sessions (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_kyc_tenant_identity ON kyc_sessions(tenant_id, identity_id, level, created_at DESC);
-CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'manual_review';
+CREATE INDEX idx_kyc_queue ON kyc_sessions(tenant_id, state) WHERE state = 'in_review' AND is_manual_review;
 
 CREATE TABLE kyc_documents (
   id         ULID PRIMARY KEY,

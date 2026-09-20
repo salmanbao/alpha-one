@@ -29,6 +29,13 @@
               "type": "string",
               "description": "the breached rule (e.g. daily drawdown, max drawdown, profit target breach path)"
             },
+            "verdict_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "evidence_ref": {
+              "type": "string",
+              "description": "pointer to the EVL evidence snapshot (verdict input: tick data, rule state)"
+            },
             "observed": {
               "type": "number"
             },
@@ -44,6 +51,7 @@
             "account_id",
             "phase",
             "rule",
+            "verdict_id",
             "breached_at"
           ]
         }

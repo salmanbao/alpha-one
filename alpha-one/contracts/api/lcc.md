@@ -18,6 +18,8 @@ States: CREATED, ACTIVE, BREACH_DETECTED, CLOSING, FAILED, PASS_PENDING, VERIFIC
 ```text
 CREATED             → ACTIVE                    broker account provisioned, credentials delivered (BRG-05, BRG-06)
 ACTIVE              → BREACH_DETECTED           hard breach (EVL-17)
+BREACH_DETECTED     → ACTIVE                    breach override (EVL-20, V1.1 — D29)
+FAILED              → ACTIVE                    breach override (EVL-20, V1.1 — D29)
 ACTIVE              → PASS_PENDING              objectives met (EVL-19)
 ACTIVE              → SUSPENDED                 admin suspend (LCC-11, V1.1)
 BREACH_DETECTED     → CLOSING                   disable-then-close enqueued (BRG-10, EVL-17)
@@ -28,6 +30,7 @@ VERIFICATION        → AWAITING_ACTIVATION       approved, fee due (LCC-06 + LC
 VERIFICATION        → TERMINATED                verification rejected
 AWAITING_ACTIVATION → TERMINATED                payment window elapsed, no fee
 FUNDED              → SUSPENDED                 admin suspend (LCC-11, V1.1)
+FUNDED              → BREACH_DETECTED           hard breach (EVL-17 — D32, docs/52)
 SUSPENDED           → ACTIVE                    resume from evaluation-phase suspend (LCC-11)
 SUSPENDED           → FUNDED                    resume from funded-phase suspend (LCC-11)
 FUNDED              → TERMINATED                end of engagement (LCC-27)
@@ -55,7 +58,7 @@ From domain (GW-02). Accounts are tenant-scoped (TEN-03, AUTH-15).
 
 ## Permissions
 - Suspend/resume account: `account.suspend` # LCC-11
-- Read account detail: `account.read` # derived from ADM-05/TD-03 consumption — TODO — needs owner decision on trader self-read vs staff read keys
+- Read account detail: `account.read` (staff: owner/admin/risk/support/finance — roles.yaml) for the admin reads; the trader self-read is the `self`-scope route (TD-03, no key — the route convention) — resolved 2026-09-20 (docs/62)
 
 ## Idempotency
 Mutating requests accept an idempotency key per GW-12. Provisioning itself is idempotent end to end: order.paid (CHK-09) is deduplicated by provider event id (CHK-07) and broker account creation carries its own idempotency key (BRG-05).
@@ -65,7 +68,7 @@ Mutating requests accept an idempotency key per GW-12. Provisioning itself is id
 ### GET /v1/trader/accounts
 Auth: Trader — TD-03
 Tenant: from domain (GW-02)
-Permission: self-read (accounts of caller) # AUTH-13; key — TODO — needs owner decision
+Permission: self-read (accounts of caller) # AUTH-13; the `self` route scope — no permission key (resolved 2026-09-20, docs/62)
 Idempotency: n/a
 
 Response 200:
@@ -122,7 +125,7 @@ Response 200:
 
 Errors:
 - `account.not_found` 404 # implied
-- `account.not_active` 409 — cannot suspend from current state — TODO — needs owner decision (guard set unspecified in LCC-02)
+- `account.not_active` 409 — cannot suspend from current state # the guard set = the LCC §5.1 matrix (suspendable: ACTIVE, FUNDED — docs/07) — resolved 2026-09-20 (docs/62)
 
 Effects: disables trading at the broker (BRG-14); emits Suspended (LCC-23); blocks payouts (PAY-04).
 
@@ -159,6 +162,6 @@ Effects: re-enables trading at the broker (BRG-14); emits Resumed (LCC-23).
 AccountCreated, PhaseAdvanced, AccountPassed, AccountBreached, AccountFailed, FundedCreated, Suspended, Resumed — see `contracts/events/catalog.md`.
 
 ## Open contract questions
-- TODO — needs owner decision: phase lineage representation (LCC-06 links accounts via `parent_account_id`; whether a separate lineage table is needed).
-- TODO — needs owner decision: whether suspend/resume is also exposed for staff (LCC-11 says tenant admin only).
+- Resolved 2026-09-20 (docs/62): V1 lineage = `parent_account_id` only; the separate `phase_history` lineage lands with V2 LCC-10 (docs/07 §9) — no new table in V1.
+- Resolved 2026-09-20 (docs/62): suspend/resume **is** exposed for staff — the admin routes are keyed `account.suspend` (owner/admin/risk, roles.yaml); LCC-11's "tenant admin" means tenant staff, never the trader.
 - Resolved 2026-09-17: LCC-02 edge list, TERMINATED entry, KYC timing enum — see "State machine (LCC-02)" above. Note: the AWAITING_ACTIVATION hold-and-pay flow cites LCC-08 (V2.0); confirm with PRD owners whether a V1 activation-fee product is intended.

@@ -62,6 +62,8 @@ stateDiagram-v2
     CREATED --> ACTIVE: broker account provisioned + credentials delivered (BRG-05, BRG-06)
     ACTIVE --> PASS_PENDING: objectives met (EVL-19)
     ACTIVE --> BREACH_DETECTED: hard breach (EVL-17)
+    BREACH_DETECTED --> ACTIVE: breach override (EVL-20, V1.1 — D29)
+    FAILED --> ACTIVE: breach override (EVL-20, V1.1 — D29)
     ACTIVE --> SUSPENDED: admin suspend (LCC-11, V1.1)
     PASS_PENDING --> VERIFICATION: queued for verification per config (EVL-19)
     PASS_PENDING --> AWAITING_ACTIVATION: activation fee configured (LCC-08)
@@ -71,6 +73,7 @@ stateDiagram-v2
     BREACH_DETECTED --> CLOSING: disable-then-close commands enqueued (EVL-17, BRG-10)
     CLOSING --> FAILED: broker confirms closure (BRG-11)
     FUNDED --> SUSPENDED: admin suspend (LCC-11, V1.1)
+    FUNDED --> BREACH_DETECTED: hard breach (EVL-17 — D32)
     SUSPENDED --> ACTIVE: resume from evaluation-phase suspend (LCC-11)
     SUSPENDED --> FUNDED: resume from funded-phase suspend (LCC-11)
     FUNDED --> TERMINATED: end of engagement (LCC-27)
@@ -84,7 +87,9 @@ Admin force-terminate (LCC-27): `<any> → TERMINATED`.
 `TERMINATED` is **terminal-only** — no outgoing edges. LCC-27 cleanup
 guarantees no orphaned broker state (close open positions, disable at the
 broker, broker confirmations written back, audit); a dead account cannot
-transition. The funded stage is `status = FUNDED`, not a phase
+transition. `FAILED` is terminal **except** for the breach-override reversal (EVL-20,
+V1.1 — the two edges above; tenth pass D29): the only way out is a validated
+override record. The funded stage is `status = FUNDED`, not a phase
 (`data/dictionary.md` §1–2).
 
 **Spawn edges** — the passing account terminates at `PASS_PENDING`,
@@ -95,6 +100,10 @@ transition. The funded stage is `status = FUNDED`, not a phase
   `parent_account_id` set (LCC-06).
 - Funded creation (final-phase pass, no activation fee): new `FUNDED`.
 - Funded creation (activation fee paid): new `FUNDED`.
+
+(When KYC timing gates funding, the spawned funded row is created on
+`kyc.approved`; the waiting row carries the `funding_pending` status — a row
+status, not a machine state.)
 
 **KYC timing enum** (per challenge config, LCC-07 / KYC-07 / KYC-08
 gating): `{at_creation, after_evaluation, at_first_payout, skipped}`
@@ -116,6 +125,8 @@ challenges may only use the subset their V1 gates can enforce.
 | ACTIVE | BREACH_DETECTED | hard breach (EVL-17) | verdict on fresh snapshot (EVL-05) | enqueue disable-then-close commands (EVL-17, EVT-20, `command_queue`); `AccountBreached` (LCC-23) |
 | BREACH_DETECTED | CLOSING | disable-then-close enqueued (BRG-10) | — | enforcement worker executes with retries/backoff (BRG-10) |
 | CLOSING | FAILED | broker confirms closure (BRG-11) | confirmation written back | FAILED recorded only after real closure (BRG-11); `AccountFailed` (LCC-23) |
+| BREACH_DETECTED | ACTIVE | breach override (EVL-20, V1.1 — D29) | override record exists (`evaluation_overrides.id`, kind `clear_breach`) + step-up satisfied | (tx) state + history; BRG `enable_trading` command (closed positions stay closed); `account.state_changed` mirror; AUD critical |
+| FAILED | ACTIVE | breach override (EVL-20, V1.1 — D29) | same guard; account not yet archived (LCC-27 archival not run) | restore-to = the **pre-breach state** (ACTIVE for evaluation accounts, FUNDED for funded ones — D32); closed positions stay closed |
 | PASS_PENDING | VERIFICATION | manual verification required per config (EVL-19) | config: verification queue | queue entry; audit |
 | PASS_PENDING | AWAITING_ACTIVATION | activation fee configured (LCC-08) | config: fee + payment window | payment window starts (LCC-08) |
 | VERIFICATION | AWAITING_ACTIVATION | approved, fee due (LCC-06 + LCC-08) | verification approved | fee window starts; `AccountPassed` (LCC-23) |
@@ -124,6 +135,7 @@ challenges may only use the subset their V1 gates can enforce.
 | SUSPENDED | ACTIVE | resume from evaluation-phase suspend (LCC-11) | account was suspended in evaluation phase | BRG-14 enable; `Resumed` (LCC-23) |
 | SUSPENDED | FUNDED | resume from funded-phase suspend (LCC-11) | account was suspended in funded phase | BRG-14 enable; `Resumed` (LCC-23) |
 | FUNDED | SUSPENDED | admin suspend (LCC-11, V1.1) | guard per current state | BRG-14 disable; `Suspended` (LCC-23); payouts blocked (PAY-04) |
+| FUNDED | BREACH_DETECTED | hard breach (EVL-17 — D32, docs/52) | verdict on fresh snapshot (EVL-05) | enqueue disable-then-close commands (EVL-17, BRG-10); `AccountBreached` (LCC-23); RSK breach case opens with `payout_hold` (docs/10 §3); in-flight **approved** payouts carry the hold flag (`status_reason='on_hold'` — docs/11 §3.3, D32) for the human queue |
 | FUNDED | TERMINATED | end of engagement (LCC-27) | no in-flight payouts | LCC-27 cleanup (close positions, disable, confirm, audit) |
 | FAILED | TERMINATED | archival (LCC-27) | — | archive (retention: trade history 7 yr, PII per GDPR — extended) |
 | `<any>` | TERMINATED | admin force-terminate (LCC-27) | — | LCC-27 cleanup + critical audit |
@@ -143,6 +155,11 @@ provisioned), `failed_reason` (enum + details), `suspended_at/resumed_at`.
   (trading_time_left seconds) decremented by rollover only while `ACTIVE`;
   `SUSPENDED` freezes it. No wall-clock expiry during suspension.
 - Expiry check: rollover job + pre-expiry warnings (V2 LCC-26: 3d/1d/24h emails).
+- **Suspension freezes everything (D31):** the rollover job skips accounts in
+  `SUSPENDED` (and terminal) states — no `account.day_rolled`, no
+  `trading_time_left`/calendar movement; EVL skips their ticks (no verdicts
+  while frozen). On resume, the next fresh tick re-evaluates. (V1-Plus pause
+  behaves the same via `paused_at`.)
 
 ### 3.4 Double-enforcement prevention (LCC-41) & breach idempotency (LCC-43)
 
@@ -179,13 +196,15 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | `AccountCreated` | LCC-23 | NOT-01 (template: account created), ANA-01 |
 | `PhaseAdvanced` | LCC-23 | ANA-01 |
 | `AccountPassed` | LCC-23 | NOT-01 (template: phase passed), DOC-04 (certificate), ANA-01 |
-| `AccountBreached` | LCC-23 | NOT-01 (template: breach), ANA-01 |
+| `AccountBreached` | LCC-23 | NOT-01 (template: breach), ANA-01, RSK (breach case auto-open — D68: V1.0, hold flag dormant until V1.1, docs/60) |
 | `AccountFailed` | LCC-23 | NOT-01 (template: phase failed), ANA-01 |
 | `FundedCreated` | LCC-23 | DOC-04 (certificate), ANA-01 |
 | `Suspended` | LCC-23 | PAY-04 (payout hold while open), ANA-01 |
 | `Resumed` | LCC-23 | ANA-01 |
+| `account.activated` | LCC (CREATED → ACTIVE on the completed provisioning command; the V2 event form is `bridge.account_created`) | BRG (start sync), EVL (start evaluation + create `evaluation_state`), NOT-01, AUD |
+| `account.day_rolled` | LCC (rollover job at broker-server midnight, ADR-12; skips SUSPENDED — D31) | EVL (daily reset), ANA |
 
-**Mapping to the extended model below:** V1 emits the single `AccountCreated` when the account exists in the lifecycle (the extended `account.purchased` + `account.activated` pair is internal V2 granularity); `AccountPassed` = the extended `account.phase_completed`; `AccountBreached` = `account.breached`; `AccountFailed` = `account.expired` / `account.closed`; `FundedCreated` = `account.funded`; `Suspended` / `Resumed` = `account.suspended` / `account.resumed`.
+**Mapping to the extended model below:** V1 emits the single `AccountCreated` when the account exists in the lifecycle (the extended `account.purchased` stays internal V2 granularity (`account.activated` joined the V1 catalog in the tenth pass — D28, docs/50)); `AccountPassed` = the extended `account.phase_completed`; `AccountBreached` = `account.breached`; `AccountFailed` = `account.expired` / `account.closed`; `FundedCreated` = `account.funded`; `Suspended` / `Resumed` = `account.suspended` / `account.resumed`.
 
 ### 4.2 Extended (post-V1) event model — design-level
 
@@ -194,22 +213,23 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | Event | Produced on | Key fields | Consumers |
 |---|---|---|---|
 | `account.purchased` | order.paid | account_id, challenge, size, price | NOT, ANA, CON |
-| `account.provisioning_failed` | broker.failed | reason, attempts | NOT, CON (manual retry), AUD |
-| `account.activated` | broker.created | broker_account_id, server, phase | BRG (start sync), EVL (start eval), NOT, DOC, AUD |
+| `account.provisioning_failed` | provisioning-command failure (the V2 event form is `bridge.account_create_failed`) | reason, attempts | NOT, CON (manual retry), AUD |
+| `account.activated` | provisioning-command completion (V2 event: `bridge.account_created`) | broker_account_id, server, phase | BRG (start sync), EVL (start eval), NOT, DOC, AUD |
 | `account.day_rolled` | rollover job | broker_date, server | EVL (reset dailies) |
-| `account.breached` | verdict.breach | rule_id, verdict_id, evidence_ref, broker_time | NOT, AUD (critical), RSK (case open V2), BRG (enforce cmd), TD (breach report) |
+| `account.breached` | verdict.breach | rule_id, verdict_id, evidence_ref, broker_time | NOT, AUD (critical), RSK (case open — V1 for kind=breach, docs/10 §3), BRG (enforce cmd), TD (breach report), PAY (hold in-flight approved payouts — D32) |
 | `account.phase_completed` | target_hit | phase, metrics | NOT, DOC (cert), ANA |
 | `account.funded` | funded.activated | funded_terms | NOT, DOC, ANA, PAY (eligibility on) |
 | `account.paused` / `account.resumed` | tenant | reason | NOT, BRG, AUD |
-| `account.suspended` / `account.reinstated` (V2) | risk | reason | NOT, BRG, PAY (block), AUD |
-| `account.expired` | expiry | — | NOT, ANA |
+| `account.suspended` / `account.reinstated` (V2) | admin suspend (LCC-11, V1.1); risk (V2 reinstate) | reason | NOT, BRG, PAY (block), AUD (critical) |
+| `account.expired` | time-limit expiry (mirror of the `breach(time_limit)` verdict — D30) | rule_id | NOT, ANA |
 | `account.closed` / `account.archived` (V2) | close | final_state | BRG (archive), NOT, AUD |
 | `account.state_changed` (catch-all mirror) | every transition | from, to, actor, correlation | AUD (mirror), ANA |
 ## 5. Lifecycles
 
 - **Account:** the LCC-02 state machine above (§3.1). Terminal states:
   `TERMINATED` (terminal-only, LCC-27 cleanup) reached from `FAILED`, `FUNDED`,
-  `VERIFICATION`, or `AWAITING_ACTIVATION` (and force-terminate from any).
+  `VERIFICATION`, or `AWAITING_ACTIVATION` (and force-terminate from any);
+  `FAILED` itself is reversible only via the EVL-20 breach override (D29).
   Extended (V2/V3): archival with retention per LCC-36 (trade history 7 yr
   financial, PII per GDPR).
 - **Credentials:** issued at `account.activated` (trading + investor passwords,
@@ -280,7 +300,7 @@ Staff (ADM): `GET /v1/admin/accounts?state=&phase=&q=`,
 required, 2FA, critical audit — the escape hatch; transition table validates it).
 
 Internal: `POST /internal/v1/accounts/{id}/provision` (CHK → LCC on order.paid),
-command endpoints for BRG (LCC → BRG; BRG → LCC `broker.created/failed`).
+command endpoints for BRG (LCC → BRG; BRG reports back by completing the command row — `broker.created/failed` was the research-track name; the V2 event forms are `bridge.account_created`/`bridge.account_create_failed`).
 ## 8. Schema (key shapes)
 
 ```jsonc
@@ -401,7 +421,7 @@ CREATE INDEX idx_acmcmd_pending ON account_commands(status, created_at) WHERE st
 
 | Option | Verdict |
 |---|---|
-| XState (FSM library) | **Rejected for server FSM**: our machine is 14 states, a validated Go table beats a JS library dependency; XState stays useful for TD's client-side view rendering |
+| XState (FSM library) | **Rejected for server FSM**: our machine is the 11 binding V1 states of §3.1 (names like `pending_payment`/`provisioning`/`funding_pending` in code are row-level statuses, not machine states), a validated Go table beats a JS library dependency; XState stays useful for TD's client-side view rendering |
 | Temporal (workflow) | Rejected V1 (ops weight); the command table + worker retry is the pragmatic equivalent; revisit if provisioning steps grow |
 | Statemachine Python / go-state | Not needed — 50 lines of Go + tests is the library |
 | Everything else (IAM, workflow, etc. in the research's OSS list) | Covered by their module docs (AUTH/EVT/BRG) |
@@ -417,11 +437,11 @@ NOT/DOC/EVT/BRG as described; Sentry on transition conflicts.
 | Module | How |
 |---|---|
 | **CHK** | `order.paid` → `account.purchased` → LCC creates row (LCC-05); `order.expired` → cancel; activation fee orders (V2 LCC-08) |
-| **BRG** | LCC issues commands (`account_commands`); BRG reports `broker.created/failed` + sync snapshots; LCC-33 broker reconciliation (V2) compares LCC state vs broker state nightly |
-| **EVL** | EVL consumes `account.activated/day_rolled/sync` → verdicts → LCC transitions; LCC never evaluates rules itself |
-| **PAY** | eligibility reads `state == funded` + KYC gate + no open risk case (PRD default); `account.breached` blocks in-flight payouts |
+| **BRG** | LCC issues commands (`account_commands`); BRG reports back by completing the command row (V2 events: `bridge.account_created`/`bridge.account_create_failed`) + sync snapshots; LCC-33 broker reconciliation (V2) compares LCC state vs broker state nightly |
+| **EVL** | EVL consumes `account.activated` / `account.day_rolled` / `bridge.tick` → verdicts → LCC transitions; LCC never evaluates rules itself |
+| **PAY** | eligibility reads `state == funded` + KYC gate + no open risk case (PRD default); `account.breached` blocks in-flight payouts (approved-but-unexecuted → hold flag + human queue, D32) |
 | **KYC** | `kyc.approved` unblocks `funding_pending → funded` (KYC-07 gate) |
-| **DOC** | phase certificates on `phase_completed`, funded cert on `account.funded`, breach report on `breached` (TD-25) |
+| **DOC** | phase certificates on `phase_completed`, funded cert on `FundedCreated`, breach report on `AccountBreached` (TD-25; the V1 catalog names — docs/58) |
 | **NOT** | all lifecycle events → template emails (credentials, breach, funding, expiry warnings V2) |
 | **ANA** | state history + events → funnel KPIs, equity curves (ANA-01 read model) |
 | **MIG** | cutover imports FunderBlu accounts into correct states (LCC-22) with state history seeded from TTS data + opening ledger entries (LED-26) |
@@ -439,7 +459,7 @@ R2 (certificate/statement PDFs via DOC), Sentry. No direct provider SDKs in LCC.
 |---|---|---|---|---|
 | 1. Schemas (accounts, history, commands) + transition table + versioned `Transition()` | BE-1 | 3 d | OPS, AUTH, TEN | unit: every illegal transition rejected; legal path green |
 | 2. Purchase path: CHK order.paid → account row → provisioning command | BE-1 | 2 d | 1, CHK-08 | staging purchase creates account in `provisioning` |
-| 3. Broker callback path: broker.created → active + terms freeze + events + creds | BE-1 | 2 d | 2, BRG-05 | end-to-end on staging broker sandbox: purchase → active with credentials |
+| 3. Broker completion path: provisioning command completes → active + terms freeze + events + creds | BE-1 | 2 d | 2, BRG-05 | end-to-end on staging broker sandbox: purchase → active with credentials |
 | 4. Verdict path: EVL breach → failed + enforcement command + evidence + NOT/DOC/AUD | BE-1 | 3 d | 3, EVL core | induced breach: account fails once (redelivered event = no-op), positions closed, email sent |
 | 5. Phase/funding path: target_hit → phase_complete → funding_pending → funded (KYC gate) | BE-1 | 3 d | 4, KYC-06/07 | full happy path on sandbox: pass phase 1 → funded |
 | 6. Pause/resume + clock (trading_time_left) + rollover job + day_rolled | BE-1 | 2.5 d | 5 | pause freezes clock across broker-midnight rollover |

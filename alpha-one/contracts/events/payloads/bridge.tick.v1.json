@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "bridge.tick.v1.json",
+  "title": "Alpha One \u2014 event bridge.tick v1",
+  "description": "V1 catalog event `bridge.tick` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = EVL (evaluate), ANA (equity points), web SSE fan-out (TD live) \u2014 observed record per EVL-49; no audit mirror (docs/05 \u00a714). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "bridge.tick"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "broker_login": {
+              "type": "string"
+            },
+            "equity_cents": {
+              "type": "integer",
+              "description": "broker-reported equity in cents \u2014 never recomputed, broker is truth (docs/09 \u00a73.3)"
+            },
+            "balance_cents": {
+              "type": "integer"
+            },
+            "margin_cents": {
+              "type": "integer"
+            },
+            "free_margin_cents": {
+              "type": "integer"
+            },
+            "leverage": {
+              "type": "string",
+              "description": "e.g. 1:500"
+            },
+            "positions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "position_id",
+                  "symbol",
+                  "side",
+                  "lots",
+                  "open_price",
+                  "opened_at"
+                ],
+                "properties": {
+                  "position_id": {
+                    "type": "string"
+                  },
+                  "symbol": {
+                    "type": "string"
+                  },
+                  "side": {
+                    "type": "string",
+                    "enum": [
+                      "buy",
+                      "sell"
+                    ]
+                  },
+                  "lots": {
+                    "type": "number"
+                  },
+                  "open_price": {
+                    "type": "number"
+                  },
+                  "current_price": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "sl": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "tp": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "opened_at": {
+                    "$ref": "envelope.schema.json#/$defs/TimestampMs"
+                  },
+                  "profit_cents": {
+                    "type": "integer"
+                  },
+                  "swap_cents": {
+                    "type": "integer"
+                  },
+                  "commission_cents": {
+                    "type": "integer"
+                  }
+                }
+              },
+              "description": "open positions at tick time (TD live view, RSK V2)"
+            },
+            "deals_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "last_deal_ticket": {
+              "type": "integer",
+              "description": "incremental fetch cursor (D33: never a continuity oracle)"
+            },
+            "broker_time": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "broker_login",
+            "equity_cents",
+            "balance_cents",
+            "margin_cents",
+            "free_margin_cents",
+            "leverage",
+            "positions",
+            "deals_count",
+            "last_deal_ticket",
+            "broker_time"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

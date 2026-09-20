@@ -14,9 +14,10 @@
 - **Data mapping (DOC-03):** each document type has a mapper: domain state →
   template vars (LCC-01 account, funded terms, identity, amounts, dates).
 - **Event triggers (DOC-04):** documents are generated **asynchronously from
-  events** (never inline in the money path): `account.funded` → certificate,
-  `payments.intent_captured` → agreement + invoice, `payout.settled` →
-  receipt, `account.breached` → breach notice (V2).
+  events** (never inline in the money path): `FundedCreated` → funded
+  certificate, `order.paid` → agreement + invoice, `payout.settled` →
+  receipt (D60), `account.breached` → breach notice (V2). The phase
+  certificate (`AccountPassed`) is a V2 document type.
 - **Secure storage (DOC-05):** R2, tenant-prefixed keys
   (`documents/{tenant}/{type}/{id}.pdf`), short-lived signed URLs (15 min),
   bucket IAM scoped per tenant prefix, all reads audited.
@@ -39,7 +40,7 @@ Requirement coverage: `DOC-01,03,04,05,06` (V1.0) + `02,07,08,09,10,11,12,13,14,
    5. upload R2 (tenant-prefixed) + insert documents row + emit
       document.generated (NOT email link V2 DOC-07; V1: link surfaced in TD)
  read paths:
-   TD/ADM: GET /v1/documents/{id}/url → signed URL (15 min, audited)
+   TD/ADM: GET /v1/trader/documents/{id}/url → signed URL (15 min, audited)
    V2 public: GET /v/verify/{cert_hash} → verification page (no login,
               no PII: name masked, amounts, validity, issuer)
 ```
@@ -56,10 +57,10 @@ documentation gap).
 
 | Type | Trigger | Contents | Audience |
 |---|---|---|---|
-| `challenge_agreement` | `payments.intent_captured` | package, rules (from the frozen rule set version), terms snapshot (LCC-20), price, tenant ToS link, acceptance timestamp | trader (kept forever by them) |
-| `funded_certificate` | `account.funded` | account id, size, split, target, drawdown rules, funding date, trader name (masked surname), tenant logo | trader (screenshot magnet) |
+| `challenge_agreement` | `order.paid` | package, rules (from the frozen rule set version), terms snapshot (LCC-20), price, tenant ToS link, acceptance timestamp | trader (kept forever by them) |
+| `funded_certificate` | `FundedCreated` (the V1 funding event; the ext `account.funded` feeds V2 re-renders) | account id, size, split, target, drawdown rules, funding date, trader name (masked surname), tenant logo | trader (screenshot magnet) |
 | `payout_receipt` | `payout.settled` | amount, split math (from the frozen calc snapshot — every step), fee, method (masked), settlement date, provider ref (last 4) | trader + tenant finance |
-| `invoice` | `payments.intent_captured` | order line items, amount, currency, tax (V2), tenant billing details | trader |
+| `invoice` | `order.paid` | order line items, amount, currency, tax (V2), tenant billing details | trader |
 | `breach_notice` (V2) | `account.breached` | what rule, when, the evidence numbers (drawdown %), next steps | trader (tone: factual, non-accusatory — FunderBlu COO review) |
 
 ### 3.2 The mapper (DOC-03)
@@ -103,15 +104,23 @@ re-issue all certificates after a branding change.
 
 ## 4. Events (topic `document`)
 
+### 4.1 V1 baseline
+
 | Event | When | Consumers |
 |---|---|---|
-| `document.generated` | PDF stored (type, id, url-key) | NOT (V2 email link DOC-07), TD (badge: "your certificate is ready"), AUD |
+| `document.generated` | PDF stored (type, id, url-key) | TD (badge: "your certificate is ready"), AUD |
 | `document.failed` | retries exhausted (DLQ) | ADM (ops alert), CON, AUD |
-| `document.regenerated` (V2) | admin action | AUD (critical-tier if it changes a money doc) |
-| `document.verified_lookup` (V2) | public verify page hit | ANA (marketing metric) |
 
-Consumes: `account.funded`, `payments.intent_captured`, `payout.settled`,
-`account.breached` (V2).
+### 4.2 Extended (post-V1) — design-level
+
+| Event | When | Consumers |
+|---|---|---|
+| `document.generated` → NOT email | V2 (DOC-07 email delivery) | NOT (email link) |
+| `document.regenerated` | admin action | AUD (critical-tier if it changes a money doc) |
+| `document.verified_lookup` | public verify page hit | ANA (marketing metric) |
+
+Consumes (V1): `FundedCreated`, `order.paid`, `payout.settled` (D60).
+V2: `account.breached` (breach notice).
 
 ## 5. Lifecycles
 
@@ -142,7 +151,7 @@ Namespace `DOC`:
 
 | Code | HTTP | Meaning |
 |---|---|---|
-| `doc.not_found` | 404 | Document id unknown |
+| `doc.not_found` | — | (folded — the V1 baseline code is `document.not_found` **404**, DOC-06; this extended variant predates the fold) |
 | `doc.pending` | 409 | URL requested before generation finished (TD shows "preparing…") |
 | `doc.state_missing` | 500-internal | Mapper found no source state (data bug — CRITICAL alert) |
 | `doc.render_failed` | 500-internal | Template/Puppeteer failure (retry; 3× → DLQ) |
@@ -157,17 +166,19 @@ Namespace `DOC`:
 | Method + path | Auth | Permission | Idempotency | V1 errors |
 |---|---|---|---|---|
 | `GET /v1/trader/documents` | Trader (self) — DOC-06 | `document.read` (own scope) | n/a | standard |
-| `GET /v1/trader/documents/{document_id}` | Trader (owner) — DOC-06 | `document.read` (own scope) | n/a | `document.not_found` |
+| `GET /v1/trader/documents/{document_id}` | Trader (owner) — DOC-06 | `document.read` (own scope) | n/a | `document.not_found`, `doc.pending` |
+| `GET /v1/trader/documents/{document_id}/url` | Trader (owner) — DOC-06 | `document.read` (own scope) | n/a | `document.not_found`, `doc.pending` |
 
 Scope, request/response shapes, and per-endpoint notes: `contracts/api/doc.md` (field values in the research are owner TODOs until contract freeze; canonical JSON is fixed at freeze, per the docs/99 §12 rules).
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54). Shown for platform completeness (V2/V3 phases, docs/99).
 
-Trader (TD): `GET /v1/documents` (own: certificates, receipts, agreements,
-invoices — with state + download),
-`GET /v1/documents/{id}/url` (signed URL, audited).
+Trader (TD): `GET /v1/trader/documents` (own: certificates, receipts,
+agreements, invoices — with state + download),
+`GET /v1/trader/documents/{id}/url` (signed URL, audited) — the V1 baseline
+carries both plus the detail endpoint (§7.1).
 
 Staff (ADM): `GET /v1/admin/documents?tenant=&type=&identity=`,
 `POST /v1/admin/documents/regenerate` (V2, reason, 2FA),
@@ -302,8 +313,8 @@ Node 22 docs-worker (Puppeteer, headless Chromium, bundled fonts), Postgres
 
 | Module | How |
 |---|---|
-| **LCC** | `account.funded` → certificate (vars: terms snapshot LCC-20, account state); `account.breached` → breach notice (V2); data mapping reads `accounts` + `funded_terms` |
-| **CHK** | `payments.intent_captured` → agreement + invoice (vars: frozen order lines, invoice number) |
+| **LCC** | `FundedCreated` → funded certificate (vars: terms snapshot LCC-20, account state); `account.breached` → breach notice (V2); data mapping reads `accounts` + `funded_terms` |
+| **CHK** | `order.paid` → agreement + invoice (vars: frozen order lines, invoice number allocated by CHK at capture) |
 | **PAY** | `payout.settled` → receipt (vars: the frozen calc snapshot steps — the receipt *is* the dispute defense) |
 | **TEN** | branding (logo, colors, billing details) for V2 injection; tenant doc retention override (V2) |
 | **NOT** | V2: `document.generated` → email with signed link (DOC-07) |

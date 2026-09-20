@@ -1,7 +1,9 @@
 # 03 — TEN: Tenant Management
 
 > Covers PRD module **TEN** (45 requirements). Tenant lifecycle, white-label,
-> entitlements, limits, and the configuration inheritance chain.
+> entitlements, limits, and the configuration inheritance chain. The consolidated
+> developer-facing multi-tenancy specification (isolation layers, per-tenant identity,
+> lifecycle semantics) is [47 — The Multi-Tenancy Model](47-multi-tenancy-model.md).
 
 ## 1. Purpose & scope
 
@@ -37,7 +39,11 @@ CON (staff) ──create/suspend/upgrade──► TEN domain (api package)
   read. Changing a platform default does NOT rewrite tenants; the tenant's row wins.
 - **Entitlements** = `tenant_entitlements` rows (module, enabled, limit overrides) +
   Flipt flags for code-level kill switches (`TEN-10`, `CON-31`). GW reads
-  entitlements per route group; Flipt decides per feature.
+  entitlements per route group; Flipt decides per feature. `tenants.features`
+  is a **denormalised snapshot, not a second source of truth**: it is written
+  only inside the same transaction as `tenant_entitlements` by the
+  entitlement-change path, and no authorization decision ever reads it (GW
+  step 6 reads the rows; the snapshot exists for cheap renders/exports).
 - **White-label** is data, not code: `tenants.branding` JSONB → compiled to CSS
   variables + email template brand at render time (§3.4).
 
@@ -63,7 +69,8 @@ tenants
 `data_retention_days`, `max_admin_users`, `max_custom_rules`. Enforcer: a small
 `limits.Assert(tenant, metric)` call in the owning domain's create-path (e.g. LCC
 checks `max_active_accounts` before provisioning a broker account); over-limit →
-`ten.limit_exceeded` with the metric named.
+`tenant.limit_exceeded` with the metric named (code name corrected 2026-09-19,
+docs/47 M3 — the row formerly read `ten.limit_exceeded`).
 
 ### 3.2 Tenant resolution (order binding — see 01 §5)
 
@@ -84,7 +91,10 @@ alphaone`. Availability is checked against `tenants.slug` **and** the reserved l
 in one call (`GET /v1/tenants/subdomain-check`), with DNS only consulted at
 provisioning. **V1: subdomains are immutable** — a change would break cookies, email
 links and webhooks, so `TEN-43` (V2) ships it as an explicit migration with a
-redirect window rather than an edit field.
+redirect window rather than an edit field. **`tenants.slug` is the subdomain's single
+source of truth** (decision D, docs/47 §15): resolution reads the slug for
+`{slug}.alpha1.io` and never `domain_mappings`; that table is for **custom domains
+only** (its `subdomain` type value is dropped at the V1.1 custom-domain freeze).
 
 ### 3.3 Configuration surface (settings JSONB, curated keys)
 
@@ -130,6 +140,7 @@ DOC). Admin preview in ADM (`ADM-19` settings pages). No JS theme injection.
 | 4 | branding defaults + legal defaults | delete rows | retry |
 | 5 | subdomain DNS (Cloudflare API: `CNAME {slug}.alpha1.io`) | delete record | retry; custom domain = V1.1 step |
 | 6 | default broker group ref (BRG-12) + default rule packs (EVL seed) | delete refs | retry |
+| 6b | seed the tenant chart of accounts (LED CoA template, docs/05 §3.1 — accounts + platform-account links; idempotent) | delete seeded rows | retry |
 | 7 | Flipt flags for plan | reset flags | retry |
 | 8 | welcome invite email to owner (NOT) | — (safe to resend) | retry ×3 |
 | 9 | `status=onboarding` → checklist starts (ADM-39 side) | — | — |
@@ -241,24 +252,34 @@ ACTIVE/ONBOARDING ──deactivate──► deactivated ──30d──► pendi
 
 ### 5.1 State → capability matrix (review G7)
 
-What each state means for the surfaces that matter. `✓` allowed · `—` blocked
-(with the error in brackets) · `~` allowed but degraded/read-only.
+What each state means for the surfaces that matter. The machine-readable source is
+`contracts/tenants/state-capabilities.yaml` (docs/47, finding M1) — the table below is
+**generated** from it (`scripts/verify_tenant_states.py`, gate 16), and the same file is
+what the docs/35 I-20 table-driven test consumes.
+
+<!-- tenant-states:begin (generated from contracts/tenants/state-capabilities.yaml — do not edit by hand) -->
 
 | State | Trader login/traffic | Staff (ADM) | API keys | Webhooks out | Bridge sync | Payments | Payouts |
 |---|---|---|---|---|---|---|---|
-| `pending_approval` | — (`tenant.not_found`) | — | — | — | — | — | — |
-| `provisioning` | — (`tenant.not_ready`) | — | — | — | — | — | — |
-| `provisioning_failed` | — (`tenant.not_ready`) | — | — | — | — | — | — |
-| `onboarding` | — (trader routes 403 `tenant.not_ready`) | ✓ | — | — | ✓ (dry-run only) | — | — |
+| `pending_approval` | — (`tenant.unknown_host`; DNS exists only from provisioning step 5 — host resolution fails first) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) |
+| `provisioning` | — (`tenant.unknown_host`; before saga step 5; after it, tenant.not_live (details.state=provisioning) — a resolved host on a pre-active tenant) | — (`tenant.unknown_host`; same DNS caveat; tenant.not_live once the host resolves) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) |
+| `provisioning_failed` | — (`tenant.not_live`; details.state=provisioning_failed; unresolved-host case yields tenant.unknown_host at GW step 2) | — (`tenant.not_live`) | — (`tenant.not_live`) | — (`tenant.not_live`) | — (`tenant.not_live`) | — (`tenant.not_live`) | — (`tenant.not_live`) |
+| `onboarding` | — (`tenant.not_live`) | ✓ | — (`tenant.not_live`) | — (`tenant.not_live`) | — (`tenant.not_live`; dry-run mode only — BRG sandbox routing, never a live broker connection) | — (`tenant.not_live`) | — (`tenant.not_live`) |
 | `active` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `suspended` | — (`tenant.suspended`, sessions killed) | — (`tenant.suspended`) | — | — (queued, then DLQ after 24 h) | paused | — | — (held, per PAY policy) |
-| `deactivated` | — | ~ (export only) | — | — | — | — | — |
-| `pending_deletion` | — | ~ (export only) | — | — | — | settlement only | settlement only |
-| `archived` | — | — | — | — | — | — | — |
-| `deleted` | — | — | — | — | — | — | — |
+| `suspended` | — (`tenant.suspended`) | — (`tenant.suspended`) | — (`tenant.suspended`) | — (`tenant.suspended`; in-flight queue drains <= 24 h, then DLQ) | — (`tenant.suspended`; paused, resumable) | — (`tenant.suspended`) | — (`tenant.suspended`; held per PAY policy — approved-but-unexecuted payouts wait) |
+| `deactivated` | — (`tenant.deactivated`) | ~ (export-only surface (TEN-33 bundle)) | — (`tenant.deactivated`) | — (`tenant.deactivated`) | — (`tenant.deactivated`) | — (`tenant.deactivated`) | — (`tenant.deactivated`) |
+| `pending_deletion` | — (`tenant.pending_deletion`) | ~ (export-only surface) | — (`tenant.pending_deletion`) | — (`tenant.pending_deletion`) | — (`tenant.pending_deletion`) | ~ (settlement only — capture of existing obligations, no new checkout) | ~ (settlement only — owed payouts execute; new requests refused) |
+| `archived` | — (`tenant.unknown_host`; DNS removed at data_cleanup) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) |
+| `deleted` | — (`tenant.unknown_host`; by id: tenant.not_found) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) | — (`tenant.unknown_host`) |
+
+`✓` allowed · `—` blocked (the GW-18 code returned; `details.state` carries the tenant state where the code is generic) · `~` allowed but degraded (note). Generated from `contracts/tenants/state-capabilities.yaml` — the same file the docs/35 I-20 table-driven test consumes; enforcement point is GW step 3.5a (docs/04 §3.1), with module-level holds (payout hold, bridge pause, webhook queue → DLQ) applied by the owning modules from the same `tenant.*` events. Console (platform realm) is not governed by tenant state.
+
+<!-- tenant-states:end -->
 
 Every transition emits `tenant.*` (docs/31) and invalidates `t:{tenant}:*` caches;
-`suspended` must reflect in ≤ 1 s (GW deny-set + session kill, TEN-15).
+`suspended` must reflect in ≤ 1 s (GW deny-set + session kill, TEN-15). The consolidated
+multi-tenancy specification — lifecycle, isolation layers, per-tenant identity,
+provisioning, configuration — is [47 — The Multi-Tenancy Model](47-multi-tenancy-model.md).
 
 ### 5.2 Termination and deletion (review G7)
 
@@ -267,9 +288,24 @@ stop traffic (state `suspended`) → export bundle for the tenant (TEN-33 shape,
 surface; V1 = manual archive of `tenants` + settings + document manifest) → suspend
 every identity in the ZITADEL org (`DeactivateUser`) → archive the R2 prefix to cold
 storage → anonymise PII in our tables (financial/audit rows retained per AUD policy)
-→ `pending_deletion` for the retention window → `deleted` tombstone (id never reused).
-The **IdP side** mirrors the identity deletion rules (docs/02 §10.4), including the
-accepted limitation on ZITADEL's event stream.
+→ `pending_deletion` for the retention window → at **data_cleanup**: delete the KYC
+documents + R2 prefix, remove the subdomain DNS record, run the IdP-side erasure
+(docs/02 §10.4 — ZITADEL user deletion revokes sessions and blocks login) → `deleted`
+tombstone (id and slug never reused; the subdomain therefore never returns to the
+available pool).
+
+**The IdP org's fate (stated 2026-09-19, docs/47 M4).** The ZITADEL organization itself
+is **never destroyed by the termination saga** — it is retained as the IdP-side
+tombstone: after the erasure step it holds no active users, no sessions and no SSO
+config, so login is impossible even though the org object (and `tenants.idp_org_id`)
+survives for audit, matching our `deleted` tombstone. Org **destruction** exists in
+exactly two audited places: the provisioning saga's step-3 *compensation* (a failed
+create is torn down so a retry starts clean) and a manual break-glass runbook for
+completed-erasure requests executed by a `platform.tenant.provision` holder with a
+CRITICAL audit row. `idp-sync` keeps applying late IdP events for `deleted`/`archived`
+tenants to the membership rows (docs/43 §4) — never guessing a tenant. The **IdP side**
+mirrors the identity deletion rules (docs/02 §10.4), including the accepted limitation
+on ZITADEL's event stream.
 
 `deactivated` is recoverable for **30 days** (TEN-45, V2): reactivation restores the
 state, DNS and branding from the archive; after that the tenant is only reachable via
@@ -295,7 +331,7 @@ Namespace `TEN` (global contract: [30-error-taxonomy](30-error-taxonomy.md)):
 | Code | HTTP | Meaning |
 |---|---|---|
 | `tenant.suspended` | 403 | Tenant traffic denied (reason in details) |
-| `tenant.not_live` | 403 | `onboarding` tenant, trader-facing route |
+| `tenant.not_live` | 403 | Pre-`active` tenant on a tenant-realm route (`details.state`: `provisioning`, `provisioning_failed`, `onboarding`; corrected 2026-09-19, docs/47 M2 — the matrix formerly cited an unregistered `tenant.not_ready`) |
 | `tenant.provisioning_failed` | 500 | Pipeline terminal failure (CON only, with step) |
 | `tenant.slug_taken` | 409 | Slug/subdomain conflict |
 | `tenant.domain_invalid` | 422 | DNS/verification failure (custom domain V1.1) |
@@ -422,14 +458,14 @@ CREATE TABLE tenants (
   limits        JSONB NOT NULL DEFAULT '{}',
   settings      JSONB NOT NULL DEFAULT '{}',        -- validated vs contracts schema
   branding      JSONB NOT NULL DEFAULT '{}',
-  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot
+  features      JSONB NOT NULL DEFAULT '{}',        -- denormalized entitlements snapshot; written only in the entitlement-change transaction (never a second write path, never read for authz)
   onboarding_state JSONB NOT NULL DEFAULT '{"completedSteps":[]}',
   data_region   VARCHAR(20) NOT NULL DEFAULT 'eu-hetzner',
   suspended_at  TIMESTAMPTZ, suspension_reason TEXT,
   created_by    ULID,                                -- platform staff identity
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  activated_at  TIMESTAMPTZ, suspended_reason TEXT,
+  activated_at  TIMESTAMPTZ                         -- set on the onboarding->active transition
   deletion_scheduled_at TIMESTAMPTZ
 );
 CREATE INDEX idx_tenants_status ON tenants(status);
@@ -439,6 +475,9 @@ CREATE TABLE domain_mappings (
   id            ULID PRIMARY KEY,
   tenant_id     ULID NOT NULL REFERENCES tenants(id),
   domain        VARCHAR(255) UNIQUE NOT NULL,
+  -- custom domains ONLY (decision D, docs/47 §15): the subdomain lives solely in
+  -- tenants.slug — resolution never reads this table for {slug}.alpha1.io, and the
+  -- 'subdomain' enum value is dropped at the V1.1 custom-domain freeze
   type          TEXT NOT NULL CHECK (type IN ('subdomain','custom')),
   verified      BOOLEAN NOT NULL DEFAULT false,
   verification_token TEXT,            -- TXT record token (custom domain)
@@ -483,9 +522,23 @@ CREATE TABLE usage_events (               -- BIL foundation (V3 billing reads th
   period_started_at TIMESTAMPTZ NOT NULL,
   recorded_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   idempotency_key  TEXT,
-  PRIMARY KEY (id)
-);
+  PRIMARY KEY (id, period_started_at)   -- partitioned table: PK must include the partition key
+) PARTITION BY RANGE (period_started_at);  -- monthly partitions (decision U, docs/47 §15)
 CREATE INDEX idx_usage_tenant_metric ON usage_events(tenant_id, metric_name, period_started_at);
+
+-- Retention (decision U, 2026-09-19): raw rows are kept 25 months (monthly partitions
+-- dropped past the window by the scheduled-jobs worker); from month 13 onward the
+-- flusher also writes monthly rollups below, and BIL (V3) reads rollups for anything
+-- older. Tenant deletion purges both per §5.2 (rollups keep the anonymised totals).
+CREATE TABLE usage_rollups_monthly (
+  tenant_id        ULID NOT NULL,
+  metric_name      TEXT NOT NULL,
+  month            DATE NOT NULL,          -- first day of the month, UTC
+  value_total      NUMERIC(18,4) NOT NULL,
+  sample_count     BIGINT NOT NULL,
+  rolled_up_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, metric_name, month)
+);
 ```
 
 **RLS (D3).** Every tenant-owned table in this module (`domain_mappings`,
@@ -591,9 +644,9 @@ evidence for tenant onboarding records — consider-later register).
 | 1. Schemas (tenants, domain_mappings, entitlements, provisioning_jobs, usage_events) + guard | BE-2 | 1.5 d | OPS, AUTH | isolation suite green |
 | 2. Tenant CRUD + settings/branding validation (JSON Schemas in contracts) | BE-2 | 3 d | 1 | CON creates tenant `staging-fb` end-to-end |
 | 3. Resolution middleware (custom domain/subdomain/header/key) + negative cache | BE-1 | 2 d | 1 | unknown subdomain → 404, < 5 ms cached |
-| 4. Provisioning saga (steps 1–9) + resume CLI | BE-2 | 4 d | 2, AUTH org, Cloudflare creds | kill step 6 mid-run → resume completes; tenant live on staging subdomain |
+| 4. Provisioning saga (steps 1–9, incl. 6b CoA seed — D26) + resume CLI | BE-2 | 4 d | 2, AUTH org, Cloudflare creds | kill step 6 mid-run → resume completes; tenant live on staging subdomain |
 | 5. Suspension/activation + session/traffic kill (event wiring to AUTH/GW) | BE-1 | 1.5 d | 4 | suspended tenant's live trader gets 403 in < 1 s |
-| 6. Limits enforcer (`limits.Assert`) + usage metering buffer | BE-2 | 2 d | 4 | over-limit account provisioning rejected with `TENANT_LIMIT_EXCEEDED` |
+| 6. Limits enforcer (`limits.Assert`) + usage metering buffer | BE-2 | 2 d | 4 | over-limit account provisioning rejected with `tenant.limit_exceeded` (docs/47 M3) |
 | 7. White-label render path (CSS vars + email brand) + asset upload/validation | FE-01 + BE-2 | 3 d | 5 | TD login page shows tenant brand on staging |
 | 8. Onboarding checklist API + ADM screen (ADM-39) | FE-1 | 3 d | 6 | FunderBlu checklist completable in staging |
 | 9. V1.1: custom domains (TXT verify, Cloudflare cert), quota alert emails | BE-2 + FE-1 | 4 d | 7 | `trade.funderblu.com` live on staging |

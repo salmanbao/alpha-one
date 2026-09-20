@@ -3,7 +3,7 @@
 Status: DRAFT
 Owner: TBD
 Version: v1
-Last updated: TODO
+Last updated: 2026-09-20
 
 Derived from the V1 Execution Sheet (V1.0 only). Nothing here is final until contract freeze.
 
@@ -17,7 +17,7 @@ Trader download endpoint in trader group (GW-01), owner-only. Generation is inte
 From domain (GW-02). Storage keys tenant-prefixed (TEN-18, Cloudflare R2 per DOC-06).
 
 ## Permissions
-- `document.read` (self certificates) # derived from DOC-06 — TODO — needs owner decision on key naming
+- `document.read` (self certificates) — registered (`contracts/permissions/registry.md`: view and download own certificates, DOC-06); own-scope enforced at the GW (docs/04 §3.1 step 4).
 
 ## Idempotency
 Generation is idempotent by triggering event id (EVT-05: consumers deduplicate by event id; DOC-04 consumes via the outbox, EVT-01).
@@ -27,12 +27,16 @@ Generation is idempotent by triggering event id (EVT-05: consumers deduplicate b
 ### GET /v1/trader/documents
 Auth: Trader (self) — DOC-06
 Tenant: from domain (GW-02)
-Permission: self-read
+Permission: `document.read` (own scope)
 Idempotency: n/a
 
-Response 200:
+Response 200 (D45 — list, so pagination is present):
 ```json
-{ "documents": [ { "document_id": "TODO", "type": "TODO", "issued_at": "TODO" } ] }
+{ "data": [ { "document_id": "01J9DOC...", "type": "funded_certificate",
+      "account_id": "01J9ACC...", "version": 1, "state": "generated",
+      "created_at": 1758282120000 } ],
+  "meta": { "request_id": "01J9ULID...", "version": "v1",
+            "pagination": { "cursor": "", "has_more": false } } }
 ```
 
 Errors: none beyond standard gateway errors # DOC-06
@@ -40,25 +44,53 @@ Errors: none beyond standard gateway errors # DOC-06
 ### GET /v1/trader/documents/{document_id}
 Auth: Trader (owner) — DOC-06
 Tenant: from domain (GW-02)
-Permission: self-read
+Permission: `document.read` (own scope)
 Idempotency: n/a
 
-Response 200: PDF binary (certificate) # DOC-01, DOC-06
+Response 200 (document metadata — the bytes flow via the signed URL):
+```json
+{ "data": { "document_id": "01J9DOC...", "type": "funded_certificate",
+    "account_id": "01J9ACC...", "version": 1, "state": "generated",
+    "created_at": 1758282120000 },
+  "meta": { "request_id": "01J9ULID...", "version": "v1" } }
+```
 
 Errors:
 - `document.not_found` 404 # implied by DOC-06
+- `doc.pending` 409 — generation still in flight (the portal shows "preparing…")
+
+### GET /v1/trader/documents/{document_id}/url
+Auth: Trader (owner) — DOC-06
+Tenant: from domain (GW-02)
+Permission: `document.read` (own scope)
+Idempotency: n/a
+
+Response 200:
+```json
+{ "data": { "url": "https://<r2-signed>/...", "expires_at": 1758283020000 },
+  "meta": { "request_id": "01J9ULID...", "version": "v1" } }
+```
+
+A short-lived signed R2 URL — 15-min TTL, every issuance audited
+(docs/15 §2/§5/§10). Added to the V1 baseline 2026-09-20 (docs/58): the
+whole module design (worker → R2 → signed read) depends on it; the former
+binary-through-api response is retired.
+
+Errors:
+- `document.not_found` 404
+- `doc.pending` 409
 
 ## Internal contracts (no HTTP)
 - DOC-01 engine: HTML templates rendered to PDF via Puppeteer.
 - DOC-03 data mapping: trader name, account size, date, certificate ID into template variables.
-- DOC-04 triggers: generate certificates on AccountPassed, FundedCreated, and PayoutPaid events (consumes LCC-23 events and PayoutPaid — produced by PAY-12, resolved 2026-09-16 (Decision 6), see catalog).
+- DOC-04 triggers (corrected 2026-09-20, docs/58): `FundedCreated` → funded_certificate · `order.paid` → challenge_agreement + invoice · `payout.settled` → payout_receipt (D60). `AccountPassed` → phase certificate is a **V2 document type** (the catalog consumer note anticipates it), not in the V1 set (docs/15 §3.1).
 - DOC-05 storage: object storage with tenant-prefixed keys, durable and isolated.
 
 ## Events consumed
-AccountPassed, FundedCreated, PayoutPaid — see `contracts/events/catalog.md`.
+FundedCreated, order.paid, payout.settled (D60) — see `contracts/events/catalog.md`. V2: account.breached (breach notice).
 
 ## Open contract questions
-- TODO — needs owner decision: certificate ID scheme (DOC-03 names a certificate ID; format/sequence unspecified).
-- TODO — needs owner decision: receipt/invoice rendering ownership split between CHK (CHK-17, CHK-40) and DOC — the sheet implies CHK requests and DOC renders; interface shape open.
-- TODO — needs owner decision: PDF generation sync vs async UX for downloads (generation latency unspecified).
-- TODO — needs owner decision: storage key format beyond tenant prefix (TEN-18).
+- Resolved 2026-09-20 (docs/58): certificate ID = the `documents.id` ULID (rendered in the PDF header/footer); the V2 `cert_hash` + QR + public verify page is a separate mechanism (docs/15 §3.4/§9).
+- Resolved 2026-09-20 (docs/58): CHK owns the order, its frozen line items, and allocates the invoice number at capture (order-at-submit, docs/53); DOC renders the agreement + invoice from `order.paid` (docs/15 §3.1/§14).
+- Resolved 2026-09-20 (docs/58): generation is asynchronous (event-triggered); a download request before completion answers `doc.pending` 409 and the portal shows "preparing…" (docs/15 §5/§6.2).
+- Resolved 2026-09-20 (docs/58): storage keys `documents/{tenant}/{type}/{id}.pdf` with per-version objects (docs/15 §1/§5/§9).

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "evaluation.verdict.v1.json",
+  "title": "Alpha One \u2014 event evaluation.verdict v1",
+  "description": "V1 catalog event `evaluation.verdict` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = LCC (transitions; dedupe on (account_id, verdict_id) per LCC-43), NOT-01, DOC-04 (TD-25 breach report), AUD (critical on breach), RSK (V2 case open). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/envelope"
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "evaluation.verdict"
+        },
+        "version": {
+          "const": 1
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "account_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "verdict_id": {
+              "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "breach",
+                "target_hit",
+                "gap_flagged"
+              ],
+              "description": "target_hit_pending is recorded in evaluations.status only \u2014 it is never emitted (docs/09 \u00a73.4)"
+            },
+            "rule_id": {
+              "type": "string",
+              "description": "required when status=breach (e.g. max_daily_loss, max_total_loss, time_limit \u2014 D30)"
+            },
+            "input_hash": {
+              "type": "string",
+              "description": "sha256(state||rules||tick) \u2014 the EVL-49 re-run proof"
+            },
+            "broker_time": {
+              "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            },
+            "limit_cents": {
+              "type": "integer"
+            },
+            "observed_cents": {
+              "type": "integer"
+            },
+            "tolerance_cents": {
+              "type": "integer"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "account_id",
+            "verdict_id",
+            "status",
+            "input_hash",
+            "broker_time"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "version",
+        "payload"
+      ]
+    }
+  ]
+}

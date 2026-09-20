@@ -1,17 +1,21 @@
 # Permission Registry
 
-Status: DRAFT
-Owner: TBD
+Status: RATIFIED (V1 bindings ratified 2026-09-19 — decision D14, docs/44 §4)
+Owner: AUTH (Tech Lead)
 Version: v1
-Last updated: 2026-09-17
+Last updated: 2026-09-19
 
 Derived from the V1 Execution Sheet (V1.0 / V1.1) of `Alpha One PRD.xlsx`.
 Key format: `resource.action` (AUTH-13). Keys are module-declared and enforced at the API layer (GW-04).
 Every key names its owning module and description with the Req ID that justifies it.
+**Role bindings: `contracts/permissions/roles.yaml`** (decision D14, docs/44 §4): the single
+source for who holds what, seeded into Casbin. Generated views (do not edit by hand):
+`contracts/permissions/matrix.md` (role × key matrix, key detail, V1 route map — regenerated
+by `scripts/verify_roles.py --write-matrix`, freshness is gate 15). The consolidated
+developer-facing specification is [docs/46-authorization-model.md](../docs/46-authorization-model.md).
 
 **V1 key count: 36** (31 original + 3 platform keys promoted 2026-09-19 + `payout.method.review`
-and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 keys. **Role bindings: `contracts/permissions/roles.yaml`**
-(decision D14, docs/44 §4): the single source for who holds what, seeded into Casbin.
+and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 keys.
 
 | Permission key | Module owner | Description |
 |---|---|---|
@@ -42,12 +46,14 @@ and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 k
 | `kyc.restrictions.write` | KYC | Maintain the restricted country list. (KYC-13) |
 | `document.read` | DOC | View and download own certificates. (DOC-06) — trader self-action |
 | `risk.case.create` | RSK | Open a risk case manually. (RSK-10) |
+| `risk.case.read` | RSK | View the risk queue: cases, signal summaries, hold state. (docs/17 §3.1, the V1-era thin view — nineteenth pass, docs/60) |
+| `risk.case.decide` | RSK | Decide a risk case (outcome + note); **2FA step-up always** (D70). (RSK-01 case machine) |
 | `payout.method.review` | PAY | View **another trader's** payout methods for approval; access is audited (AUD-23). (PAY-08/PAY-09) — added 2026-09-19 (D14) |
 | `kyc.document.read` | KYC | View/download a trader's KYC documents; access is audited (AUD-23). (KYC-11) — added 2026-09-19 (D14) |
 | `audit.read` | AUD | View and search audit logs; every view/search itself recorded. (AUD-21) — key name ratified 2026-09-19 (D14) |
 | `audit.export` | AUD | Export audit logs; export itself recorded. (AUD-21) |
 | `analytics.read` | ANA | View the real-time KPI dashboard **of the caller's own firm**. (ANA-32) — key name ratified 2026-09-19 (D14) |
-| `console.session.revoke` | CON | Revoke another super admin's console session. (CON-30) — surface is V2 (AUTH-27); key reserved here |
+| `console.session.revoke` | CON | Revoke another super admin's console session (CON-30 — V1 route `POST /v1/console/sessions/{id}/revoke`; AUTH-27 cross-identity forced logout is the V2 extension). |
 | `platform.identity.admin` | AUTH | Platform-staff identity administration: create/deactivate console users, force MFA reset (AUTH-28), break-glass. (AUTH-16, AUTH-28) — promoted to V1 2026-09-19 (D14) |
 | `platform.tenant.provision` | TEN | Run/resume the tenant provisioning saga and destroy a tenant org in the IdP. (docs/03 §3.5) — promoted to V1 2026-09-19 (D14) |
 | `platform.session.revoke` | AUTH | Revoke another identity's sessions (admin forced logout, AUTH-27). — promoted to V1 2026-09-19 (D14) |

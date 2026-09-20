@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `user.status_changed` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/user.schema.json ($defs/user_status_changed). Per-event payload. Producer: 02 (AUTH). When: any identity status transition (from, to, reason). Consumers: GW, AUD, ANA. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `user.status_changed` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/user.schema.json ($defs/user_status_changed). Per-event payload. Producer: 02 (AUTH). When: any identity status transition (from, to, reason). Consumers: GW, AUD, ANA. Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "85PXDD2X4NQEB107EBTAJX508Z",
   "type": "user.status_changed",
   "version": 1,
   "tenant_id": "GSPARGKENTEXBT1E1FK7RVGS56",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

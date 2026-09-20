@@ -19,12 +19,15 @@ Requirement coverage: `OPS-01,02,03,04,06,07,09,25,26,36,37,38` (V1.0) +
 ```
  GitHub ──push/PR──► GitHub Actions (signed)
                       ├── lint (golangci-lint, eslint, buf) + unit tests
+                      ├── gitleaks + dep-scan (docs/99 0.2) + contract gates
+                      │   (docs/99 0.10: error registry, 31 catalog, 32 schema)
                       ├── build images (GHCR: OPS-36) — go/rust/node per service
                       ├── migrate (dry-run against throwaway PG)
                       └── deploy (SSH → prod/staging host):
                            1. sops -d .env.sops → .env (never logged)
                            2. docker compose pull (tag = git sha, immutable)
-                           3. docker compose up -d (rolling: new → health → old down)
+                           3. rolling cycle for api (2 replicas, D58): new →
+                              health → drain old; `up -d` for the rest
                            4. migrate up (golang-migrate, single runner, advisory lock)
                            5. smoke: /readyz + one internal canary request
 ```
@@ -36,16 +39,18 @@ Requirement coverage: `OPS-01,02,03,04,06,07,09,25,26,36,37,38` (V1.0) +
 | `dev` | laptops (Compose) | synthetic (make fixture) | daily dev |
 | `staging` | Hetzner CX32 (2nd box) | **synthetic-only** (PRD decision: yes to synthetic-only staging) + staging broker sandbox (MetaApi demo server, OPS-19 V2) | pre-prod, cutover dress rehearsal |
 | `prod` | Hetzner **AX42** (4×AMD EPYC, 64 GB RAM, 2×1 TB NVMe) | real | FunderBlu live |
+| `standby` (D56, docs/57) | Hetzner AX42-class (2nd prod-class host) | warm PG replica + backup target + Uptime Kuma | promote-on-disaster ≤ 15 min; the CX32 staging box is too small to serve as standby (4 GB/160 GB vs a 24 GB-class PG) |
 
 **Parity rule (OPS-05):** one Compose file family + env files; staging and prod
 differ only in `.env` values and host resources. Any config key not in both
-envs' files fails CI.
+envs' files fails CI. (The parity rule is enforced from week 1 by the deploy
+config per docs/99 0.2; the OPS-05 row itself is V2-tier and productizes it.)
 
 ### 2.2 Service resource limits (OPS-37, compose `deploy.resources`)
 
 | Service | CPU | Mem (limit) | Notes |
 |---|---|---|---|
-| api | 2 | 4 GB | 2 replicas V2 |
+| api | 2 total | 4 GB | **2 replicas in V1 (D58)** — rolling deploys; blue-green = V2 OPS-18 |
 | bridge | 1.5 | 2 GB | MetaApi-bound, not CPU-bound |
 | engine | 1 | 1 GB | Rust, tight |
 | relay | 0.5 | 512 MB | exactly 1 |
@@ -54,8 +59,10 @@ envs' files fails CI.
 | web | 1.5 | 2 GB | Next.js SSR |
 | zitadel (IdP, ADR-13) | 1 | 1 GB | Go binary + its own PG **database** on the platform cluster (ADR-10); health `/debug/healthz` |
 | db (PG) | 6 | 24 GB | `shared_buffers` 6 GB, `work_mem` bounded |
-| redis | 1 | 8 GB | maxmemory 6 GB, `allkeys-lru` on the `cache:*` DB only (see 2.6) |
-| hook0/flipt/observability | 1 | 2 GB | — |
+| redis-main / redis-streams / redis-cache | 1 total | 8 GB (2/2/4) | three containers per D51 — see 2.6 |
+| hook0 (V1 — D54) | 0.5 | 1 GB | webhook delivery pipeline (docs/99 0.3/0.7); the EVT-11/13/14/15 V2 rows are the productized per-tenant surface (docs/34) |
+| flipt | 0.25 | 512 MB | maintenance flag (GW-32) |
+| prometheus + grafana (minimal — D54) | 0.5 | 1 GB | the four binding metrics: `relay.lag`, DLQ depth, disk, redis-mem (docs/04 §3.6); Loki/OTel/business dashboards = OPS-10/12 V2 |
 
 **V1 lane inventory (binding, `contracts/diagrams/lanes.md`, rendered PNG
 alongside):** edge (Cloudflare: DNS + WAF + tenant resolution input) → api
@@ -93,16 +100,18 @@ Host headroom: 16 GB + 1 TB free disk reserved. `nofile` 65536 on db.
 
 | Item | Mechanism | Target |
 |---|---|---|
-| PG WAL | `archive_command` → rsync to 2nd Hetzner box (S3-compatible object store), continuous | **RPO ≤ 5 min** |
-| PG base backup | `pg_basebackup` nightly 03:00 UTC → same remote, encrypted at rest (SSE + age on key) | verified, not assumed |
-| **Backup integrity** (OPS-38) | monthly **restore drill**: base + WAL → scratch instance on staging host → run integrity suite (row counts on 12 key tables, ledger balance check, audit chain spot-check, **`identity_idp_links` integrity (link ↔ identity, one live link per org) + one login smoke-test**) → report filed in CON; drill failure = P1 incident | **RTO ≤ 2 h** (documented runbook + rehearsed) |
+| PG WAL | **pgBackRest** continuous archiving (D55, docs/57) with `archive_timeout = 5 min` — a quiet day still ships every 5 min — and archive-failure alerting; copies: standby host + off-provider object store | **RPO ≤ 5 min** (enforced, not assumed) |
+| PG base backup | pgBackRest nightly 03:00 UTC (D55), encrypted, tool-managed retention | verified, not assumed |
+| **Backup integrity** (OPS-38, D59) | **weekly automated restore verification** (pgBackRest restore → scratch PG on the standby host → `pg_verifybackup` + row-count/ledger-balance subset; alert on failure) + monthly **full drill** (the human-run integrity suite: row counts on 12 key tables, ledger balance check, audit chain spot-check, **`identity_idp_links` integrity (link ↔ identity, one live link per org) + one login smoke-test**) → report filed in CON; failure = P1 | weekly catches breakage ≤ 7 d; **RTO ≤ 15 min promoted (D56) / ≤ 2 h worst case (full restore)** |
+| **Warm standby** (D56, docs/57) | async **streaming replica** of the whole PG cluster (platform DB + ZITADEL DB) on the standby host; disaster = promote (runbook `ops/dr/runbook.md`), never rebuild-from-zero first | RPO seconds; RTO minutes |
+| **3-2-1 (D55):** three copies, two systems, one off-provider — prod box, standby host, off-provider object storage (e.g. B2/Wasabi) with object lock/versioning and **separate credentials**: a provider lock-out or a compromised host cannot touch every copy.
 | R2 | versioning enabled on the tenant-docs bucket; cross-region replication off in V1 (single region, nightly object manifest backup to the remote box) | docs restorable to last night |
-| **ZITADEL database** (ADR-13) | same `pg_basebackup` + WAL ritual as the platform DB (same cluster, separate database); the master key and the DB dump are stored **separately** (a dump alone cannot decrypt IdP secrets) | login service restorable ≤ RTO; key stored per docs/28 §5 |
+| **ZITADEL database** (ADR-13) | same pgBackRest ritual as the platform DB (same PG cluster — the D56 standby replicates it too); the master key and the DB dump are stored **separately** (a dump alone cannot decrypt IdP secrets) | login service restorable ≤ RTO; key stored per docs/28 §5 |
 | Redis | AOF `everysec` (OPS-26) + `maxmemory-policy noeviction` on sessions/streams DBs, `allkeys-lru` only on the cache DB | streams rebuildable from `events` table (Redis is transport, not truth) |
 | Config/secrets | repo (SOPS) is the source of truth; age keys on 2 offline locations + 1 host | rotation = PR |
 | Compose/state | declarative; `docker compose config` reproducible from git sha | redeploy = pull + up |
 
-DR runbook (`ops/dr/runbook.md`, V2 OPS-22): 5 sections — *detect (who notices),
+DR runbook (`ops/dr/runbook.md`; the V1 drill writes v1 per blueprint step 6, OPS-22 formalizes the suite in V2): 5 sections — *detect (who notices),
 assess (WAL lag check), restore (exact commands), verify (integrity suite),
 declare (status update template)*.
 
@@ -117,22 +126,37 @@ Rotation: per-provider calendar in `ops/secrets.md` (MetaApi/CF quarterly,
 provider keys on any personnel change). **Infisical is the V2 upgrade path**
 (register) — SOPS is sufficient at V1 scale.
 
-### 2.6 Redis durability & eviction (OPS-26)
+### 2.6 Redis durability & eviction (OPS-26; corrected 2026-09-20 — D51, docs/56)
 
-Three logical DBs (separate key prefixes + `SELECT`): `0` sessions/deny-set
-(AOF, noeviction), `1` streams (AOF, noeviction, MAXLEN per stream), `2` cache
-(allkeys-lru). Misconfigured eviction of a session key = forced re-login (safe);
-eviction of a stream = data loss (therefore noeviction + capacity alert at 80%).
+Redis eviction policy and `maxmemory` are **instance-wide** — they cannot
+differ per logical DB — so the single-instance/three-DBs design was not
+implementable as written. V1 runs **three small Redis containers**, each with
+the policy it actually needs:
+
+| Container | Contents | Policy |
+|---|---|---|
+| `redis-main` | sessions, deny-set, **GW rate counters + idempotency claims** (docs/55 §4.6/§4.8 — the D48 fail-closed money paths live here, never on the cache box) | AOF `everysec`, `noeviction`, capacity alert at 80 % |
+| `redis-streams` | Redis Streams (transport, not truth — rebuildable from `events`) | AOF `everysec`, `noeviction`, `MAXLEN` per stream, alert at 80 % |
+| `redis-cache` | `cache:*` read-through keys (gate/entitlement/JWKS mirrors) | `allkeys-lru`, no persistence (rebuildable by design) |
+
+Evicting a session key = forced re-login (safe); evicting a stream = data
+loss (therefore `noeviction`); evicting an idempotency claim = a
+double-submittable money write (worst case). `redis-main` down = the D48
+degradation matrix applies per step (docs/55 §3.6).
 
 ## 3. System design (deploy mechanics)
 
-### 3.1 Zero-downtime deploys (V2 OPS-18; V1 = acceptable 10 s window)
+### 3.1 Zero-downtime deploys (D58: V1 = 2 api replicas + rolling cycle; blue-green two-stack = V2 OPS-18)
 
-V1 reality: `compose up -d` with healthchecks — Go services drain connections
-(SIGTERM handler, 30 s grace). V2 adds: blue-green `api` (two tagged stacks,
+V1: `api` runs **2 replicas** behind the compose-network ingress with a deploy
+cycler — start new replica → health green → drain old (SIGTERM, 30 s grace) →
+stop it. The earlier "compose rolls automatically" wording was wrong (plain
+`up -d` recreates a single container in place — that was the honest 10 s
+window); D58 makes the described behaviour real. Singletons (relay, migrate)
+keep the brief-restart reality. V2 adds: blue-green `api` (two tagged stacks,
 `up -d api-green` → canary → `rm api-blue`) + migrate-before-deploy ordering
-(backend-compatible-first rule: **additive migrations land in the release before
-the code that needs them**).
+(backend-compatible-first rule: **additive migrations land in the release
+before the code that needs them**).
 
 ### 3.2 Rollback (V2 OPS-30)
 
@@ -147,11 +171,13 @@ Prod host: SSH key per team member (rotated quarterly) + Tailscale-only access
 restrict to CF ranges — OPS-15), Tailscale subnet. No database port exposed
 outside the Docker network. Root SSH disabled; sudoers per task.
 
-### 3.4 Job scheduling & single-execution (OPS-17, OPS-27)
+### 3.4 Job scheduling & single-execution (V1 practice; OPS-17/27 productize in V2)
 
 Workers own all cron (no `pg_cron`, no host crontab): each job declares
 `{name, cron, lock_key, timeout}`; execution takes `SELECT pg_try_advisory_lock`
-→ exactly one instance runs (safe when workers scale to 2). Jobs: day-boundary
+→ exactly one instance runs (safe when workers scale to 2). (The advisory-lock
+discipline is ordinary worker code in V1 — docs/99 0.7's relay uses the same
+lock; the two rows build the scheduled-jobs framework around it in V2.) Jobs: day-boundary
 rollover (EVL), sync gap scanner (BRG), reconciliation (LED/PAY), read-model
 refresh (ANA), outbox pruning (EVT), backup integrity check, retention purges
 (AUD/KYC docs), usage metering flush (TEN), relay watchdog.
@@ -190,18 +216,27 @@ rehearsable, not tribal knowledge:
 
 ## 4. Events
 
-OPS does not produce domain events. It produces **operational** signals:
-`ops.deploy_started/succeeded/failed`, `ops.backup_completed/failed`,
-`ops.restore_drill_completed` → CON (internal dashboard) + NOT (staff channel).
-Provider health (MetaApi/Veriff) → `ops.provider_health` (feeds BRG-16 V2).
+### 4.1 V1 baseline — `ops`
+
+None in the V1 execution sheet — these are operational signals, not domain
+events.
+
+### 4.2 Extended (post-V1) signals — design-level
+
+| Event | When | Consumers |
+|---|---|---|
+| `ops.deploy_started` / `ops.deploy_succeeded` / `ops.deploy_failed` | every deploy step | CON (internal dashboard), NOT (staff channel on failure) |
+| `ops.backup_completed` / `ops.backup_failed` | nightly base backup (03:00 UTC) | CON, NOT (staff channel on failure) |
+| `ops.restore_drill_completed` | monthly restore drill (OPS-38) | CON (drill report filed) |
+| `ops.provider_health` | provider poll, 5 min | CON, dashboards (feeds BRG-16 V2) |
 
 ## 5. Lifecycles
 
 - **Release:** `built (GHCR tag=sha) → promoted (staging) → deployed (prod) →
-  rolled-forward | rolled-back (≤ <sha>)` — immutable tags, no `latest` in
+  rolled-forward | rolled-back (to the previous sha)` — immutable tags, no `latest` in
   compose files (CI lints for it).
-- **Backup:** `taken → verified (weekly checksum) → (monthly) restored-and-tested
-  → (90 d) pruned (base) / (7 d) WAL segment rotation`.
+- **Backup:** `taken → (weekly) auto-restored-and-checked (D59) → (monthly)
+  full drill → retention/pruning per pgBackRest policy (D55)`.
 - **Secret:** `created (PR) → active → rotated (PR) → retired (90 d)`.
 - **Incident:** `detected (alert) → triaged (P1–P3) → mitigated → resolved →
   post-mortem (P1/P2 within 48 h, blameless, in repo `ops/incidents/`)`.
@@ -209,8 +244,17 @@ Provider health (MetaApi/Veriff) → `ops.provider_health` (feeds BRG-16 V2).
 ## 6. Error taxonomy
 
 OPS errors surface as infra conditions, not client errors. Client-visible:
-`sys.maintenance` (503, GW-32), `sys.degraded` (200 + `X-Service: degraded`
-header on affected reads). Internal condition codes (metrics/alerts):
+`gw.maintenance` (503, GW-32) — the registered gateway code, renamed here from
+`sys.maintenance` (D52, docs/56: the old name was never registered and would
+fail the error-registry gate).
+
+**Degraded reads are a header convention, not a code (D52, docs/56):** a read
+served stale or partial still returns 200 with the binding D45 envelope plus
+the `X-Service: degraded` response header — a success envelope has no field a
+code could occupy, so `sys.degraded` is dropped (it was never registered).
+
+Internal condition codes (metrics/alerts, never client-facing — outside the
+registry gate by design):
 `ops.migration_failed`, `ops.backup_failed`, `ops.backup_unverified`,
 `ops.restore_drill_failed`, `ops.relay_down`, `ops.disk_full_80`,
 `ops.redis_mem_80`, `ops.cert_expiring_14d` (OPS-35), `ops.provider_degraded`.
@@ -222,7 +266,7 @@ header on affected reads). Internal condition codes (metrics/alerts):
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54 — this is the console group, `/v1/console/*`). Shown for platform completeness (V2/V3 phases, docs/99).
 
 Console-only (no tenant surface):
 
@@ -235,11 +279,42 @@ Console-only (no tenant surface):
 Liveness/readiness probes (GW-14) are owned by the gateway — see 04 §3.6; they ship in the 04 spec, not here.
 ## 8. Schema
 
-No tenant-owned tables. Platform tables: `backups` (id, kind, taken_at,
-size_bytes, checksum, verified_at, drill_report JSONB), `incidents` (id,
-severity, title, started_at, resolved_at, post_mortem_url), `deploys` (id,
-env, sha, started_at, finished_at, status, actor), `slo_defs` (V2). All in the
-platform schema (no tenant_id).
+No tenant-owned tables. Platform tables: `backups`, `incidents`, `deploys`
+(DDL below — added 2026-09-20, docs/56: the tables were named here but had no
+DDL anywhere; docs/32 counts them from this block), `slo_defs` (V2, OPS-40 —
+added with its row). All in the platform schema (no tenant_id).
+
+```sql
+CREATE TABLE backups (
+  id           ULID PRIMARY KEY,
+  kind         TEXT NOT NULL,          -- wal | base | r2_manifest
+  taken_at     TIMESTAMPTZ NOT NULL,
+  size_bytes   BIGINT NOT NULL,
+  checksum     TEXT NOT NULL,
+  verified_at  TIMESTAMPTZ,            -- weekly checksum verify (§5)
+  drill_report JSONB                   -- monthly restore drill (OPS-38)
+);
+CREATE INDEX idx_backups_kind_taken ON backups(kind, taken_at DESC);
+
+CREATE TABLE incidents (
+  id              ULID PRIMARY KEY,
+  severity        TEXT NOT NULL,       -- P1 | P2 | P3 (§5 ladder)
+  title           TEXT NOT NULL,
+  started_at      TIMESTAMPTZ NOT NULL,
+  resolved_at     TIMESTAMPTZ,
+  post_mortem_url TEXT                 -- ops/incidents/ (P1/P2 ≤ 48 h)
+);
+
+CREATE TABLE deploys (
+  id          ULID PRIMARY KEY,
+  env         TEXT NOT NULL,           -- staging | prod
+  sha         TEXT NOT NULL,           -- immutable GHCR tag
+  started_at  TIMESTAMPTZ NOT NULL,
+  finished_at TIMESTAMPTZ,
+  status      TEXT NOT NULL,           -- promoted | deployed | rolled_back | failed
+  actor       TEXT NOT NULL
+);
+```
 
 ## 9. Database design
 
@@ -267,7 +342,8 @@ comfortable at 10× V1 targets. When to scale (written thresholds, not vibes):
 - PG `max_connections` pressure sustained > 70% (PgBouncer absorbs; alert)
 - disk > 70% (WAL + events partitions)
 - bridge poll backlog > 2 min (add bridge replica — stateless)
-- single box → 2 boxes: `api+web` box / `db+redis` box is the V2 first split
+- the D56 standby host is the first real second box (disaster standby, not a
+  traffic split); the V2 split builds on it: `api+web` box / `db+redis` box
   (OPS-33 failover strategy doc); K8s remains forbidden (revisit only at > 50
   tenants or multi-region).
 
@@ -281,17 +357,18 @@ comfortable at 10× V1 targets. When to scale (written thresholds, not vibes):
 | **GHCR + GitHub Actions** | registry + CI/CD (PRD signed) |
 | **PgBouncer** | connection pooling (ADR-8) | 
 | **ZITADEL** | identity provider (ADR-13): OIDC hosted login, MFA, SAML/OIDC SSO, SCIM 2.0 (user schema); AGPL-3.0, self-hosted, unmodified — licence gate in docs/41 §8.2 |
-| **Prometheus + Grafana** | V1 metrics/dashboards (Loki + OTel V2 register) |
-| **Uptime Kuma** | external uptime (OPS-31) |
+| **Prometheus + Grafana** | minimal V1 metrics (D54: relay.lag, DLQ depth, disk, redis-mem); Loki + OTel + business dashboards = OPS-10/12, V2 |
+| **Uptime Kuma** | uptime checks from the standby host (D57 — in V1; supersedes the Uptime-Kuma-V2 slice of D54; the fuller OPS-31 monitoring stays V2) |
+| **Healthchecks.io** | off-provider dead-man's switches for backups/cron/drill (D57) — pages when a job stops reporting |
 | **Trivy** | image scanning |
 | **Tailscale** | private access (ops plane) |
-| **restic** (or bare rsync + age) | backup transport/encryption |
+| **pgBackRest** | backup + WAL archiving, retention, encryption, verification (D55 — replaces the rsync/restic script approach) |
 
 ## 13. Technology stack
 
 Shell + Compose + Go (one-shot services), GitHub Actions, GHCR, Hetzner Cloud
 API (provisioning, cost queries), SOPS/age, Prometheus/Grafana/Uptime Kuma/
-Trivy, Tailscale, restic.
+Healthchecks.io, Trivy, Tailscale, pgBackRest.
 
 ## 14. Integration — internal modules (glue)
 
@@ -310,7 +387,7 @@ Trivy, Tailscale, restic.
 
 Hetzner (hosts, object storage), GitHub Actions/GHCR (signed), Cloudflare (DNS,
 origin rules, cert bot for custom domains — OPS-35 expiry monitor), Sentry,
-Uptime Kuma, Postmark (staff alerts via NOT), provider consoles (manual
+Postmark (staff alerts via NOT), Healthchecks.io (dead-man's switches — D57), provider consoles (manual
 cost tracking until BRG-47/OPS-23 automate it).
 
 ## 16. Implementation blueprint
@@ -321,11 +398,11 @@ cost tracking until BRG-47/OPS-23 automate it).
 | 2. Compose files (dev/staging/prod) + all V1 services + resource limits + healthchecks | DevOps | 3 d | 1 | `make deploy-staging` green from a clean box |
 | 3. CI: lint+test+build+GHCR+staging deploy workflow; migration dry-run gate | DevOps + BE-1 | 3 d | 2 | PR → staging deploy fully automatic |
 | 4. Migrations framework + first schema set + version gate in /readyz | BE-1 + DevOps | 2 d | 2 | drift blocks deploy |
-| 5. Backups: WAL archiving + nightly base + remote box + weekly checksum verify | DevOps | 2 d | 2 | restore from base+WAL into scratch PG succeeds |
-| 6. **First restore drill** (full integrity suite) + runbook v1 | DevOps | 2 d | 5 | drill report filed; RTO measured ≤ 2 h |
+| 5. Backups: pgBackRest (D55) — WAL (archive_timeout 5 min) + nightly base + off-provider copy + warm standby (D56) | DevOps | 3 d | 2 | restore from base+delta into scratch PG succeeds; replica lag < 1 min |
+| 6. **First restore drill** (full integrity suite) + weekly automated restore verification (D59) + the promote runbook (D56) | DevOps | 2 d | 5 | drill report filed; promote measured ≤ 15 min; weekly verify green |
 | 7. SOPS secrets rollout (all providers) + rotation calendar + CI redaction test | DevOps | 1.5 d | 1 | no plaintext secret anywhere in repo/logs (scan clean) |
-| 8. Prometheus + Grafana (service/PG/Redis/relay/dashboards) + alert routing v1 | DevOps | 3 d | 2 | alert fires on induced relay stop |
-| 9. Prod deploy + smoke + Uptime Kuma + Sentry wired | DevOps | 1 d | 2–8 | platform live on prod host |
+| 8. Prometheus + Grafana minimal (D54: the four binding metrics — relay.lag, DLQ depth, disk, redis-mem) + alert routing v1 | DevOps | 2 d | 2 | alert fires on induced relay stop |
+| 9. Prod deploy + smoke + Sentry + Uptime Kuma + Healthchecks.io switches (D57) | DevOps | 1 d | 2–8 | platform live; a killed backup job pages within minutes |
 | 10. V2 hardening phase (OPS-05,08,10–14,16,18–24,27–35,39,40): zero-downtime, rollback rehearsal, load test (OPS-29: k6 scripts in repo), SLOs, log retention, cost dashboard, incident process | DevOps + all | 3 wks | 9 | load test at 10× targets green; SLO dashboards live |
 
 **Risks:** single-box SPOF (accepted V1, ADR-9/10, with rehearsed DR + RPO 5

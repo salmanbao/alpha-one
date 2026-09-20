@@ -41,7 +41,7 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (313 codes — 73 V1 baseline, 240 extended — across 25 modules)
+## 2. The registry (314 codes — 73 V1 baseline, 241 extended — across 25 modules)
 
 ### 02 — AUTH
 
@@ -90,7 +90,7 @@
 | `tenant.subdomain_taken` | 409 | Subdomain already in use — "That subdomain is already taken." | V1 |
 | `tenant.subdomain_reserved` | 409 | Subdomain on reserved list (www, admin, api, console, app) — "That subdomain is reserved." | V1 |
 | `tenant.suspended` | 403 | Tenant traffic denied (reason in details) | ext |
-| `tenant.not_live` | 403 | `onboarding` tenant, trader-facing route | ext |
+| `tenant.not_live` | 403 | Pre-`active` tenant on a tenant-realm route (`details.state`: `provisioning`, `provisioning_failed`, `onboarding`; corrected 2026-09-19, docs/47 M2 — the... | ext |
 | `tenant.provisioning_failed` | 500 | Pipeline terminal failure (CON only, with step) | ext |
 | `tenant.slug_taken` | 409 | Slug/subdomain conflict | ext |
 | `tenant.domain_invalid` | 422 | DNS/verification failure (custom domain V1.1) | ext |
@@ -120,12 +120,12 @@
 | `gw.rate_limited` | 429 | `Retry-After` set; scope in details (ip/user/tenant) | ext |
 | `gw.quota_exceeded` | 429 | Plan quota; `details.metric` | ext |
 | `gw.module_disabled` | 403 | Entitlement gate (module not enabled for tenant) | ext |
-| `gw.idempotency_conflict` | 422 | Key reused with different body | ext |
+| `gw.idempotency_conflict` | — | (folded — the V1 baseline code is `request.idempotency_conflict` **409**, GW-12; this extended variant predates the fold) | ext |
 | `gw.payload_too_large` | 413 | Body over limit | ext |
 | `gw.timeout` | 504 | Handler exceeded budget | ext |
 | `gw.maintenance` | 503 | Maintenance mode | ext |
 | `gw.method_not_allowed` | 405 | — | ext |
-| `evt.webhook_signature_invalid` | 401 | Ingress: bad provider signature | ext |
+| `evt.webhook_signature_invalid` | — | (folded — the V1 baseline code is `webhook.signature_invalid` **401**, EVT-10) | ext |
 | `evt.webhook_schema_invalid` | 422 | Ingress: payload failed schema | ext |
 | `evt.webhook_duplicate` | 200 | Ingress: already processed (idempotent 200) | ext |
 | `evt.consumer_dlq` | — | Internal: consumer gave up (alert + DLQ row) | ext |
@@ -176,7 +176,7 @@
 | `brg.capacity` | 503 | Server group full / MetaApi quota — account cap guard | ext |
 | `brg.command_failed` | — | Execution failed after retries (reason in command result) | ext |
 | `brg.command_conflict` | — | Broker state contradicted preconditions (e.g. position already closed) → confirm path | ext |
-| `brg.sync_gap` | — | Deal discontinuity (event + ADM review) | ext |
+| `brg.sync_gap` | — | Deals-count mismatch in the sync window (event + ADM review) | ext |
 | `brg.credentials_missing` | — | Provisioned account missing creds (should never happen) | ext |
 | `brg.symbol_unknown` | — | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) | ext |
 
@@ -209,13 +209,14 @@
 |---|---|---|---|
 | `risk.account_not_found` | 404 | Case target account unknown — "Account not found." | V1 |
 | `risk.case_already_open` | 409 | Second open case on same account — "A review case is already open." | V1 |
-| `rsk.case_not_found` | 404 | — | ext |
-| `rsk.case_closed` | 409 | Action on decided case (use appeal, V2) | ext |
-| `rsk.signal_required` | 422 | Open case without signal/reason | ext |
-| `rsk.decision_conflict` | 409 | Concurrent decision (optimistic lock) | ext |
-| `rsk.hold_not_active` | 409 | Release without hold | ext |
-| `rsk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed | ext |
-| `rsk.detector_disabled` | 422 | (V2) Trigger detector that's disabled | ext |
+| `risk.case_not_found` | 404 | Case unknown | ext |
+| `risk.case_closed` | 409 | Action on decided case (use appeal, V2) | ext |
+| `risk.signal_required` | 422 | Open case without signal/reason | ext |
+| `risk.decision_conflict` | 409 | Concurrent decision (optimistic lock) | ext |
+| `risk.case_claimed` | 409 | Another staff claimed the case (V2 claim race, §3.5) | ext |
+| `risk.hold_not_active` | 409 | Release without hold | ext |
+| `risk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed | ext |
+| `risk.detector_disabled` | 422 | (V2) Trigger detector that's disabled | ext |
 
 ### 11 — PAY
 
@@ -225,7 +226,7 @@
 | `payout.kyc_required` | 422 | Payout gate blocked pending KYC approval — "Verify your identity before requesting a payout." | V1 |
 | `payout.risk_hold` | 423 | Open risk case (RSK-11) or active suspension (PAY-04) — "Payouts are temporarily held for review." | V1 |
 | `payout.not_funded` | 409 | Account not in FUNDED state — "Payouts are only available on funded accounts." | V1 |
-| `payout.amount_exceeds_available` | 422 | Beyond available profit (balance+equity − initial − prior payouts) — "Amount exceeds your available profit." | V1 |
+| `payout.amount_exceeds_available` | 422 | Beyond available profit (HWM − initial − prior payouts, pre-split — §3.2) — "Amount exceeds your available profit." | V1 |
 | `payout.schedule_not_due` | 422 | Frequency or next-withdrawal-date not reached — "Your next payout is available on {date}." | V1 |
 | `payout.method_not_confirmed` | 400 | Payout method not confirmed — "Confirm your payout method first." | V1 |
 | `payout.invalid_address` | 400 | Chain-specific crypto address validation failed — "That wallet address is not valid for {chain}." | V1 |
@@ -304,7 +305,7 @@
 |---|---|---|---|
 | `not.template_not_found` | 500 | Mapping references missing template (deploy error — CRITICAL alert) | ext |
 | `not.vars_invalid` | 500 | vars_selector produced empty/PII-guarded vars (alert + skip, never send half-rendered) | ext |
-| `not.recipoent_unknown` | 500 | No email/identity (alert — usually a data bug) | ext |
+| `not.recipient_unknown` | 500 | No email/identity (alert — usually a data bug) | ext |
 | `not.provider_unavailable` | 503 | Postmark down (retry queue drains on recovery; critical templates page ops) | ext |
 | `not.rate_limited` | 429 | (V2) Per-recipient/template cap hit (batched into digest) | ext |
 | `not.suppressed` | — | Info state (not an error) | ext |
@@ -316,7 +317,7 @@
 | Code | HTTP | Meaning (from doc 15 §6) | Tier |
 |---|---|---|---|
 | `document.not_found` | 404 | Document unknown or not owned — "Document not found." | V1 |
-| `doc.not_found` | 404 | Document id unknown | ext |
+| `doc.not_found` | — | (folded — the V1 baseline code is `document.not_found` **404**, DOC-06; this extended variant predates the fold) | ext |
 | `doc.pending` | 409 | URL requested before generation finished (TD shows "preparing…") | ext |
 | `doc.state_missing` | 500 | Mapper found no source state (data bug — CRITICAL alert) | ext |
 | `doc.render_failed` | 500 | Template/Puppeteer failure (retry; 3× → DLQ) | ext |
@@ -332,7 +333,7 @@
 | `auth.expired` | 401 | full-screen re-login (state preserved via query) | ext |
 | `tenant.not_found` | 404 | "site not found" (04: 404-not-403 posture) | ext |
 | `rate.limited` | 429 | inline "slow down, try in {n}s" | ext |
-| `gw.internal` | — | error boundary: retry button + ticket pre-fill + Sentry id shown | ext |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) | ext |
 | `stream.lost` | — | polling fallback + amber chip (not an error screen) | ext |
 | `render.stale` | — | amber "data from {time}" banner (honesty over polish) | ext |
 

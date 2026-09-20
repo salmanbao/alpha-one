@@ -411,9 +411,10 @@ SHARED = {
                                 "docs/31, contracts/events/payloads/envelope.schema.json). "
                                 "Every event carries EXACTLY these fields; `payload` is "
                                 "per-event. Broker commands are NOT events (EVT-20)."),
-                "required": ["id", "type", "version", "tenant_id", "occurred_at", "payload"],
+                "required": ["id", "type", "version", "tenant_id", "occurred_at", "correlation_id", "payload"],
                 "properties": {
                     "id": {"$ref": "#/components/schemas/ULID"},
+                    "correlation_id": {"$ref": "#/components/schemas/ULID", "description": "Correlation propagation (GW step 8); required since the ninth pass (docs/49 C1)."},
                     "type": {"type": "string", "description": "The event name (e.g. order.paid, AccountCreated)."},
                     "version": {"type": "integer", "minimum": 1, "description": "Bumped on any payload change (additive-only between freezes)."},
                     "tenant_id": {"$ref": "#/components/schemas/ULID"},

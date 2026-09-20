@@ -14,7 +14,11 @@ CREATE INDEX idx_outbox_unpublished ON outbox(id) WHERE published_at IS NULL;
 
 CREATE TABLE events (
   event_id      ULID,
-  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- per-topic seq in app (Redis INCR on publish)
+  seq           BIGINT GENERATED ALWAYS AS IDENTITY,   -- global append order, assigned by the
+                                                       -- INSERT (the relay is the single writer;
+                                                       -- NO Redis counter in the durable path —
+                                                       -- the D27 lesson, docs/48); V2 CON replay
+                                                       -- addresses seq ranges
   topic         TEXT NOT NULL,
   tenant_id     ULID NOT NULL,
   entity_id     TEXT NOT NULL,

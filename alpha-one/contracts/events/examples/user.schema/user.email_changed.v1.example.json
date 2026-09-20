@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `user.email_changed` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/user.schema.json ($defs/user_email_changed). Per-event payload. Producer: 02 (AUTH). When: email change verified (AUTH-29, V2). Consumers: AUD, NOT (both addresses). Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `user.email_changed` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/user.schema.json ($defs/user_email_changed). Per-event payload. Producer: 02 (AUTH). When: email change verified (AUTH-29, V2). Consumers: AUD, NOT (both addresses). Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "AAKKFERXWNT6H2MSTARZ04GK1X",
   "type": "user.email_changed",
   "version": 1,
   "tenant_id": "2DQKEEMHXNPYBWGNH29XX8SK46",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }

@@ -191,7 +191,7 @@ Appendix A lists every ID.
 | 0.6 | **TEN (V1.0 = the 9 rows: TEN-01/02/03/08/11/12/15/18/42)**: tenant record + creation flow (the doc-defined 9-step saga shape, 03 §3.1) + tenant resolution (custom domain > subdomain > X-Tenant-Id internal, the 04 §3.4 chain) + subdomain reservation + tenant-scoped data access + entitlements + integration config + secrets handling + suspension cascade + storage scoping (R2 tenant prefix). **Not V1.0:** white-label branding (TEN-04, V2) | 03 §16 | BE-1 | 2 wks | 0.5 | `POST /v1/admin/tenants` (the CON's future surface; Phase 0 = a dev script + the CON-less 2-op) → the tenant record + config + storage prefix exist (TEN-01/11/12/18) → the tenant's subdomain resolves (TEN-02/42) → tenant-scoped queries return 0 cross-tenant rows (TEN-03) → suspension cascades (TEN-15) → an entitlement gates a feature (TEN-08) |
 | 0.7 | **GW+EVT (V1.0 = GW-01/02/03/04/05/12/18 + EVT-01/02/03/05/08/10/20)**: the GW chain (single entry point, tenant resolution, auth, ABAC, rate limits, idempotency, the error contract, the 04 §3) + the outbox (the PG, the 04 §5.4) + the relay (the single process, the advisory lock, the LastSeq+1 resync, the 04 §5.4) + Redis Streams at-least-once + idempotent consumers (the 04 §5.7) + the append-only event log + inbound webhook verification + command queue separation + Hook0 egress (signed webhooks, the retry, the DLQ, the 04 §5.6) + SSE relay (the 01 §4.3) | 04 §16, 28 §12 P2 | BE-1 + BE-2 | 3 wks | 0.5, 0.6 | A request with a bad tenant 404s (the no-oracle); a duplicate idempotency key returns the original (the 04 §3.3); an event written to the outbox flows: PG → relay → Redis Stream → 2 consumers (the idempotent, the 04 §5.7) → the Hook0 delivers a signed webhook (the forged signature 401s, the 28 §2.3 #5); killing the relay and restarting resumes at LastSeq+1 (the no-event-loss, the 04 §5.4) |
 | 0.8 | **LED+AUD (V1.0 = LED-01/02/03/04/07/08/18 + AUD-01/03/04/21)**: the double-entry ledger (chart of accounts, entry model, idempotent posting, capture/payout postings, the `BEFORE UPDATE/DELETE` triggers reject, the 05 §9, the 28 §3.3) + the append-only audit (event schema, single service API, append-only storage, the critical tier, the fail-closed, the 05 §3.3, access/export audit). The nightly snapshot + hash to R2 (05 §3.5) is doc-defined ops practice inside this task, not a PRD row | 05 §16, 28 §12 P3 | BE-2 | 2 wks | 0.7 | An unbalanced entry 422s (the 05 §9); a direct UPDATE on `ledger_entries` is rejected by the trigger (the test); a sensitive action (a test admin op) fails when the audit write fails (the fail-closed, the 05 §3.3); the nightly snapshot lands on R2 with the hash (the 05 §3.5) |
-| 0.9 | **OPS (V1.0 = OPS-01/02/03/04/06/07/09/25/26/36/37/38)**: containerization + Compose + CI/CD pipelines + migrations + PG backups + secrets (SOPS+age) + PgBouncer + Redis durability + image registry + resource limits + host capacity plan + backup-integrity verification + the **monthly restore drill (the RPO ≤ 5-min, the RTO ≤ 2-h, the 06 §3.2 — first drill in week 4)** + `/healthz` per service + Sentry SDKs day 1 (docs/34 §9) + the incident runbook skeleton (the 06 §3.3, the P0–P3 ladder, the 21 §3.2) + the egress allowlist (the 28 §3.1, the T5 defense). **Not V1.0:** the observability stack + business dashboards + external uptime monitoring (OPS-10/12/31, V2 — Phase 4 wave 2) | 06 §16, 28 §12 P0/P5, 29 §6 | DevOps | 2 wks | 0.3 | The health endpoints + Sentry show the 01 §1's 13 services + the PG/Redis; the first restore drill passes (the RPO/RTO met, the isolation verified post-restore, the 28 §11); an injected failure (kill the PG) follows the runbook (the P0, the 15-min ack, the status update); the egress to an unknown host is blocked (the test) |
+| 0.9 | **OPS (V1.0 = OPS-01/02/03/04/06/07/09/25/26/36/37/38)**: containerization + Compose + CI/CD pipelines + migrations + PG backups + secrets (SOPS+age) + PgBouncer + Redis durability + image registry + resource limits + host capacity plan + backup-integrity verification + the **monthly restore drill (the RPO ≤ 5-min, the RTO ≤ 2-h, the 06 §3.2 — first drill in week 4)** + `/healthz` per service + Sentry SDKs day 1 (docs/34 §9) + the incident runbook skeleton (the 06 §3.3, the P0–P3 ladder, the 21 §3.2) + the egress allowlist (the 28 §3.1, the T5 defense). **Not V1.0:** the observability stack + business dashboards (OPS-10/12, V2 — Phase 4 wave 2; external uptime + dead-man switches moved INTO V1 by D57, docs/57) | 06 §16, 28 §12 P0/P5, 29 §6 | DevOps | 2 wks | 0.3 | The health endpoints + Sentry show the 01 §1's 13 services + the PG/Redis; the first restore drill passes (the RPO/RTO met, the isolation verified post-restore, the 28 §11); an injected failure (kill the PG) follows the runbook (the P0, the 15-min ack, the status update); the egress to an unknown host is blocked (the test) |
 | 0.10 | **Contracts pack v0 frozen** (the README convention): `contracts/shared/` (the error envelope, the pagination, the event envelope, the money/id/time schemas) + the V1 modules' OpenAPI (02, 03, 04, 05, 07–15, 17, 21) + the V1 events' JSON Schemas (`contracts/events/`) + the CI gates (the 04 §6 error-registry check, the 31 catalog check, the 32 schema check) | the README, 30/31/32, 28 §11 | Tech Lead + BE-1 | 1 wk | 0.5–0.8 (the shapes) | The CI runs the contract checks on every PR; a code change that breaks a frozen schema fails the build (the test); the pack is tagged `contracts-v0` |
 
 **Phase 0 exit (M0):** all of 0.1–0.10; the staging demo =
@@ -261,11 +261,107 @@ docs/34 §9 alongside the five above:
     403 `authz.step_up_required`, and the hosted re-auth (`prompt=login&max_age=300`) then
     succeeds (docs/02 §3.2, decision D23).
 
+**Gates added by the sixth-pass consolidation (docs/46, 2026-09-19)** — recorded in docs/34 §9:
+
+15. **Authorization views are render-fresh** — `contracts/permissions/matrix.md` (the role ×
+    key matrix, the key → holders detail, the V1 route → permission → authorized-roles map)
+    regenerates byte-identical from `contracts/permissions/roles.yaml` + the registry V1
+    table + the `x-phase: V1` operations via `scripts/verify_roles.py --write-matrix`; the
+    check mode fails the build on drift (docs/46 §11).
+
+**Gates added by the seventh-pass consolidation (docs/47, 2026-09-19)** — recorded in docs/34 §9:
+
+16. **Tenant state matrix is machine-fresh** — `contracts/tenants/state-capabilities.yaml`
+    (the state × capability matrix, the docs/35 I-20 test source) renders byte-identical
+    into docs/03 §5.1 via `scripts/verify_tenant_states.py`, every matrix state exists in
+    the `tenants.status` DDL, and every blocked cell's code is registered in
+    `contracts/errors/taxonomy.md`; the check mode fails the build on drift (docs/47 §11).
+
+**Gates added by the eighth-pass review (docs/48, 2026-09-19)** — recorded in docs/34 §9:
+
+17. **Journal invariants are commit-enforced** — the deferred constraint trigger rejects
+    unbalanced or mixed-currency entries at COMMIT (property test over randomized line
+    sets passes), immutability triggers + INSERT-only privileges hold for the app role,
+    the ledger-applier replays the same event idempotently (same `idempotency_key` → one
+    entry), and a deliberately unbalanced post rolls the business transaction back with
+    `led.entry_unbalanced` (docs/48 §5, decisions D25–D27).
+
 The third-pass design artifact is `docs/43-idp-deprovisioning.md` (decisions D10–D12) and
 the fourth-pass artifact is `docs/44-auth-multitenancy-review.md` (G21–G33, decisions
 D13–D18) and the fifth-pass artifact is `docs/45-auth-contract-hardening.md` (G34–G45,
-decisions D19–D24); like docs/42 these change V1 design detail only — **no PRD workbook
-row was changed**.
+decisions D19–D24) and the sixth-pass artifact is `docs/46-authorization-model.md` (the
+consolidated authorization specification, findings A1–A4), the seventh-pass artifact is
+`docs/47-multi-tenancy-model.md` (the consolidated multi-tenancy specification, findings
+M1–M10, owner decisions W/U/D recorded in its §15) and the eighth-pass artifact is
+`docs/48-ledger-audit-review.md` (the LED + AUD deep review, findings F1–F10, owner
+decisions D25–D27) the ninth-pass artifact is `docs/49-chain-review-ledger-audit-oss.md`
+(the four-domain chain review — findings C1/C2, the required event `correlation_id` — and
+the LED/AUD open-source evaluation with the V2 hash-chain design rules), the tenth-pass
+artifact is `docs/50-evl-lcc-review.md` (the trading-core review — decisions D28–D31: the
+Phase-1 five events in the V1 catalog, guarded breach-reversal edges, expiry-as-breach,
+suspension-freezes-everything — plus F13 surfaced for the next pass), the eleventh-pass
+artifact is `docs/51-brg-review.md` (the trading-bridge review — decisions D33–D36: history-window
+gap detection, the full bridge.tick shape, BRG-owned account_snapshots, worker-internal sync —
+and `bridge.sync_gap` joining the V1 catalog), the twelfth-pass artifact is `docs/52-pay-review.md`
+(the payout review — D32 answered: the FUNDED breach edge + hold-flag queue; D37–D39: no V1 request
+event, reserves as visibility-only, re-check-failure pins; the PAY-13 machine reconciled everywhere),
+the thirteenth-pass artifact is `docs/53-chk-kyc-review.md` (money-in + gates — D40–D44: minimal
+manual refunds, wire to V2, order-at-submit + checkout_sessions DDL, KYC edges pinned, no V1 purchase
+gate; the workbook itself used as the citation oracle), and the fourteenth-pass artifact is
+`docs/54-gw-evt-review.md` (the spine — D45–D47: the success envelope binding, the GW-01 groups as the
+URL plan, the V1 relay dlq subcommand; all gateway/event contract TODOs resolved), and the gateway solution
+specification `docs/55-gw-solution-spec.md` (the developer-facing
+how-to-build for the eleven chain steps of docs/04 §3.1 — per-step
+algorithms, caches, degradation contracts, latency budgets, tests and the
+SOL-01…SOL-20 register, with SOL-04/06/07 ratified 2026-09-20 as D48–D50); implementation-level only), and the fifteenth-pass artifact is
+`docs/56-ops-review.md` (the platform under everything — OPS/DevOps: D51 the
+three-container Redis topology, D52 gw.maintenance + the degraded header rule,
+D53 dual-approval migration PRs, D54 the Hook0/minimal-metrics V1 tier split;
+the ops signals registered in the event catalog, the ops-platform tables given
+their DDL, the ops contract's stale TODOs resolved), and the sixteenth-pass artifact is
+`docs/57-ops-industry-benchmark.md` (OPS benchmarked against industry
+practice — D55 pgBackRest + 3-2-1 off-provider copies, D56 the warm standby
+host (promote ≤ 15 min), D57 external uptime + dead-man switches in V1,
+D58 two-replica rolling deploys, D59 weekly automated restore verification),
+and the seventeenth-pass artifact is `docs/58-not-doc-review.md` (NOT + DOC —
+messages and paper: D60 the settlement event is `payout.settled`, D61 the
+14-template V1 set with every trigger registered and every reserve named,
+D62 no KYC invite email in V1, D63 expiry silent; the signed-URL endpoint in
+the V1 baseline, D45 shapes in the DOC contract, ten contract questions
+resolved), and the eighteenth-pass artifact is `docs/59-surfaces-review.md`
+(the four surface modules TD/ADM/CON/ANA: D64 dual transport — browser
+surfaces on the HttpOnly session cookie with the origin check in the GW
+chain, machines keep the bearer JWT; D65 the risk-case spine events promoted
+to V1 for the ADM risk queue; D66 the realm idle carve-out — traders 30,
+staff + console 15; D67 the admin panel on the tenant host under /admin;
+plus the pre-D45 envelope, the un-prefixed trader paths, the PAY-44 tier,
+the step-up code, the ops.* topic, the ANA-32 tier and feed names, and 12
+contract questions resolved), and the nineteenth-pass artifact is
+`docs/60-rsk-review.md` (RSK — the last Phase-1 core module: D68 the breach
+auto-open is V1.0 with the dormant payout_hold flag, the PAY-04 interlock
+bites from V1.1; D69 the error namespace unified on risk.*; D70 case
+decisions always carry the 2FA step-up; D71 one open case per account,
+app-enforced under a per-trader advisory lock; plus the V1 baseline gained
+the queue reads + the decide endpoint, the AccountBreached consumer wiring,
+the payload parity rebuild, and all 10 contract TODOs resolved), and the
+twentieth-pass artifact is `docs/61-freeze-audit.md` (the cross-cutting
+freeze audit — docs/28 Security + 29 Scalability + 35 Testing: **zero new
+decisions** — every finding was binding text not yet propagated: the D51
+three-Redis / D55 pgBackRest / D56 standby / D57 external-monitor facts
+synced into docs/28/29, the 30+ pre-restructure `02 §3.x` citation refs
+re-pointed to the real sections, `audit_log` → `audit_events`, three legacy
+uppercase error codes lowercased, the `payments.*` alias family retired in
+docs/07/23/24/27/99, the `isolation.test` suite given its true home
+(01 ADR-1 / 28 §3.3 / 35 I-01), and docs/35 gained the decision-coverage
+test hooks for D64/D66/D68/D70/D71), and the twenty-first-pass artifact is
+`docs/62-contract-todo-sweep.md` (the contract-TODO backlog: all 53 open
+owner-questions closed — 49 by citation, 4 decided: D72 the closed
+payout-ineligible sub-reason enum, D73 the confirm-once method flow,
+D74 ops-runbook credential delivery in V1, D75 the coupon/add-on/numbering
+shapes — the contract pack is now TODO-free);
+like docs/42
+these change V1 design detail only — **no PRD workbook row was
+changed**.
 
 ## 4. Phase 1 — The core money loop (weeks 5–16, V1.0)
 
@@ -280,16 +376,16 @@ row was changed**.
 | 1.1 | **LCC (V1.0 = the 12 rows: LCC-01/02/03/05/06/07/20/23/27/41/43/44)**: the TradingAccount aggregate + the state machine (the single `Transition()`, the 07 §3.1) + state history/audit + provisioning on purchase + on phase pass + KYC-gated funding + payout terms at funding + lifecycle events + terminal cleanup + **double-enforcement prevention (LCC-41)** + breach-decision idempotency key + partial-enforcement/confirm state | 07 §16 | BE-1 | 3 wks | 0.7, 0.8 | A synthetic account walks `provisioning → funded → active → breached → closed` (the single Transition, the property test: no path bypasses the machine, the 07 §11); a breach emits `account.breached` (the 31 catalog) + the BRG command (the 1.2's consumer); the double-breach fires once (LCC-41/43: the second decision with the same idempotency key is a no-op, the test); a partial enforcement confirms per position (LCC-44) |
 | 1.2 | **BRG (V1.0 = the 13 rows: BRG-01/02/05/06/07/08/09/10/11/12/14/43/44)**: the capability interface (BRG-01) + the MetaApi MT5 adapter (poll-only, the 08 §1 binding) + account creation + credential storage/delivery + balance/equity sync + position/trade sync (the stagger, the 08 §3.2) + on-demand sync + enforcement execution + command confirmation + leverage/group config + enable/disable trading + the adapter contract-test suite + credential encryption/rotation | 08 §16 | BE-1 | 4 wks | 0.1 (MetaApi live), 0.7 | The demo MT5 account's ticks/deals sync ≤ 60 s (the 08 §3.2, the measured); a synthetic trade on the demo account appears as a `bridge.tick`/deal (the 08 §3.2); an enforcement command (the close-all, the 07's) executes on the demo account (the 08 §3.3, the idempotent — the double-send doesn't double-close, the test); a MetaApi outage → `bridge.sync_gap` + the `EVL_TICK_STALE` (the 09's) + no verdict on stale (the 28 §2.3 #6); the contract suite (BRG-43) runs in CI against the sandbox |
 | 1.3 | **EVL (V1.0 = the 22 rows: EVL-01/02/04/05/06/07/08/16/17/19/29/34/35/44/46/47/48/49/50/52/53/54)**: the Rust service (axum, the ADR-11, the 01 §3) + the `evaluate(state, rules, tick)` pure function (the 09 §1) + challenge templates + rulepack versioning/composition + profit-target/daily-DD/max-DD/trailing-HWM rules + evaluation triggers + decision priority + metric registry + trading calendar/broker-TZ day boundary (the ADR-12, the 01 §3) + observed-vs-evaluated snapshots + ordering/staleness/comparison semantics + verdict (hard-breach action, pass detection, the 09 §3.4) + evaluation audit + regression + test-vector suites | 09 §16 | BE-1 | 3 wks | 1.2 (the ticks) | A synthetic tick sequence produces the expected verdicts (the property test: the recompute = the same hash, the 09 §3.4, the 28 §11); the drawdown breach fires `verdict.breach` (the 31) → the LCC's Transition (the 1.1); the day boundary resets the daily DD at the broker's midnight (the ADR-12, the test with a TZ-shifted broker); the rulepack v1→v2 migrates existing accounts (EVL-34, additive); the regression + vector suites (EVL-35/54) run in CI |
-| 1.4 | **RSK (V1.0 = 2 rows ONLY: RSK-01 signal+case model, RSK-10 case opening)**: the signal record + the case aggregate + the case machine (the 10 §5) + manual case opening (staff/API). **Not V1.0** (do not build): every detector (RSK-04/05/06 and the V2 detector set — Phase 4 wave 3), the payout hold (RSK-11 + PAY-04, V1.1 — task 2.1), the review queue + SLAs (V2). V1.0 proves the case spine; the teeth arrive in Phases 2–4 | 10 §16 | BE-2 | 1 wk | 1.3 (the verdicts feed signals later), 0.7 | A staff user opens a case on a synthetic account (RSK-10) with a linked signal (RSK-01) → the case walks its machine (the 10 §5) → resolves with audit; no detector fires in V1.0 (the manifest is empty by design — the test asserts it) |
+| 1.4 | **RSK (V1.0 = 2 rows ONLY: RSK-01 signal+case model, RSK-10 case opening)**: the signal record + the case aggregate + the case machine (the 10 §5) + manual case opening (staff/API) + the breach auto-open (D68, docs/60: the case + the dormant `payout_hold` flag on `AccountBreached`; the PAY-04 interlock waits for task 2.1) + the ADM queue reads (docs/17 §3.1). **Not V1.0** (do not build): every detector (RSK-04/05/06 and the V2 detector set — Phase 4 wave 3), the payout-hold interlock (RSK-11 + PAY-04, V1.1 — task 2.1), the SLA/claim/assignment layer (V2). V1.0 proves the case spine; the teeth arrive in Phases 2–4 | 10 §16 | BE-2 | 1 wk | 1.3 (the verdicts feed signals later), 0.7 | A staff user opens a case on a synthetic account (RSK-10) with a linked signal (RSK-01) → the case walks its machine (the 10 §5) → resolves with audit; a synthetic breach opens a case automatically with the dormant hold flag (D68); no detector fires in V1.0 (the manifest is empty by design — the test asserts it) |
 
 ### 4b — The money in/out (weeks 9–14): KYC → CHK → PAY
 
 | # | Task | Doc | Owner | Est | Depends | Exit criterion |
 |---|---|---|---|---|---|---|
 | 1.5 | **KYC (V1.0 = the 7 rows: KYC-01/02/05/06/07/08/16)**: the L1 (purchase) / L2 (payout) gates (the 13 §1) + the provider-adapter interface + the Veriff adapter (the signed provider, the 00 §7) + webhook status handling + the status machine (the 13 §5) + document handling (the R2 per-tenant, the signed URL, the 13 §3.4) + the `kyc.*` events. **Not V1.0:** the verified-identity record + manual review + uploads + country/age rules (KYC-09/11/12/13/14/36, V1.1 — tasks 2.1/3.2), re-verification triggers (KYC-21, V2) | 13 §16 | BE-2 | 3 wks | 0.5 (the envelope), 0.3 | A synthetic identity completes the Veriff sandbox flow (the L1) → the gate opens (the 12's 1.6 consumer); a payout attempt without the L2 422s (`PAY_KYC_REQUIRED`, the 11's 1.7); a document is stored on R2 (the tenant prefix) and retrieved only via the signed URL (the 5-min TTL, the 13 §3.4) |
-| 1.6 | **CHK (V1.0 = the 10 rows: CHK-01/02/04/06/07/08/09/42/43/44)**: catalog consumption + checkout session (login-first, the 00 §6) + payment-provider adapters (Match2Pay/Interkasa for PK/IN, NOWPayments, the manual wire — STRIPE rejected, the 00 §6) + hosted payment flow + payment webhooks + order creation + provisioning trigger + client-retry idempotency + session expiry job + session cancellation + the `order.paid`/`payments.intent_captured` events + the frozen price (the 12 §3.2). **Not V1.0:** the refund machine (CHK-15/35, V2 — Phase 4 wave 3), the payment state machine (CHK-20, V2) | 12 §16 | BE-2 | 4 wks | 1.5 (the KYC L1 gate), 0.8 (the LED) | A synthetic trader logs in → checks out a challenge (the frozen price, the 12 §3.2) → pays via the NOWPayments test mode → `order.paid` → the LCC's activation (the 1.1) → the LED entries balance (the 05's); a capture mismatch (the test: the amount differs) → the `CHK_CAPTURE_MISMATCH` (the 12 §6) → the manual review (the 17's 1.11 surface) |
+| 1.6 | **CHK (V1.0 = the 10 rows: CHK-01/02/04/06/07/08/09/42/43/44)**: catalog consumption + checkout session (login-first, the 00 §6) + payment-provider adapters (Match2Pay/Interkasa for PK/IN, NOWPayments, the manual wire — STRIPE rejected, the 00 §6) + hosted payment flow + payment webhooks + order creation + provisioning trigger + client-retry idempotency + session expiry job + session cancellation + the `order.paid` event (the extended `payment.intent_captured` alias — docs/12) + the frozen price (the 12 §3.2). **Not V1.0:** the refund machine (CHK-15/35, V2 — Phase 4 wave 3), the payment state machine (CHK-20, V2) | 12 §16 | BE-2 | 4 wks | 1.5 (the KYC L1 gate), 0.8 (the LED) | A synthetic trader logs in → checks out a challenge (the frozen price, the 12 §3.2) → pays via the NOWPayments test mode → `order.paid` → the LCC's activation (the 1.1) → the LED entries balance (the 05's); a capture mismatch (the test: the amount differs) → the `chk.capture_mismatch` (the 12 §6) → the manual review (the 17's 1.11 surface) |
 | 1.7 | **PAY (V1.0 = the 10 rows: PAY-01/02/03/08/09/12/13/14/21/38)**: the payout request + available-profit calc + the eligibility engine (the frozen rules, the 11 §3.1) + the approval queue + approve/reject with reason (**manual approval + staff 2FA (AUTH-09) + two-op**, the 00 §6, the 02 §3.4, the 17 §3.3) + manual execution recording + the payout state machine + ledger integration + scheduling enforcement + payout-policy config + the `payout.*` events; rails = NOWPayments crypto + manual wire (the 11 §3.4). **Not V1.0:** the eligibility snapshot freeze (PAY-27, V2), the method-change cooldown (PAY-06, V2), the reconciliation job (PAY-34, V2), batch export + address validation (PAY-44/45, V1.1 — tasks 2.1/3.2), the RSK hold wiring (PAY-04, V1.1 — task 2.1) | 11 §16 | BE-2 | 4 wks | 1.6 (the purchase), 1.1 (the account state), 0.8 (the LED) | A synthetic funded trader who hit the target requests a payout → the eligibility passes (the frozen rules) → the manual approval (the 2FA, the two-op, the 17's) → the NOWPayments test transfer → `payout.settled` → the LED (the 05's); a payout for already-paid profit 422s (the available-profit calc, PAY-02 — the property test, the 28 §11); a failed transfer → the manual ticket (the 2.5, the no-auto-retry, the 11 §3.5) |
-| 1.8 | **NOT (V1.0 = the 4 rows: NOT-01/03/05/13)**: the event consumer + the email-provider adapter (Postmark, the 14 §3.1) + the core transactional templates (the versioned, the 14 §3.2) + idempotency/dedupe (the SETNX 24-h, the 14 §3.5) + preferences (the 14 §3.2) + in-app channel + the `notification.failed_final` | 14 §16 | BE-2 | 2 wks | 0.7 (the events) | Every V1 event in the 31 catalog that has a consumer=NOT delivers the right template to the right channel (the test matrix); the dedupe blocks the double-send (the 24-h, the 14 §3.5); a Postmark failure → the retry → the `notification.failed_final` (the 14's) + the in-app fallback (the 29 §4); the preferences suppress the opted-out channel (the 14 §3.2) |
+| 1.8 | **NOT (V1.0 = the 4 rows: NOT-01/03/05/13)**: the event consumer + the email-provider adapter (Postmark, the 14 §3.1) + the core transactional templates (the versioned, the 14 §3.2) + idempotency/dedupe (the SETNX 24-h, the 14 §3.5) + the `notification.failed_final` event (preferences + the in-app channel are V2 — NOT-11/07/08; the V1 template set = 14 per D61, docs/58) | 14 §16 | BE-2 | 2 wks | 0.7 (the events) | Every V1 event in the 31 catalog that has a consumer=NOT delivers the right template to the right channel (the test matrix); the dedupe blocks the double-send (the 24-h, the 14 §3.5); a Postmark failure → the retry → the `notification.failed_final` (the 14's) + the in-app fallback (the 29 §4); the preferences suppress the opted-out channel (the 14 §3.2) |
 
 ### 4c — The surfaces (weeks 12–16): DOC → TD → ADM → CON → ANA
 
@@ -522,7 +618,7 @@ owner — updated at each gate)
 | R1 | **The MetaApi contract/capability slips** (the HIGHEST-RISK dep, the 00 §7) | 0–1 | Med | **Critical** (the whole money loop) | Signed in wk 0–1 (0.1); the Week-2 spike (the 00 §6); the `Capabilities()` recorded (the 08 §1); the fallback = the Brokeree (the 00 §6, the Week-2 decision); the poll-only design (the 08 §1) is the minimum-viable | Tech Lead + DevOps |
 | R2 | **The cutover data mismatch** (the TTS → Alpha One) | 2 | Med | **High** (the FunderBlu trust) | The anonymized dry run (the 25 §3.7); the per-row sha256 100%-or-dispositioned (the 25 §3.3); the 14-day parallel (the 25 §3.6); the 30-day rollback (the TTS read-only, the 25 §3.7); the concierge (the 25 §3.6) | BE-1 + FunderBlu |
 | R3 | **The payout fraud / the insider** (the T2/T3, the 28 §2.2) | 1+ | Low | **Critical** (the money) | The manual approval + the 2FA + the two-op (the 00 §6, the 02 §3.4, the 17 §3.3); the available-profit calc (the 11 §3.2, the property test); the method-cooldown (PAY-06, V2, the 11 §3.3); the RSK hold (RSK-11, live since 2.1, the 10 §3.2); the audit fail-closed (the 05 §3.3); the CON-13/15 review (the 21 §3.3) | BE-1 + DevOps |
-| R4 | **The cross-tenant leak** (the A5, the 28 §2.1) | 0+ | Low | **Critical** (the existential) | The structural `tenant_id` (the 01 ADR-1); the sqlc typed (the 01 §2); the 404-not-403 (the 04 §6); the `isolation.test` in CI (the 04 §11, the 28 §3.3); the CON-22 recon alert (the 21 §3.4); the monthly drill verifies (the 28 §11) | BE-1 + DevOps |
+| R4 | **The cross-tenant leak** (the A5, the 28 §2.1) | 0+ | Low | **Critical** (the existential) | The structural `tenant_id` (the 01 ADR-1); the sqlc typed (the 01 §2); the 404-not-403 (the 04 §6); the `isolation.test` in CI (the 01 ADR-1, the 28 §3.3); the CON-22 recon alert (the 21 §3.4); the monthly drill verifies (the 28 §11) | BE-1 + DevOps |
 | R5 | **The box is a single point of failure** (the A7, the 28 §2.1) | 0+ | Med | **High** (the availability) | The 06 §1's sizing (the 29 §1.2's 2×); the WAL + daily (the 06 §3.2); the monthly restore drill (the RPO/RTO, the 06 §3.2); the 2-box in V3 (the 29 §3.2); the multi-region framework (the 27 Part C.1, the RTO-trigger) | DevOps |
 | R6 | **The scope creep into V1** (the 630 V2 reqs pulling early) | 1 | High | Med (the schedule) | The phase gates (the §10); the PRD triage (the 00 §6, the 3.2); the V1 defaults held (the 00 §6); the Appendix-A train check (§1 rule 7); a V2 req in V1 = the Tech Lead's explicit decision (the 99 §1.1) | Tech Lead |
 | R7 | **The team is small (4–5) for the breadth** | all | Med | Med (the velocity) | The phase waves (the §7); the parallelization (the §9); the V2 split into 3 waves (the §7); the V3 is the ecosystem (the design-now-build-later, the docs/00); the FunderBlu concierge (the 25 §3.6) absorbs the ops load early | Tech Lead |

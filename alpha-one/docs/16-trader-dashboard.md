@@ -46,7 +46,7 @@ Requirement coverage: `TD-02,03,09,10` (V1.0) + `TD-05` (V1.1) +
    │     sees PG or long-lived secrets)
    │   · client islands: live chart (TradingView Lightweight Charts ~45KB),
    │     payout form, checkout widget, notification center
-   │   · live updates: SSE endpoint /v1/td/streams/{account} (01 §4.3):
+   │   · live updates: SSE endpoint /v1/trader/streams/{account_id} (01 §4.3, D46 group):
    │     GW-authenticated SSE, server-side relay of EVT `account.state_changed`,
    │     equity points (ANA read model), `notification.*` (V2 in-app)
    │   · fallback: the TD-11 pattern — if the stream drops, the island polls
@@ -70,15 +70,15 @@ one-time reveal.
 
 | Route | Data (GET via RSC or island) | Notes |
 |---|---|---|
-| `/` (account home) | `GET /v1/accounts` (state, phase, metrics snapshot, time left) | metrics = the EVL-49 *observed* numbers; staleness chip if tick age > 10 min |
-| `/accounts/{id}` | `GET /v1/accounts/{id}` + `GET /v1/accounts/{id}/positions|deals` (BRG read) + SSE | positions/deals paginated, 100 max page |
-| `/accounts/{id}/credentials` | `GET /v1/accounts/{id}/credentials` (masked; reveal = 2FA + audit) | one-time reveal: password shown once, then masked forever (re-issue = support reset, BRG) |
-| `/buy` | `GET /v1/payments/catalog` → checkout (CHK) → redirect → `/orders` | checkout is the only page with a redirect out |
-| `/orders` | `GET /v1/payments/orders` (own) + invoice links | |
-| `/payouts` | `GET /v1/payouts/eligibility` (TD-26) + request form + `GET /v1/payouts` | eligibility re-fetched on open (server-side) — never trust the cached preview |
-| `/payouts/methods` | PAY methods CRUD (11 §7) | |
+| `/` (account home) | `GET /v1/trader/accounts` (state, phase, metrics snapshot, time left) | metrics = the EVL-49 *observed* numbers; staleness chip if tick age > 10 min |
+| `/accounts/{id}` | `GET /v1/trader/accounts/{id}` + `GET /v1/trader/accounts/{id}/positions|deals` (BRG read) + SSE | positions/deals paginated, 100 max page |
+| `/accounts/{id}/credentials` | `GET /v1/trader/accounts/{id}/credentials` (masked; reveal = 2FA + audit) | one-time reveal: password shown once, then masked forever (re-issue = support reset, BRG) |
+| `/buy` | `GET /v1/trader/catalog` (12 §7) → checkout (CHK) → redirect → `/orders` | checkout is the only page with a redirect out |
+| `/orders` | `GET /v1/trader/orders` (own, 12 §7) + invoice links | |
+| `/payouts` | `GET /v1/trader/payouts/eligibility` (TD-26) + request form + `GET /v1/trader/payouts` (11 §7) | eligibility re-fetched on open (server-side) — never trust the cached preview |
+| `/payouts/methods` | `/v1/trader/payouts/methods` (11 §7; PAY-05, V1.1 — V1 sets the method on the request) | |
 | `/kyc` | KYC status + session embed + uploads (13 §7) | Veriff iframe embed (same-origin wrapper) |
-| `/documents` | `GET /v1/documents` + signed URLs (15 §7) | |
+| `/documents` | `GET /v1/trader/documents` + signed URLs (15 §7) | |
 | `/notifications` | in-app center (V2; V1: "email only" stub + history stub) | |
 | `/profile` | AUTH profile/2FA endpoints + email change (sensitive) | |
 
@@ -107,9 +107,10 @@ question ("why is my account still opening?") answered by the UI, not a ticket.
 
 ### 3.4 Error & empty states
 
-The GW error contract (04 §3.4: `{error:{code,message,details}}`) maps 1:1 to
-UI treatments: `*_REQUIRED`/`*_WINDOW`/`*_BELOW_MIN` → inline forms with the
-`details` (next eligible time, missing docs); `*_CONFLICT`/`*_EXISTS` →
+The GW error contract (GW-18: `{code, message, correlation_id}` — the binding
+envelope; `details` objects are the V2 extension) maps 1:1 to UI treatments:
+module codes → inline forms and next-step links, the next-step data carried in
+the user-safe `message` (V2 adds `details`: next eligible time, missing docs); `*_CONFLICT`/`*_EXISTS` →
 toast + link to the existing object; `503`-class (rail unavailable) → "try
 another method" with the alternatives from the response. **No code in the
 error text:** the UI shows the `message` (already user-safe) and uses `code`
@@ -135,7 +136,9 @@ confirmation text). Every one of these emits audit (critical tier, AUD).
 | `checkout.order_state` | `/buy` completion screen (polling fallback) |
 
 TD **produces no domain events** — every trader action is an API call; the
-domain emits. (A `trader.ui_action` event for ANA is V2, not V1.)
+domain emits. (A `trader.ui_action` event for ANA is V2, not V1.) `equity.point` and
+`checkout.order_state` are catalogued UI stream/poll shapes (ext) — they are
+not bus events; the live frames ride the TD SSE stream.
 
 ## 5. Lifecycles
 
@@ -159,7 +162,7 @@ Client-side taxonomy (for FE error-boundary + Sentry grouping):
 | `auth.expired` | 401 on any call | full-screen re-login (state preserved via query) |
 | `tenant.not_found` | 404 tenant | "site not found" (04: 404-not-403 posture) |
 | `rate.limited` | 429 + Retry-After | inline "slow down, try in {n}s" |
-| `gw.internal` | 5xx | error boundary: retry button + ticket pre-fill + Sentry id shown |
+| `gw.internal` | 500 | error boundary: retry button + ticket pre-fill + Sentry id shown (D50: also the generic API boundary code — HTTP 500, docs/55 §4.12) |
 | `stream.lost` | SSE 3 reconnect fails | polling fallback + amber chip (not an error screen) |
 | `render.stale` | data age > 10 min on live views | amber "data from {time}" banner (honesty over polish) |
 | `PARTIAL` | island fetch failed but page rendered | per-card skeleton + retry, never a broken page |
@@ -171,13 +174,13 @@ Client-side taxonomy (for FE error-boundary + Sentry grouping):
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54 — the trader group). Shown for platform completeness (V2/V3 phases, docs/99).
 
-TD consumes (all via GW, session-authed): AUTH (02), LCC `GET /v1/accounts…`,
-BRG read `GET /v1/accounts/{id}/positions|deals|history` (08 §7), PAY (11 §7
+TD consumes (all via GW, session-authed): AUTH (02), LCC `GET /v1/trader/accounts…`,
+BRG read `GET /v1/trader/accounts/{id}/positions|deals|history` (08 §7), PAY (11 §7
 trader surface), CHK (12 §7 trader surface), KYC (13 §7 trader surface),
-DOC (15 §7 trader surface), NOT (14 §7), `GET /v1/td/streams/{account_id}`
-(SSE — GW route, server-side relay), `GET /v1/td/health` (for the UI's
+DOC (15 §7 trader surface), NOT (14 §7), `GET /v1/trader/streams/{account_id}`
+(SSE — GW route, server-side relay), `GET /v1/trader/status` (for the UI's
 "platform status" chip, reads the ops status object, OPS).
 
 TD exposes **no endpoints** (it's a client).
@@ -214,9 +217,10 @@ not leak equity history).
   support canned text — sanitized at render (React escaping default; no
   `dangerouslySetInnerHTML` without an explicit sanitize pass — lint rule
   enforced in CI).
-- **CSRF:** same-origin cookie auth + `SameSite=Lax` + the GW's CSRF
-  posture for state-changing routes (04); the checkout redirect is the one
-  exception and is GET-idempotent by design.
+- **CSRF:** same-origin cookie auth (the D64 browser transport, docs/59) +
+  `SameSite=Lax` + the **origin check on cookie-authenticated state changes**
+  in the GW chain (docs/28 T8's defense — written into the chain by D64); the
+  checkout redirect is the one exception and is GET-idempotent by design.
 - **Credentials reveal:** 2FA + critical audit + one-time semantics (07/08
   own the reset); the reveal response is never cached (no-store headers on
   that route) and the island never writes it to storage.

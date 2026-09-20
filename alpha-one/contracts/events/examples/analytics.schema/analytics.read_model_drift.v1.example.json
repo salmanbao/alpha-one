@@ -1,9 +1,10 @@
 {
-  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `analytics.read_model_drift` \u2014 envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/analytics.schema.json ($defs/analytics_read_model_drift). Per-event payload. Producer: 19 (ANA). When: reconciliation mismatch. Consumers: CON (CRITICAL), ADM, AUD. Canonical fields: the producer module doc's \u00a74/\u00a78 (docs/31).",
+  "_note": "ILLUSTRATIVE example for the extended (post-V1) event `analytics.read_model_drift` — envelope per EVT-03; payload fields are provisional until that phase's freeze. Canonical schema: contracts/events/extended/analytics.schema.json ($defs/analytics_read_model_drift). Per-event payload. Producer: 19 (ANA). When: reconciliation mismatch. Consumers: CON (CRITICAL), ADM, AUD. Canonical fields: the producer module doc's §4/§8 (docs/31).",
   "id": "TB826T4FG3CG12TKRHXEAYG4GV",
   "type": "analytics.read_model_drift",
   "version": 1,
   "tenant_id": "VKJBND2X10H56PQS4DKHMADYTG",
   "occurred_at": 1758278400000,
+  "correlation_id": "01J9ZACC0RRT0000000000XKR2",
   "payload": {}
 }
