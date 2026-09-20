@@ -41,7 +41,7 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (313 codes — 73 V1 baseline, 240 extended — across 25 modules)
+## 2. The registry (314 codes — 73 V1 baseline, 241 extended — across 25 modules)
 
 ### 02 — AUTH
 
@@ -209,13 +209,14 @@
 |---|---|---|---|
 | `risk.account_not_found` | 404 | Case target account unknown — "Account not found." | V1 |
 | `risk.case_already_open` | 409 | Second open case on same account — "A review case is already open." | V1 |
-| `rsk.case_not_found` | 404 | — | ext |
-| `rsk.case_closed` | 409 | Action on decided case (use appeal, V2) | ext |
-| `rsk.signal_required` | 422 | Open case without signal/reason | ext |
-| `rsk.decision_conflict` | 409 | Concurrent decision (optimistic lock) | ext |
-| `rsk.hold_not_active` | 409 | Release without hold | ext |
-| `rsk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed | ext |
-| `rsk.detector_disabled` | 422 | (V2) Trigger detector that's disabled | ext |
+| `risk.case_not_found` | 404 | Case unknown | ext |
+| `risk.case_closed` | 409 | Action on decided case (use appeal, V2) | ext |
+| `risk.signal_required` | 422 | Open case without signal/reason | ext |
+| `risk.decision_conflict` | 409 | Concurrent decision (optimistic lock) | ext |
+| `risk.case_claimed` | 409 | Another staff claimed the case (V2 claim race, §3.5) | ext |
+| `risk.hold_not_active` | 409 | Release without hold | ext |
+| `risk.allowlist_invalid` | 422 | (V2) Allowlist entry malformed | ext |
+| `risk.detector_disabled` | 422 | (V2) Trigger detector that's disabled | ext |
 
 ### 11 — PAY
 

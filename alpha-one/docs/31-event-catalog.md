@@ -117,7 +117,7 @@
 | `AccountCreated` | 07 (LCC) | LCC-23 | NOT-01 (template: account created), ANA-01 | V1 |
 | `PhaseAdvanced` | 07 (LCC) | LCC-23 | ANA-01 | V1 |
 | `AccountPassed` | 07 (LCC) | LCC-23 | NOT-01 (template: phase passed), DOC-04 (certificate), ANA-01 | V1 |
-| `AccountBreached` | 07 (LCC) | LCC-23 | NOT-01 (template: breach), ANA-01 | V1 |
+| `AccountBreached` | 07 (LCC) | LCC-23 | NOT-01 (template: breach), ANA-01, RSK (breach case auto-open — D68: V1.0, hold flag dormant until V1.1, docs/60) | V1 |
 | `AccountFailed` | 07 (LCC) | LCC-23 | NOT-01 (template: phase failed), ANA-01 | V1 |
 | `FundedCreated` | 07 (LCC) | LCC-23 | DOC-04 (certificate), ANA-01 | V1 |
 | `Suspended` | 07 (LCC) | LCC-23 | PAY-04 (payout hold while open), ANA-01 | V1 |
@@ -168,8 +168,8 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `risk.case_opened` | 10 (RSK) | manual open (RSK-10) / after breach (V1 kind=breach) | ADM (queue), AUD | V1 |
-| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep), LCC (if action), AUD | V1 |
+| `risk.case_opened` | 10 (RSK) | manual open (RSK-10) / breach auto-open on AccountBreached (D68) | ADM (queue), AUD, ANA (risk_summary daily counts) | V1 |
+| `risk.case_decided` | 10 (RSK) | decision | PAY (hold release/keep — the interlock from V1.1), LCC (if action), AUD (sensitive — docs/05 §14), ANA (risk_summary daily counts) | V1 |
 | `risk.signal_created` | 10 (RSK) | any signal | ANA (V2), AUD (standard) | ext |
 | `risk.case_escalated` | 10 (RSK) | SLA breach | NOT (owner + CON), AUD | ext |
 | `risk.case_appealed` | 10 (RSK) | trader appeal | ADM, AUD | ext |

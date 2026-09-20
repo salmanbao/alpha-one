@@ -123,8 +123,8 @@ def _doc_group(name: str) -> str:
         return "Cross-cutting (28–35)"
     if n <= 40:
         return "PRD registers (36–40)"
-    if n <= 59:
-        return "Design decisions (41–59)"
+    if n <= 60:
+        return "Design decisions (41–60)"
     return "Development plan"
 
 

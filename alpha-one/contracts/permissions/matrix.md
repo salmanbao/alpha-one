@@ -42,6 +42,8 @@ realm only); `·` = denied. A digit cites the constraint in §2. Tenant roles ca
 | `platform.session.revoke` | platform | · | · | · | · | · | · | · | · | · | · | P | P |
 | `platform.tenant.provision` | platform | · | · | · | · | · | · | · | · | · | · | · | P |
 | `risk.case.create` | all | · | · | · | · | A | A | A | · | · | · | · | · |
+| `risk.case.decide` | all | · | · | · | · | A6 | A6 | A6 | · | · | · | · | · |
+| `risk.case.read` | all | · | · | · | · | A | A | A | · | · | · | · | · |
 | `ruleset.write` | all | · | · | · | · | · | A | A | · | · | · | · | · |
 | `tenant.create` | platform | · | · | · | · | · | · | · | · | · | · | · | P |
 | `tenant.entitlement.change` | platform | · | · | · | · | · | · | · | · | · | · | · | P |
@@ -85,6 +87,8 @@ Role columns: `user:trader` = `trader`; `firm:support` = `sup`; `firm:finance` =
 | `platform.session.revoke` | AUTH | platform | `ops`, `sadmin` | — |
 | `platform.tenant.provision` | TEN | platform | `sadmin` | — |
 | `risk.case.create` | RSK | all | `risk`, `admin`, `owner` | — |
+| `risk.case.decide` | RSK | all | `risk`, `admin`, `owner` | (6) step-up: mfa_verified_at within 5 min (docs/02 §3.1; D70 — nineteenth pass, docs/60) |
+| `risk.case.read` | RSK | all | `risk`, `admin`, `owner` | — |
 | `ruleset.write` | EVL | all | `admin`, `owner` | — |
 | `tenant.create` | TEN | platform | `sadmin` | — |
 | `tenant.entitlement.change` | TEN | platform | `sadmin` | — |
@@ -173,7 +177,7 @@ Module + description are the registry's; a key with no binding is denied for eve
 
 ## 4. Bound V1 keys with no V1 route (reserved — first surface named in docs/46 §4.4)
 
-`kyc.document.read`, `payout.method.read`, `payout.method.review`, `platform.identity.admin`, `platform.session.revoke`, `platform.tenant.provision`
+`kyc.document.read`, `payout.method.read`, `payout.method.review`, `platform.identity.admin`, `platform.session.revoke`, `platform.tenant.provision`, `risk.case.decide`, `risk.case.read`
 
 These bindings are ratified now and enforced from the moment their route ships; until then
 they are exercised by runbooks and internal surfaces only. docs/46 §4.4 names each key's

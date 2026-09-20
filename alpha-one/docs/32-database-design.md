@@ -775,8 +775,8 @@ CREATE TABLE risk_cases (
   status        TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','decided','reopened','closed')),
   severity      TEXT NOT NULL,
   trader_id     ULID NOT NULL,
-  account_ids   ULID[],
-  payout_hold   BOOLEAN NOT NULL DEFAULT false,
+  account_ids   ULID[],                     -- one open case per account (D71): transactional check under a per-trader advisory lock (§3.2)
+  payout_hold   BOOLEAN NOT NULL DEFAULT false,  -- dormant in V1.0; the PAY-04 interlock reads it from V1.1 (D68)
   hold_until    TIMESTAMPTZ,                -- RSK-31 (V2 expiry)
   decision_note TEXT,
   actions       JSONB NOT NULL DEFAULT '[]',

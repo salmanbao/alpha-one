@@ -713,6 +713,46 @@
       "owner": "FE-1, BE-1",
       "deadline": "Phase 1 (surfaces build)",
       "answer": "**Answered 2026-09-20 \u2014 option A:** the staff admin lives on the tenant host under /admin; the platform console keeps its own subdomain (docs/21). docs/17 \u00a72 corrected."
+    },
+    {
+      "id": "D68",
+      "source_doc": "60",
+      "section": "RSK — deep review",
+      "question": "AUTO-OPEN BOUNDARY: docs/10's diagram and \u00a73.2 put the breach auto-open in V1 (docs/07's FUNDED breach row and docs/17's queue row agree), but \u00a73.2 also claimed the payout hold as 'the only V1 side effect' while the coverage line and docs/99 tasks 1.4/2.1 put the interlock (RSK-11 + PAY-04) in V1.1. Options \u2014 A: the breach auto-open is V1.0 (case + the dormant payout_hold flag, idempotent per breach verdict id); the PAY-04 interlock wires in V1.1 (task 2.1) \u2014 the queue is warm on day one, the sheet's RSK-11 = V1.1 line stands; B: auto-open and hold both defer to V1.1 (strict task-1.4 reading; the queue launches empty of breach cases). See docs/60 \u00a73 F1.",
+      "raised_by": "Nineteenth-pass review (docs/60 F1)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (task 1.4)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** the breach auto-open is V1.0 with the dormant hold flag; the PAY-04 interlock bites from V1.1. docs/07's V1 AccountBreached consumer row, docs/17's queue row and docs/99 task 1.4 aligned."
+    },
+    {
+      "id": "D69",
+      "source_doc": "60",
+      "section": "RSK — deep review",
+      "question": "ERROR NAMESPACE: the two V1 codes say risk.* (risk.account_not_found, risk.case_already_open) but all seven extended codes said rsk.* \u2014 while the event topic and the permission keys say risk. Options \u2014 A: unify on risk.* (the registered baseline + topic + keys win; 7 ext rows renamed); B: unify on rsk.* (matches the module token like evl.*/pay.*, but renames registered V1 baseline codes). See docs/60 \u00a73 F2.",
+      "raised_by": "Nineteenth-pass review (docs/60 F2)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (task 1.4)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** risk.* everywhere; the extended rows renamed (risk.case_claimed added from \u00a73.5); docs/30 regenerated."
+    },
+    {
+      "id": "D70",
+      "source_doc": "60",
+      "section": "RSK — deep review",
+      "question": "DECIDE STEP-UP: \u00a710's sentence ('decisions require 2FA when they release a hold or keep it past 72 h (V2 SLA)') never settles the V1 rule, while the same queue family is strict (payout approve/reject always-2FA; KYC decide 2FA). Options \u2014 A: case decisions require the 2FA step-up always, from V1.0 (the D38 authz.step_up_required chain; no tier-conditional auth); B: no step-up in V1.0 (a decision is record-keeping until the hold bites), switch on with the V1.1 interlock. See docs/60 \u00a73 F3.",
+      "raised_by": "Nineteenth-pass review (docs/60 F3)",
+      "owner": "BE-2, BE-1",
+      "deadline": "Phase 1 (task 1.4)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** always-step-up from V1.0; risk.case.decide registered with the abac step-up clause (roles.yaml)."
+    },
+    {
+      "id": "D71",
+      "source_doc": "60",
+      "section": "RSK — deep review",
+      "question": "ONE-OPEN-CASE RULE: risk.case_already_open ('second open case on same account') is a registered V1 409, but the contract flagged 'rule not in sheet' and nothing enforces it (cases key on trader with an account_ids array \u2014 no plain unique index). Options \u2014 A: per-account, app-enforced (transactional check under a per-trader advisory lock \u2014 keeps the registered meaning); B: one open case per trader (a partial unique index \u2014 simpler, but rewrites the registered code's meaning and re-keys the queue); C: no uniqueness rule in V1.0 (the 409 stays registered but never fires). See docs/60 \u00a73 F4.",
+      "raised_by": "Nineteenth-pass review (docs/60 F4)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (task 1.4)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** one open case per account, transactional check under a per-trader advisory lock; documented in \u00a73.2, \u00a79/DDL and the contract."
     }
   ]
 }

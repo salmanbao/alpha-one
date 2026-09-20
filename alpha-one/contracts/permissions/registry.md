@@ -46,6 +46,8 @@ and `kyc.document.read`) — plus 10 provisional keys and the reserved post-V1 k
 | `kyc.restrictions.write` | KYC | Maintain the restricted country list. (KYC-13) |
 | `document.read` | DOC | View and download own certificates. (DOC-06) — trader self-action |
 | `risk.case.create` | RSK | Open a risk case manually. (RSK-10) |
+| `risk.case.read` | RSK | View the risk queue: cases, signal summaries, hold state. (docs/17 §3.1, the V1-era thin view — nineteenth pass, docs/60) |
+| `risk.case.decide` | RSK | Decide a risk case (outcome + note); **2FA step-up always** (D70). (RSK-01 case machine) |
 | `payout.method.review` | PAY | View **another trader's** payout methods for approval; access is audited (AUD-23). (PAY-08/PAY-09) — added 2026-09-19 (D14) |
 | `kyc.document.read` | KYC | View/download a trader's KYC documents; access is audited (AUD-23). (KYC-11) — added 2026-09-19 (D14) |
 | `audit.read` | AUD | View and search audit logs; every view/search itself recorded. (AUD-21) — key name ratified 2026-09-19 (D14) |

@@ -110,6 +110,8 @@
     "kyc.restrictions.write": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
     "document.read": { "scope": "own", "roles": ["user:trader"] },
     "risk.case.create": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "risk.case.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },
+    "risk.case.decide": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"], "abac": "step-up: mfa_verified_at within 5 min (docs/02 §3.1; D70 — nineteenth pass, docs/60)" },
     "audit.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
     "audit.export": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:compliance"] },
     "analytics.read": { "scope": "all", "roles": ["firm:owner", "firm:admin", "firm:risk"] },

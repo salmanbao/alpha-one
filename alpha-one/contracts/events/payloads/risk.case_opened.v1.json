@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "risk.case_opened.v1.json",
   "title": "Alpha One \u2014 event risk.case_opened v1",
-  "description": "V1 catalog event `risk.case_opened` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ADM (queue), AUD. Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
+  "description": "V1 catalog event `risk.case_opened` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = ADM (queue), AUD, ANA (risk_summary daily counts). Payload field values are INFERRED from consumer requirements; the sheet fixes only the envelope (EVT-03) \u2014 field confirmation is an open owner decision (catalog.md).",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -24,8 +24,14 @@
             "tenant_id": {
               "$ref": "envelope.schema.json#/$defs/ULID"
             },
-            "account_id": {
+            "trader_id": {
               "$ref": "envelope.schema.json#/$defs/ULID"
+            },
+            "account_ids": {
+              "type": "array",
+              "items": {
+                "$ref": "envelope.schema.json#/$defs/ULID"
+              }
             },
             "kind": {
               "type": "string",
@@ -37,17 +43,18 @@
             "severity": {
               "type": "string",
               "enum": [
+                "info",
                 "low",
                 "medium",
                 "high",
                 "critical"
               ]
             },
+            "payout_hold": {
+              "type": "boolean"
+            },
             "opened_by": {
               "$ref": "envelope.schema.json#/$defs/ULID"
-            },
-            "summary": {
-              "type": "string"
             },
             "opened_at": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
@@ -57,9 +64,11 @@
           "required": [
             "case_id",
             "tenant_id",
-            "account_id",
+            "trader_id",
+            "account_ids",
             "kind",
             "severity",
+            "payout_hold",
             "opened_at"
           ]
         }

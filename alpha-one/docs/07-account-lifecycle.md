@@ -196,7 +196,7 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 | `AccountCreated` | LCC-23 | NOT-01 (template: account created), ANA-01 |
 | `PhaseAdvanced` | LCC-23 | ANA-01 |
 | `AccountPassed` | LCC-23 | NOT-01 (template: phase passed), DOC-04 (certificate), ANA-01 |
-| `AccountBreached` | LCC-23 | NOT-01 (template: breach), ANA-01 |
+| `AccountBreached` | LCC-23 | NOT-01 (template: breach), ANA-01, RSK (breach case auto-open — D68: V1.0, hold flag dormant until V1.1, docs/60) |
 | `AccountFailed` | LCC-23 | NOT-01 (template: phase failed), ANA-01 |
 | `FundedCreated` | LCC-23 | DOC-04 (certificate), ANA-01 |
 | `Suspended` | LCC-23 | PAY-04 (payout hold while open), ANA-01 |

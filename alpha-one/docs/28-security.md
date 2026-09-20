@@ -131,7 +131,8 @@ annual pentest scope, §11)
    + the 2FA-on-approve (the 11 §3.5, the 02 §3.4's MFA <
    5 min) + the two-op (the 17 §3.3's V1) + the AUD
    critical (the 05 §3.3) + the RSK hold (the 10 §3.2's
-   sole V1 action, the payout hold) + the method-change
+   sole V1-era action, the payout hold — the flag set in V1.0, the PAY-04
+   interlock biting from V1.1 — D68, docs/60) + the method-change
    cooldown (the 11 §3.3).
 3. **The KYC document exfil** (T2): the staff bulk-
    exports the KYC documents — the defense: the export

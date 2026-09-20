@@ -235,21 +235,24 @@ EVENTS = {
     }, ["payout_id", "account_id", "amount", "provider", "reference", "executed_at"]),
   },
   "risk.case_opened": {
-    "consumers": ["ADM (queue)", "AUD"],
+    "consumers": ["ADM (queue)", "AUD", "ANA (risk_summary daily counts)"],
     "payload": obj({
-      "case_id": ULID, "tenant_id": ULID, "account_id": ULID,
+      "case_id": ULID, "tenant_id": ULID, "trader_id": ULID,
+      "account_ids": {"type": "array", "items": ULID},
       "kind": {"type": "string", "enum": ["manual", "breach"]},
-      "severity": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
-      "opened_by": ULID, "summary": {"type": "string"}, "opened_at": TS,
-    }, ["case_id", "tenant_id", "account_id", "kind", "severity", "opened_at"]),
+      "severity": {"type": "string", "enum": ["info", "low", "medium", "high", "critical"]},
+      "payout_hold": {"type": "boolean"},
+      "opened_by": ULID, "opened_at": TS,
+    }, ["case_id", "tenant_id", "trader_id", "account_ids", "kind", "severity", "payout_hold", "opened_at"]),
   },
   "risk.case_decided": {
-    "consumers": ["PAY (hold release/keep)", "LCC (if action)", "AUD"],
+    "consumers": ["PAY (hold release/keep — the interlock from V1.1)", "LCC (if action)", "AUD (sensitive)", "ANA (risk_summary daily counts)"],
     "payload": obj({
-      "case_id": ULID, "tenant_id": ULID, "account_id": ULID,
-      "outcome": {"type": "string"},
-      "decided_by": ULID, "note": {"type": "string"}, "decided_at": TS,
-    }, ["case_id", "tenant_id", "account_id", "outcome", "decided_by", "decided_at"]),
+      "case_id": ULID, "tenant_id": ULID, "trader_id": ULID,
+      "outcome": {"type": "string", "enum": ["confirmed", "dismissed", "escalated_platform"]},
+      "actions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+      "decided_by": ULID, "decision_note": {"type": "string"}, "decided_at": TS,
+    }, ["case_id", "tenant_id", "outcome", "decided_by", "decided_at"]),
   },
 }
 
