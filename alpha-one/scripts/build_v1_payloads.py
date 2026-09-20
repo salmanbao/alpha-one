@@ -226,8 +226,8 @@ EVENTS = {
       "rejected_by": ULID, "reason": {"type": "string"}, "rejected_at": TS,
     }, ["payout_id", "account_id", "amount", "rejected_by", "reason", "rejected_at"]),
   },
-  "PayoutPaid": {
-    "consumers": ["LED-08 (settlement posting)", "DOC-04 (certificate)", "ANA-01"],
+  "payout.settled": {
+    "consumers": ["LED-08 (settlement posting)", "DOC-04 (receipt)", "ANA-01"],
     "payload": obj({
       "payout_id": ULID, "account_id": ULID, "amount": MONEY,
       "provider": {"type": "string"}, "reference": {"type": "string"},

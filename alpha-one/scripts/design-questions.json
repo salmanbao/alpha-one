@@ -633,6 +633,46 @@
       "owner": "DevOps",
       "deadline": "Phase 0 (blueprint step 6)",
       "answer": "**Answered 2026-09-20 \u2014 option A:** weekly automated restore verification + the monthly full human drill. The drill keeps the full integrity suite; the weekly check catches breakage within 7 days."
+    },
+    {
+      "id": "D60",
+      "source_doc": "58",
+      "section": "NOT + DOC — deep review",
+      "question": "The settlement event is registered as PayoutPaid (Decision 6, 2026-09-16; docs/48 F3 fixed the ledger doc to it and called payout.settled nonexistent), but ten-plus docs across the repo (including docs/11 diagram text, docs/14, docs/15, docs/19-24, docs/99 1.7) say payout.settled — a name in no catalog. Options \u2014 A: register payout.settled as the V1 name (rename the catalog row + docs/05/11/48/52 citations; the ten-plus drift docs become correct); B: keep PayoutPaid and rename across the drift docs. See docs/58 \u00a73 F1.",
+      "raised_by": "Seventeenth-pass review (docs/58 F1)",
+      "owner": "BE-2, Tech Lead",
+      "deadline": "Contract freeze",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** the settlement event is `payout.settled` (V1). docs/11 \u00a74.1, docs/05, the payload schema, and the review citations renamed; the dotted name matches the payout.* family."
+    },
+    {
+      "id": "D61",
+      "source_doc": "58",
+      "section": "NOT + DOC — deep review",
+      "question": "The NOT contract (10 templates) and docs/14 \u00a73.4 (~23 templates) are two unreconciled lists, and several templates in BOTH have no V1 event trigger (payout requested \u2014 D37 removed it; refund \u2014 V2; risk cases \u2014 no V1 risk events; certificate email \u2014 DOC-07 is V2). Options \u2014 A: one merged catalog-anchored set \u2014 11 trader + 3 staff templates, every one mapped to a registered V1 event, everything else a named V2 reserve; B: the contract's 10 only; C: docs/14's full list with dead templates flagged. See docs/58 \u00a73 F2.",
+      "raised_by": "Seventeenth-pass review (docs/58 F2)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (NOT build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** the V1 set is 14 templates (11 trader + 3 staff), each mapped to a registered V1 event; the reserves list names every V2 trigger. docs/14 \u00a73.4 + api/not.md rewritten to the one set."
+    },
+    {
+      "id": "D62",
+      "source_doc": "58",
+      "section": "NOT + DOC — deep review",
+      "question": "The contract's oldest TODO: what emits the KYC invite email in V1? The catalog has kyc.session_started as an internal (ext) event with no email consumer, and the session opens inside the purchase flow the trader is already in. Options \u2014 A: no invite email in V1 (template dropped; event stays ext); B: promote kyc.session_started to V1 and send the invite. See docs/58 \u00a73 F3.",
+      "raised_by": "Seventeenth-pass review (docs/58 F3 \u2014 stale contract TODO)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (NOT build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** no V1 KYC invite email; the invite template is a V2 reserve."
+    },
+    {
+      "id": "D63",
+      "source_doc": "58",
+      "section": "NOT + DOC — deep review",
+      "question": "The catalog flags kyc.expired's email trigger as an open question: does expiry notify the trader? Options \u2014 A: silent in V1 (portal status + the payout gate's kyc.required error are the signals); B: an expiry email (needs-docs variant). See docs/58 \u00a73 F4.",
+      "raised_by": "Seventeenth-pass review (docs/58 F4 \u2014 catalog open question)",
+      "owner": "BE-2",
+      "deadline": "Phase 1 (NOT build)",
+      "answer": "**Answered 2026-09-20 \u2014 option A:** silent in V1; an expiry email is a V2 reserve."
     }
   ]
 }

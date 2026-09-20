@@ -254,7 +254,7 @@ A(f"## 2. The catalog ({n_ev} events — {n_v1ev} V1 baseline, "
   f"{n_ev - n_v1ev} extended — across {len(topics)} topics)")
 A("")
 for t, rows in topics.items():
-    A(f"### `{t}.*`" if t != "(v1-pascal)" else "### V1 PascalCase events (LCC-23, PayoutPaid)")
+    A(f"### `{t}.*`" if t != "(v1-pascal)" else "### V1 PascalCase events (LCC-23)")
     A("")
     A("| Event | Producer | When / V1 producer | Consumers | Tier |")
     A("|---|---|---|---|---|")

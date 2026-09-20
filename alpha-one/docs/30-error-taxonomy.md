@@ -304,7 +304,7 @@
 |---|---|---|---|
 | `not.template_not_found` | 500 | Mapping references missing template (deploy error — CRITICAL alert) | ext |
 | `not.vars_invalid` | 500 | vars_selector produced empty/PII-guarded vars (alert + skip, never send half-rendered) | ext |
-| `not.recipoent_unknown` | 500 | No email/identity (alert — usually a data bug) | ext |
+| `not.recipient_unknown` | 500 | No email/identity (alert — usually a data bug) | ext |
 | `not.provider_unavailable` | 503 | Postmark down (retry queue drains on recovery; critical templates page ops) | ext |
 | `not.rate_limited` | 429 | (V2) Per-recipient/template cap hit (batched into digest) | ext |
 | `not.suppressed` | — | Info state (not an error) | ext |
@@ -316,7 +316,7 @@
 | Code | HTTP | Meaning (from doc 15 §6) | Tier |
 |---|---|---|---|
 | `document.not_found` | 404 | Document unknown or not owned — "Document not found." | V1 |
-| `doc.not_found` | 404 | Document id unknown | ext |
+| `doc.not_found` | — | (folded — the V1 baseline code is `document.not_found` **404**, DOC-06; this extended variant predates the fold) | ext |
 | `doc.pending` | 409 | URL requested before generation finished (TD shows "preparing…") | ext |
 | `doc.state_missing` | 500 | Mapper found no source state (data bug — CRITICAL alert) | ext |
 | `doc.render_failed` | 500 | Template/Puppeteer failure (retry; 3× → DLQ) | ext |

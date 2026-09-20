@@ -134,7 +134,7 @@ CREATE CONSTRAINT TRIGGER trg_lines_balance AFTER INSERT OR UPDATE OR DELETE ON 
 |---|---|---|
 | Order paid (`order.paid`) | `tenant:challenge_receivable` → `tenant:challenge_revenue` (gross) + provider fee: `tenant:challenge_revenue` → `tenant:provider_fee_expense` (fee) + `tenant:cash` stays (net effect: cash up by net) | LED-04 |
 | Payout requested & approved (`payout.approved`) | `tenant:cash` → `tenant:payout_liability` | LED-07 |
-| Payout settled (`PayoutPaid` — the V1 catalog name, Decision 6) | `tenant:payout_liability` → `tenant:payout_paid` + fee line | LED-08 |
+| Payout settled (`payout.settled` — the V1 catalog name; renamed from `PayoutPaid` by D60, docs/58) | `tenant:payout_liability` → `tenant:payout_paid` + fee line | LED-08 |
 | Payout failed (`payout.failed`, V2 rail failure — the V1 failed-return is posted by the applier from the payout row) | `tenant:payout_liability` → `tenant:cash` (return) | LED-07 (V2 formal) |
 | Refund (`payment.refund_requested` → settled reversal, V2) | `tenant:challenge_revenue` → `tenant:refund_payable` → `tenant:cash` | LED-05 |
 
@@ -153,7 +153,7 @@ ADM finance queue.
 ### 4.1 V1 baseline — LED/AUD produce **no domain events**
 
 The V1 appliers are **consumers**: the `ledger-applier` worker consumes
-`order.paid`, `payout.approved` and `PayoutPaid` (the V1 catalog names) and
+`order.paid`, `payout.approved` and `payout.settled` (the V1 catalog names — D60) and
 posts the §3.3 entries inside its own transaction; the `audit-applier` mirrors
 catalog events into `audit_events` (tier per the catalog). Emitting no events in
 V1 is deliberate — the journal itself is the record, and the audit mirror is
@@ -426,7 +426,7 @@ emails via NOT); Sentry (integrity alerts); Comp AI/Openlane (V2 evidence).
 | Module | How |
 |---|---|
 | **CHK** | consumes `checkout.order_paid/refunded` → posts LED-04/LED-05 entries (worker `ledger-applier`) |
-| **PAY** | `payout.approved` → LED-07 and `PayoutPaid` → LED-08 (the V1 applier consumes the catalog names); **V1 eligibility does not read the ledger** — it computes `available = gross − settled_paid` from payout history (docs/11 §3); the V2 `balances` table (LED-10) becomes the fast path then |
+| **PAY** | `payout.approved` → LED-07 and `payout.settled` → LED-08 (the V1 applier consumes the catalog names — D60); **V1 eligibility does not read the ledger** — it computes `available = gross − settled_paid` from payout history (docs/11 §3); the V2 `balances` table (LED-10) becomes the fast path then |
 | **AUD consumers** | every domain event in the catalog mirrors to `audit_events` (the **audit-applier**): **actor** from the payload's `*_by` field (`approved_by`/`executed_by`), else the producing service as `actor_kind='system'`, `actor=<producer>` (ninth pass, docs/49 C1 — the envelope's `correlation_id` fills `audit_events.correlation_id`); **tier by rule** (ninth pass, docs/49 C2 — "decided by the catalog" was never a mapping): `critical` = suspensions/terminations/reversals/audit-tamper classes, `sensitive` = every money-adjacent event (`payout.*`, `order.*`, `payment.*`) and KYC events, `standard` = the rest — this is the AUD-02 "mandatory coverage" mechanism (V2 formalizes the lint). **Exception (tenth pass, docs/50 D28):** observed high-frequency events — `bridge.tick` — do NOT mirror (their append-only `events` row *is* the record, EVL-49); evaluated/decision events mirror as usual (`evaluation.verdict` breach rows are critical — termination-class; `evaluation.daily_reset`, `account.day_rolled`, `account.activated` are standard) |
 | **GW** | sensitive-route audit flag triggers direct `audit.Write` (sensitive reads that aren't events) |
 | **CON** | platform finance views, legal holds (V2), integrity dashboards |

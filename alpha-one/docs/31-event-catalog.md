@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (160 events — 37 V1 baseline, 123 extended — across 33 topics)
+## 2. The catalog (160 events — 40 V1 baseline, 120 extended — across 33 topics)
 
 ### `user.*`
 
@@ -110,7 +110,7 @@
 | `ops.restore_drill_completed` | 06 (OPS) | monthly restore drill (OPS-38) | CON (drill report filed) | ext |
 | `ops.provider_health` | 08 (BRG) | 5 min | CON, dashboards | ext |
 
-### V1 PascalCase events (LCC-23, PayoutPaid)
+### V1 PascalCase events (LCC-23)
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
@@ -122,7 +122,6 @@
 | `FundedCreated` | 07 (LCC) | LCC-23 | DOC-04 (certificate), ANA-01 | V1 |
 | `Suspended` | 07 (LCC) | LCC-23 | PAY-04 (payout hold while open), ANA-01 | V1 |
 | `Resumed` | 07 (LCC) | LCC-23 | ANA-01 | V1 |
-| `PayoutPaid` | 11 (PAY) | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 | V1 |
 
 ### `account.*`
 
@@ -182,6 +181,7 @@
 |---|---|---|---|---|
 | `payout.approved` | 11 (PAY) | PAY-09 | LED-07 (payout obligation posting), NOT-01 (template: payout approved), ANA-01 | V1 |
 | `payout.rejected` | 11 (PAY) | PAY-09 | NOT-01 (template: payout rejected), ANA-01 | V1 |
+| `payout.settled` | 11 (PAY) | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (receipt), ANA-01 | V1 |
 | `payout.requested` | 11 (PAY) | request created (eligible) | NOT (trader + finance), ANA | ext |
 | `payout.eligibility_failed` | 11 (PAY) | request rejected at validation | NOT (trader, reason template) | ext |
 | `payout.execution_attempted` | 11 (PAY) | each send/retry | AUD | ext |
@@ -235,9 +235,9 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `notification.sent` | 14 (NOT) | channel accept (provider ref) | AUD (low tier), ANA (V2) | ext |
+| `notification.sent` | 14 (NOT) | channel accept (provider ref) | AUD (low tier), ANA (V2) | V1 |
 | `notification.failed_final` | 17 (ADM) | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) | ops alert surface (V1: a simple "ops alerts" list on the home; V2: routing ADM-37) | ext |
-| `notification.suppressed` | 14 (NOT) | dedupe/prefs/quiet-hours/bounce | AUD (low), ANA | ext |
+| `notification.suppressed` | 14 (NOT) | dedupe (V1); prefs/quiet-hours/bounce (V2) | AUD (low), ANA | V1 |
 | `notification.bounce` | 14 (NOT) | provider webhook | AUD | ext |
 | `notification.broadcast_sent` | 14 (NOT) | staff broadcast | AUD (critical) | ext |
 
@@ -246,7 +246,7 @@
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
 | `document.generated` | 16 (TD) | documents badge "new" (V2 in-app notification) | documents badge "new" (V2 in-app notification) | ext |
-| `document.failed` | 15 (DOC) | retries exhausted (DLQ) | ADM (ops alert), CON, AUD | ext |
+| `document.failed` | 15 (DOC) | retries exhausted (DLQ) | ADM (ops alert), CON, AUD | V1 |
 | `document.regenerated` | 15 (DOC) | admin action | AUD (critical-tier if it changes a money doc) | ext |
 | `document.verified_lookup` | 15 (DOC) | public verify page hit | ANA (marketing metric) | ext |
 

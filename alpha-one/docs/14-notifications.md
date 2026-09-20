@@ -31,14 +31,15 @@ Requirement coverage: `NOT-01,03,05,13` (V1.0) + `02,04,06..12,14..33,35,36,37,3
 ## 2. Architecture
 
 ```
- EVT relay (Redis Streams) ──topics: account.*, payout.*, kyc.*, payments.*,
-                                 risk.*, order/checkout events, system.*
+ EVT relay (Redis Streams) ──topics: Account* (LCC), payout.*, kyc.* results,
+                                 order.paid, ops.* (docs/56); V2 adds risk.*/checkout lifecycle
       │  (NOT consumer group — its own lane, at-least-once)
       ▼
  NOT worker (Go, part of the workers process):
    1. map(event) → [ (recipient, template, vars, priority, channel) ]
         (mapping table in PG — admin-editable V2 NOT-21)
-   2. dedupe: key = hash(event_type, entity_id, recipient, template_version)
+   2. dedupe: key = hash(event_type, entity_id, recipient, template_key,
+        template_version)
         (Redis SETNX, TTL 24 h — same key as the GW idempotency pattern)
    3. prefs/suppression (V2: quiet hours, unsubscribes, digests)
    4. render template (PG-stored, tenant-branded V2) with vars from event
@@ -95,28 +96,59 @@ channels[] (['email']), template_key (e.g. 'payout_settled'), priority
 (critical|high|normal|low), vars_selector (JSONPath picks from event payload),
 enabled, tenant_override?}`.
 
-- V1 ships ~20 rows (the core set, §3.4); V2 makes it admin-editable
+- V1 ships 14 mappings (the core set, §3.4); V2 makes it admin-editable
   (NOT-21) with a "test send" (NOT-20) preview.
 - **vars_selector enforces PII hygiene:** only whitelisted event fields may
   flow into vars; the renderer rejects vars containing full PAN/wallet/KYC
   values (regex guard — the same masking rules as PAY/KYC).
 
-### 3.4 V1 core templates (NOT-05)
+### 3.4 The V1 template set (NOT-05 — reconciled 2026-09-20, D61/D62/D63, docs/58)
 
-Trader: `kyc_session_started`, `kyc_needs_docs`, `kyc_approved`,
-`kyc_rejected` (reason class), `account_opening_started`,
-`account_funded` (live-trading welcome + terms summary link),
-`account_breached` (what happened + next steps, no jargon),
-`account_halt_requested` (suspension), `payout_requested`,
-`payout_rejected` (reason class), `payout_approved`, `payout_settled`
-(+ receipt link), `payout_failed_final`, `payment_captured` (purchase
-confirmed + invoice link), `payment_pending` (complete your payment, TTL),
-`payment_refund_settled`.
+Every V1 template maps to a **registered V1 event** (docs/31). The former
+contract list (10 templates) and the former module list (~23) were two
+unreconciled passes; this table replaces both (`api/not.md` rewritten to
+match). Templates whose trigger does not exist in V1 are V2 reserves, never
+shipped dead.
 
-Staff (per tenant): `payout_pending_approval`, `payout_approved_by_other`,
-`payout_settled`, `risk_case_opened`, `risk_case_decided`,
-`kyc_manual_review_needed`, `payment_reconciliation_exception` (V2),
-`worker_dlq` (ops), `slo_breach` (ops, V2).
+**Trader (11):**
+
+| Template | Trigger (V1 event) | Notes |
+|---|---|---|
+| `account_created` | `AccountCreated` | unifies the contract's "account created" and the old `account_opening_started` |
+| `phase_passed` | `AccountPassed` | the contract had it, the old module list lacked it |
+| `phase_failed` | `AccountFailed` | same |
+| `breach` | `AccountBreached` | what happened + next steps, no jargon (both lists had it) |
+| `kyc_approved` | `kyc.approved` | the contract's "KYC result", split per event |
+| `kyc_rejected` | `kyc.rejected` | reason class + re-verify path |
+| `kyc_needs_docs` | `kyc.resubmission_requested` | documents needed |
+| `payout_approved` | `payout.approved` | + expected settlement window |
+| `payout_rejected` | `payout.rejected` | reason class |
+| `payout_settled` | `payout.settled` | + receipt link (D60) |
+| `payment_captured` | `order.paid` | purchase confirmed + invoice link |
+
+**Staff (3):**
+
+| Template | Trigger | Notes |
+|---|---|---|
+| `payout_approved_by_other` | `payout.approved` (recipient = the requesting staff member) | the two-op trail |
+| `payout_settled_staff` | `payout.settled` (finance-role copy) | finance record |
+| `worker_dlq` | the DLQ-depth ops alert path (`evt.consumer_dlq` condition → ops alert, docs/04/56) | ops email, not a domain event |
+
+**Owner rulings folded in:** no KYC invite email in V1 — the session opens
+inside the purchase flow (D62; `kyc.session_started` stays an internal ext
+event); expiry is silent in V1 — the portal shows the status and the payout
+gate's `kyc.required` error redirects to re-verify (D63).
+
+**V2 reserves (trigger named, never shipped dead):** `payout_requested` ←
+`payout.requested` (V2 event — D37); `payout_failed_final` ← `payout.failed`
+(V2); `payment_pending` ← checkout-session lifecycle (V2);
+`payment_refund_settled` ← refund events (V2, CHK-15/35); `kyc_invite` ←
+`kyc.session_started` promotion (V2, D62); `kyc_expired` (V2, D63);
+`kyc_manual_review_needed` ← the manual-review event (V2);
+`risk_case_opened` / `risk_case_decided` ← `risk.*` (V2 — no V1 risk events);
+`payment_reconciliation_exception` ← `ledger.reconciliation_exception` (ext);
+`certificate_issued` ← `document.generated` + DOC-07 delivery (V2);
+`slo_breach` ← OPS-40 (V2).
 
 Each template: subject + body (HTML + text fallback), tenant branding
 (V2 NOT-06: logo, colors from TEN-05/06; V1: platform-branded with tenant
@@ -150,17 +182,29 @@ matches the GW idempotency TTL (04) — same reasoning.
 
 ## 4. Events (topic `notification`)
 
+### 4.1 V1 baseline
+
 | Event | When | Consumers |
 |---|---|---|
 | `notification.sent` | channel accept (provider ref) | AUD (low tier), ANA (V2) |
 | `notification.failed_final` | retries exhausted → DLQ | ADM (ops alert), CON, AUD |
-| `notification.suppressed` | dedupe/prefs/quiet-hours/bounce | AUD (low), ANA |
-| `notification.bounce` / `notification.complaint` (V2) | provider webhook | AUD |
-| `notification.broadcast_sent` (V2) | staff broadcast | AUD (critical) |
+| `notification.suppressed` | dedupe (V1); prefs/quiet-hours/bounce (V2) | AUD (low), ANA |
 
-NOT **consumes** (V1): `kyc.*`, `account.*` (LCC states incl. funded/breached/
-halted), `payout.*`, `payments.*` (CHK), `risk.*` (cases), `ledger.*`
-(anomalies → ops), `system.*` (ops: restore drill, backup failures).
+### 4.2 Extended (post-V1) — design-level
+
+| Event | When | Consumers |
+|---|---|---|
+| `notification.bounce` / `notification.complaint` | provider webhook | AUD |
+| `notification.broadcast_sent` | staff broadcast | AUD (critical) |
+
+NOT **consumes** (V1 — every one a registered V1 event, docs/31):
+`AccountCreated`, `AccountPassed`, `AccountFailed`, `AccountBreached`,
+`payout.approved`, `payout.rejected`, `payout.settled` (D60), and the KYC
+result trio `kyc.approved` / `kyc.rejected` / `kyc.resubmission_requested`,
+plus `order.paid`. Ops signals (restore drills, backup failures, DLQ depth)
+arrive via the `ops.*` path (docs/56 §4) — the old `system.*` topic name was
+never registered. V2 adds: `payout.requested`, `payout.failed`, `risk.*`,
+`ledger.reconciliation_exception`, the checkout-session lifecycle events.
 
 ## 5. Lifecycles
 
@@ -182,7 +226,7 @@ Namespace `NOT`:
 |---|---|---|
 | `not.template_not_found` | 500-internal | Mapping references missing template (deploy error — CRITICAL alert) |
 | `not.vars_invalid` | 500-internal | vars_selector produced empty/PII-guarded vars (alert + skip, never send half-rendered) |
-| `not.recipoent_unknown` | 500-internal | No email/identity (alert — usually a data bug) |
+| `not.recipient_unknown` | 500-internal | No email/identity (alert — usually a data bug) |
 | `not.provider_unavailable` | 503 | Postmark down (retry queue drains on recovery; critical templates page ops) |
 | `not.rate_limited` | 429 | (V2) Per-recipient/template cap hit (batched into digest) |
 | `not.suppressed` | — | Info state (not an error) |
@@ -196,7 +240,7 @@ Namespace `NOT`:
 
 ### 7.2 Extended (post-V1) surface — provisional
 
-> Not in the V1 execution sheet. Design-level; paths beyond the V1 baseline are provisional until the URL-plan decision (`contracts/api/gw.md`, open question). Shown for platform completeness (V2/V3 phases, docs/99).
+> Not in the V1 execution sheet. Design-level; paths per the resolved URL plan (D46, docs/54). Shown for platform completeness (V2/V3 phases, docs/99).
 
 Trader (TD): `GET /v1/notifications` (in-app list, V2 NOT-07/08),
 `POST /v1/notifications/read-all` (V2), `GET /v1/notifications/history`

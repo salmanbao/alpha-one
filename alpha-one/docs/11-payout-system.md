@@ -36,7 +36,7 @@ Requirement coverage: `PAY-01,02,03,08,09,12,13,14,21,38` (V1.0) + `04,05,44,45`
                                             └► LED-07 obligation posted (PAY-14)
  COO ──record execution (provider, reference, amount, timestamp — PAY-12)
         (Build Strategy: "Manual for V1" — sending money is manual)
-        ──► paid (emits PayoutPaid via outbox — Decision 6)
+        ──► paid (emits payout.settled via outbox — Decision 6; renamed from PayoutPaid by D60, docs/58)
              └► LED-08 obligation settled · DOC-04 certificate · NOT-01
  reject path: reason recorded, payout.rejected, trader notified (NOT-05)
  nightly: reconciliation (V2 PAY-34) + reserves check (V2 PAY-37)
@@ -148,7 +148,7 @@ fixed); the approver executes or rejects each held payout by hand.
 
 **Ledger coupling:** approval posts the payout obligation (LED-07, PAY-14);
 recorded execution settles it (LED-08). Both are event-driven:
-`payout.approved` → LED-07; `PayoutPaid` (emitted by PAY-12 through the
+`payout.approved` → LED-07; `payout.settled` (emitted by PAY-12 through the
 outbox — Decision 6, 2026-09-16) → LED-08 + DOC-04 + ANA-01.
 
 **Execution recording (PAY-12):** every recorded execution is appended to
@@ -248,9 +248,9 @@ From `contracts/events/catalog.md` (the V1 execution sheet). Envelope EVT-03 (`i
 |---|---|---|
 | `payout.approved` | PAY-09 | LED-07 (payout obligation posting), NOT-01 (template: payout approved), ANA-01 |
 | `payout.rejected` | PAY-09 | NOT-01 (template: payout rejected), ANA-01 |
-| `PayoutPaid` | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (certificate), ANA-01 |
+| `payout.settled` | PAY-12 (execution recording, via outbox — Decision 6) | LED-08 (settlement posting), DOC-04 (receipt), ANA-01 |
 
-**Mapping to the extended model below:** `payout.approved` / `payout.rejected` are the same events (their extended-table rows are folded into the baseline table above); `PayoutPaid` = the extended `payout.settled` (Decision 6, 2026-09-16: emitted by PAY-12 through the outbox). The extended `payout.requested` has no V1 counterpart — resolved D37 (docs/52): no V1 request event (the 201 + TD status is the ack; the finance queue reads the table, PAY-08); template 7 is a V2 reserve.
+**Mapping to the extended model below:** `payout.approved` / `payout.rejected` are the same events (their extended-table rows are folded into the baseline table above); the settlement event is **`payout.settled`** (Decision 6, 2026-09-16, emitted by PAY-12 through the outbox; renamed from the sheet's PascalCase `PayoutPaid` by **D60, docs/58** — the dotted name matches the `payout.*` family and the ten-plus docs that already used it). The extended `payout.requested` has no V1 counterpart — resolved D37 (docs/52): no V1 request event (the 201 + TD status is the ack; the finance queue reads the table, PAY-08); template 7 is a V2 reserve.
 
 ### 4.2 Extended (post-V1) event model — design-level
 
@@ -572,7 +572,7 @@ Postmark (via NOT), Sentry, Prometheus/Grafana.
 | 2. Profit calculator (pure) + calc_snapshot + property tests (HWM, split, fee, floor) | BE-2 | 2 d | 1, EVL-29 | recompute-from-snapshot test: stored steps == recomputed |
 | 3. Eligibility service (5 checks) + preview endpoint | BE-2 | 2 d | 2, KYC, RSK-10, LED | each fail code triggerable in staging |
 | 4. Request lifecycle: create → pending_approval → ADM queue → approve/reject (2FA) | BE-2 + FE-1 | 4 d | 3, AUTH step-up | end-to-end in staging: request appears in queue, approve posts LED obligation |
-| 5. Manual execution path: provider dashboard procedure (COO) + ADM record + `PayoutPaid` (outbox) + LED-08 settlement + receipt | BE-2 | 4 d | 4, LED-08 | settled payout posts LED-08 exactly once; duplicate record = idempotent no-op (the V2 rail adapter + executor + webhooks are PAY-24, step 10) |
+| 5. Manual execution path: provider dashboard procedure (COO) + ADM record + `payout.settled` (outbox) + LED-08 settlement + receipt | BE-2 | 4 d | 4, LED-08 | settled payout posts LED-08 exactly once; duplicate record = idempotent no-op (the V2 rail adapter + executor + webhooks are PAY-24, step 10) |
 | 6. Method management (TD UI) + versioning + cooldown flag + default | FE-01 + BE-2 | 3 d | 1 | edit wallet → new version visible in next request's snapshot |
 | 7. Receipt (DOC) + notifications + batch export (PAY-44) + staleness guard | BE-2 | 2 d | 5 | settled payout → branded PDF + email; stale tick → `pay.stale_data` |
 | 8. Reserves visibility: CON dashboard (`cash` vs open obligations) + ADM queue banner (V1 — D38; the PAY-37 hard block stays V2) | BE-2 | 1 d | 4, LED | dashboard shows a shortfall injected on a synthetic tenant |

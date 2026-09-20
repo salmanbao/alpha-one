@@ -338,7 +338,7 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 |---|---|---|
 | `not.template_not_found` | 500 | Mapping references missing template (deploy error — CRITICAL alert) |
 | `not.vars_invalid` | 500 | vars_selector produced empty/PII-guarded vars (alert + skip, never send half-rendered) |
-| `not.recipoent_unknown` | 500 | No email/identity (alert — usually a data bug) |
+| `not.recipient_unknown` | 500 | No email/identity (alert — usually a data bug) |
 | `not.provider_unavailable` | 503 | Postmark down (retry queue drains on recovery; critical templates page ops) |
 | `not.rate_limited` | 429 | (V2) Per-recipient/template cap hit (batched into digest) |
 | `not.suppressed` | — | Info state (not an error) |
