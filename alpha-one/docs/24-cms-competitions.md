@@ -578,8 +578,8 @@ ledger liability released, the trader notice is the SUP template)
 
 Consumes: `equity.point` (scoring ticks — the ANA feed), `account.
 state_changed` (badge events), `payout.settled` (badges), `risk.
-case_decided` (dispute outcomes), `payments.intent_captured` (entry
-fees).
+case_decided` (dispute outcomes), `order.paid` (entry
+fees — the extended `payment.intent_captured` alias, docs/12).
 
 ## 5. Lifecycles
 

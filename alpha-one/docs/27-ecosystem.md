@@ -222,7 +222,8 @@ Requirement coverage: `DVP-01..18` (all V3) + `SDK-01..18`
      the injection endpoint, the mock server)
  the webhook egress (the SDK-02/03/07 contract):
    · the event catalog: the public event set (the `account.*`,
-     the `payout.*`, the `payments.*`, the `kyc.*`, the
+     the `payout.*`, the `payment.*` (the ext alias family; V1 rides
+     `order.*`), the `kyc.*`, the
      `order.*` subsets the developer subscribes to — the
      subscription is the key's config (the scopes include
      `webhook:{topic}`), the Hook0 delivery (the 04 §5.6:
@@ -433,7 +434,7 @@ the certification (SDK-10, the DVP-14): the conformance
 
 | Event | When | Consumers |
 |---|---|---|
-| **Public egress (the webhooks):** the `account.*`, `payout.*`, `payments.*`, `kyc.*`, `order.*` public subsets (the 31-event-catalog's public class) | the domain events (the relay's egress, the Hook0) | the developer's endpoint (the tenant's system) |
+| **Public egress (the webhooks):** the `account.*`, `payout.*`, `payment.*`/`order.*`, `kyc.*` public subsets (the 31-event-catalog's public class) | the domain events (the relay's egress, the Hook0) | the developer's endpoint (the tenant's system) |
 | `developer.key_created/rotated/revoked` | the key lifecycle (the AUTH-25) | AUD (the critical on the revoke — the access change), the NOT (the tenant admin's notice) |
 | `developer.delegation_created/revoked` (DVP-10) | the sub-key lifecycle | AUD (the critical — the partner's access), the NOT |
 | `developer.usage_alert` (DVP-16) | the 80%/100% quota | the NOT (the developer's email), the AUD (the low) |

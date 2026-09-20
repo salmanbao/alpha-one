@@ -441,7 +441,7 @@ NOT/DOC/EVT/BRG as described; Sentry on transition conflicts.
 | **EVL** | EVL consumes `account.activated` / `account.day_rolled` / `bridge.tick` → verdicts → LCC transitions; LCC never evaluates rules itself |
 | **PAY** | eligibility reads `state == funded` + KYC gate + no open risk case (PRD default); `account.breached` blocks in-flight payouts (approved-but-unexecuted → hold flag + human queue, D32) |
 | **KYC** | `kyc.approved` unblocks `funding_pending → funded` (KYC-07 gate) |
-| **DOC** | phase certificates on `phase_completed`, funded cert on `account.funded`, breach report on `breached` (TD-25) |
+| **DOC** | phase certificates on `phase_completed`, funded cert on `FundedCreated`, breach report on `AccountBreached` (TD-25; the V1 catalog names — docs/58) |
 | **NOT** | all lifecycle events → template emails (credentials, breach, funding, expiry warnings V2) |
 | **ANA** | state history + events → funnel KPIs, equity curves (ANA-01 read model) |
 | **MIG** | cutover imports FunderBlu accounts into correct states (LCC-22) with state history seeded from TTS data + opening ledger entries (LED-26) |

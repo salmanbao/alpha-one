@@ -134,6 +134,8 @@ constantly).
 
 | [60-rsk-review](docs/60-rsk-review.md) | **Risk management** (nineteenth pass): RSK — the last unreviewed Phase-1 core module — D68 the breach auto-open is V1.0 with the dormant payout-hold flag (the PAY-04 interlock bites from V1.1), D69 the module's two error spellings unified on `risk.*`, D70 case decisions always carry the 2FA step-up, D71 one open case per account enforced app-side under a per-trader advisory lock; plus the V1 baseline completed (the queue reads + the decide endpoint the ADM screen and the build task already required), the `AccountBreached` consumer wiring, `risk_summary`'s V1 feed, the claim race corrected to V2, payload parity rebuilt, and all 10 contract TODOs resolved — every Phase-1 module now has a review pass |
 
+| [61-freeze-audit](docs/61-freeze-audit.md) | **The freeze audit** (twentieth pass): the cross-cutting sweep over docs/28 Security + 29 Scalability + 35 Testing — **zero new decisions needed**, every finding was already-decided text not yet propagated: the D51/D55/D56/D57/D59 OPS facts synced into the Security and Scalability aggregations (three Redis containers, pgBackRest, the warm standby's ≤ 15-min promote, the external monitors, the weekly restore verify), 30+ stale `02 §3.x` citation refs re-pointed to the restructured AUTH layout, `audit_log` → `audit_events`, three legacy uppercase error codes lowercased, the `payments.*` alias family retired across five docs, `isolation.test` given its true home, and docs/35 gained the D64/D66/D68/D70/D71 test hooks |
+
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The
 > machine-readable mirror of every PRD sheet is `scripts/prd-workbook.json`.

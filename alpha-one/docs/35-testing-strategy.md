@@ -48,7 +48,7 @@ generators). Each names its owner doc:
 
 | # | Invariant | Asserts | Owner |
 |---|---|---|---|
-| I-01 | tenant isolation | querying any table as another tenant returns 0 rows (`isolation.test`) | 04 §11 |
+| I-01 | tenant isolation | querying any table as another tenant returns 0 rows (`isolation.test`) | 28 §3.3 / 01 ADR-1 |
 | I-02 | no double-payout | available-profit calc (PAY-02): paid profit can never be paid again | 11 §11 |
 | I-03 | verdict recompute | re-running `evaluate()` over stored snapshots reproduces the verdict hash | 09 §3.4 |
 | I-04 | machine confinement | no LCC/payout/KYC path bypasses its state machine (illegal transitions rejected) | 07/11/13 §11 |
@@ -69,13 +69,26 @@ generators). Each names its owner doc:
 | I-19 | staff-MFA gate | every staff-role route denies a token without an MFA assertion (`amr`), with `auth.mfa_required` (D5, AUTH-09) | 02 §3.2 |
 | I-20 | tenant-state enforcement | the §5.1 state→capability matrix holds for every state x surface pair (table-driven test over the matrix) | 03 §5.1 |
 
+### 3.1 Freeze-audit addenda (twentieth pass — the decision-coverage hooks)
+
+The cross-cutting freeze audit (docs/61) verified every invariant above
+against the current decisions; the recent rulings gain explicit hooks:
+
+| Decision | The test hook |
+|---|---|
+| D64 (dual transport, docs/59) | a cross-origin state-changing POST with the session cookie on a cookie realm → blocked by the GW origin check; the SSE subscribe with the cookie → 200; the bearer path unchanged |
+| D66 (idle carve-out, docs/59) | the trader session survives 15 idle minutes and dies at 30; the staff/console session dies at 15 (docs/02 §9) |
+| D68 (breach auto-open, docs/60) | the same breach verdict id replayed → exactly one case (the `dedup_key`); the case carries `payout_hold=true`, dormant until the V1.1 interlock |
+| D70 (decide step-up, docs/60) | `risk.case.decide` without a fresh MFA assertion → `authz.step_up_required` 403; with one → 200 |
+| D71 (one open case per account, docs/60) | two concurrent opens on the same account → one 201 + one `risk.case_already_open` 409 (the advisory-lock check) |
+
 ## 4. Contract gates (code vs `contracts/`)
 
 | Gate | What it checks | Fails the build when |
 |---|---|---|
 | error-registry | handler error codes ⊆ docs/30 taxonomy | an unknown code is emitted |
 | openapi-parity | routes + params + status codes = the frozen spec | a route/param/code drifts (public drift = also a freeze violation, docs/99 §12) |
-| event-catalog | emitted events ⊆ docs/31 with valid envelope + version | an unknown event or envelope violation (`EVT_WEBHOOK_SCHEMA_INVALID`) |
+| event-catalog | emitted events ⊆ docs/31 with valid envelope + version | an unknown event or envelope violation (`evt.webhook_schema_invalid`) |
 | schema-check | migrations ⊆ docs/32 conventions (ULID, tenant_id, `_cents`, TZ) | a convention break |
 | adapter-suite (BRG-43) | every broker adapter passes the capability contract tests against sandbox | a capability lies (claims `Capabilities()` it fails) |
 | webhook-schema | outbound payloads validate against `contracts/events/` | a payload/schema mismatch |
@@ -136,8 +149,9 @@ sessions while an `app_rw` query without context returns zero rows.
 **Authorization (docs/44 §4):** `scripts/verify_roles.py` in CI — `roles.yaml` ⇄
 `casbin_rule` seed ⇄ rendered tables agree (including `inherits` expansion); a boot with an
 empty/unloadable rule set denies every route and alerts; a key with no binding is denied
-for every role; the four ABAC constraints (own-data, payout step-up, $500k override,
-audited reads) each have a positive and a negative fixture; `firm:support` cannot reach
+for every role; the five ABAC constraints (own-data, payout step-up, $500k override,
+audited reads, and the risk-decide step-up — D70, docs/60) each have a
+positive and a negative fixture; `firm:support` cannot reach
 `kyc.document.read` or `payout.approve`.
 
 **Status gate (docs/44 §7):** tenant → identity → membership precedence with one fixture
@@ -161,9 +175,10 @@ the same suite (docs/43 §6).
 - **Annual:** external pentest scoped to GW + portals + DVP +
   public API + BRG + R2 signed URLs + webhook signatures
   (docs/28 §11); quarterly game-day from V3 (PLT-05).
-- **Continuous:** weekly audit review (CON-13/15), monthly
-  restore drill (docs/06 §3.2), 90/180-day secret rotation,
-  weekly dep-scan (docs/28 §12).
+- **Continuous:** weekly audit review (CON-13/15), the weekly
+  automated restore verification + the monthly drill (docs/06 §3.2 —
+  D59, docs/57), 90/180-day secret rotation, weekly dep-scan
+  (docs/28 §12).
 
 ## 7. Migration & cutover testing (docs/25)
 

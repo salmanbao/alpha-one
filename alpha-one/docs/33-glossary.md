@@ -154,6 +154,6 @@
 | prod-like | a dataset shaped like production: a legal event + CON sign-off + anonymization | 06/25 |
 | property test | a test asserting an invariant over generated inputs (the 28 §11 suite) | 28 |
 | contract check | the CI gate asserting code matches `contracts/` (routes, codes, schemas) | 04 |
-| isolation test | the CI property test: querying as another tenant returns 0 rows, every table | 04/28 |
+| isolation test | the CI property test: querying as another tenant returns 0 rows, every table | 01/28/35 |
 | ticket / SLA | SUP: a support case / its response+resolve time contract | 18 |
 | segment / campaign | CRM: a computed trader cohort / a consent-checked outreach over it | 20 |

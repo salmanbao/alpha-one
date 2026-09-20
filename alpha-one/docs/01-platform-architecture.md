@@ -99,7 +99,7 @@ with enforced boundaries (linter: `goimports` + custom `boundary` check in CI).
 | Email | **Postmark** (transactional); Resend allowed for dev | Templates rendered server-side (MJML → HTML), tenant-overridable. |
 | PDFs | **Puppeteer** (Node `docs-worker`) | Certificates, statements, invoices. Rejected: html-pdf-lite (capability limits). |
 | CI/CD | **GitHub Actions** (signed) | One workflow file family: lint → test → build → migrate → deploy (SSH, Compose pull). |
-| Observability | **Prometheus + Grafana** (V1), **+ Loki + OTel** (V2 register) | Structured JSON logs (slog/Zap) with `tenant_id`, `correlation_id`. Sentry for errors (signed). Uptime Kuma for synthetic checks. |
+| Observability | **Prometheus + Grafana** (V1), **+ Loki + OTel** (V2 register) | Structured JSON logs (slog/Zap) with `tenant_id`, `correlation_id`. Sentry for errors (signed). Uptime Kuma for synthetic checks — running from the standby host + the external checker and dead-man switches (D57, docs/57): a dead prod box can no longer silence its own monitoring. |
 | Charts | **TradingView Lightweight Charts** | TD-06/21 equity curves, P&L charts (~45KB, MIT). |
 
 **Versioning:** URL-based (`/v1/...`) — the only supported scheme. Additive-only

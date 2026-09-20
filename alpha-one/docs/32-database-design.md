@@ -10,7 +10,7 @@
 
 - **`tenant_id ULID NOT NULL`** on every tenant-scoped table (the structural
   isolation, 28 §3.3); exceptions (the platform-level): `tenants`,
-  `identities`, `audit_log` (tenant + platform scope, 05 §9).
+  `identities`, `audit_events` (tenant + platform scope, 05 §9).
 - **ULIDs** everywhere (01 §2); the char-25 top-3-bits guard (02 §3.5);
   public surface uses `public_id_refs` (27 Part A §8), never raw ULIDs.
 - **Money**: `_cents BIGINT` + `currency` (no floats, 05 §9).
@@ -20,7 +20,7 @@
   (04 §5.4) → R2 archive (06 §3.2, 29 §3.2).
 - **Retention**: 7-yr financial/audit (00 §6, 05 §3.5), 2-yr tickets (18 §3.5),
   12-mo competition (24 Part B), 30-day sandbox (27 Part A §5).
-- **Append-only**: `ledger_entries`, `audit_log` — the `BEFORE UPDATE`/
+- **Append-only**: `ledger_entries`, `audit_events` — the `BEFORE UPDATE`/
   `BEFORE DELETE` triggers reject (05 §9, 28 §3.3).
 - **PII**: envelope-encrypted `pii_*` / `*_encrypted` columns (02 §3.7, 28 §3.3);
   documents in R2 (per-tenant prefix), the PG holds the ref only (13 §3.4).
