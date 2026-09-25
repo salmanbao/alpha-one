@@ -58,7 +58,7 @@ on-call surface.
 | `api` | Go 1.27 | All public + internal REST APIs. Hosts the **in-app gateway layer** (GW). Sync request handling | stateless, 1–2 instances |
 | `bridge` | Go 1.27 | BRG: MetaApi connections, account provisioning, **streaming ingest** (hot state, conflation, group commit — D78/D79) + fallback polling, enforcement actions | 1 instance V1; hot state is rebuildable (MetaApi resync + PG), scaling = shard accounts across instances (docs/63 §4.11) |
 | `bridge-stream` | Node 22 / TS | BRG stream gateway (D77, ADR-15): official `metaapi.cloud-sdk` streaming connections → ordered frames to `bridge` over gRPC on a Unix socket. No money math, no persistence, no decisions | 1 shard V1; ≤ 2k accounts/shard (5–6 shards at 10k) |
-| `engine` | Rust (axum) | EVL: rule evaluation, verdicts, PnL math, day-boundary processing | stateless, 1–2 instances; invoked by `api`/`bridge`/`workers` |
+| `engine` | Rust (axum) | EVL: **the stateless compute tier (ADR-11, re-confirmed by D81 — docs/64)**: rule/verdict math, the decision priority matrix, metric math, floor hints, rule-pack **validation**. **No database connection, no account or rule-pack storage, no idempotency store** | stateless, 2–4 instances (sized by HTTP/PG fan-in, not CPU — ≈ 52,600 pure evals/s single-threaded vs a 10k verdict/s target); invoked by **`workers` only** |
 | `relay` | Go 1.27 | Outbox relay: reads `outbox`, publishes to Redis Streams, manages delivery seq | **exactly one instance** (locked via PG advisory lock) |
 | `workers` | Go 1.27 | Event consumers (consumer groups), schedulers, reconcilers, report generation, DLQ handling | stateless, 1–2 instances |
 | `docs-worker` | Node 22 | DOC: Puppeteer PDF rendering, uploads to R2 | stateless |
@@ -129,6 +129,27 @@ where it bites; this is the register.
 path (per-tick drawdown/limit checks) runs in Rust with property-tested invariants;
 Go calls it over local HTTP. Engine is stateless — all state in PG; Rust owns *math
 and verdict logic only*.
+
+> **Re-confirmed 2026-09-25 by D81 (docs/64 §4.1) — not superseded.** ADR-11 had
+> been drifted from: `propfirm-engine` had grown its own tenant-scoped Postgres
+> account store with optimistic concurrency (9 migrations, its own
+> `accounts`/`positions`/`trades`/`events`/`rule_packs`/`idempotency_entries`
+> schema), its own idempotency store, its own rule-pack lifecycle and service-bearer
+> auth, and business endpoints that read and write account state directly —
+> `POST /internal/v1/evaluate` loaded the account **from its own store** instead of
+> taking state in the request, contradicting docs/09 §2. **The engine holds no state
+> and opens no database connection.** `workers` owns `evaluation_state`, per-account
+> and per-tenant ordering, `(event_id, consumer)` idempotency in `consumer_state`,
+> retries and the DLQ — via docs/04 §3.5's existing consumer-supervisor pattern, the
+> same mechanism NOT/LED/AUD use. The engine's surface reduces to 7 routes: the two
+> probes plus stateless `/internal/v1/evaluate` (now taking the real `bridge.tick` v1
+> envelope and returning `new_state` + floor `hints`), `/internal/v1/rule-packs/validate`
+> and `/internal/v1/explain`, plus a kept-but-unused-in-V1 stateless `/evaluate-order`.
+> Why it matters at scale: **a stateless engine scales by adding replicas; a stateful
+> one makes N replicas N competing writers on the same rows** — at the corrected
+> 100,000-account V2 target (docs/29 §1.1) that difference is the whole capacity
+> plan. Full reasoning, the per-endpoint disposition and the rejected alternatives:
+> **docs/64**. See also ADR-9 (narrowed at V2 by docs/63 F12, not overturned).
 
 **ADR-12**: **The broker attests time.** For all trading data
 (positions, trades, equity), the broker-reported timestamp is canonical for day
@@ -283,14 +304,16 @@ Trader: TD "Buy challenge" → CHK session (GW idempotency)
   → on pass: LCC state=FUNDED_OFFER (V1: auto-fund or manual approval per tenant setting)
 ```
 
-**Flow B — Sync tick (hot path, ~10/s V1, ≤ 250/s V2 — D78/D79, docs/63).**
+**Flow B — Sync tick (hot path, ~10/s V1, **≤ 2,500/s sustained / ≤ 10k/s burst V2** at the corrected 100k-account target — D78/D79, docs/63 §4.4/§4.11).**
 ```
 MetaApi streaming → bridge-stream (Node, SDK) → gRPC/UDS frames → bridge hot state
   → normalize (BRG-19) → conflator (deal|position|guard|material|heartbeat|resync)
   → group commit ≤25 ms (urgent: now): broker_account snapshot + deals (PG) +
     outbox: bridge.tick {account, equity, margin, positions[...], broker_time, trigger}
     + pg_notify doorbell → relay wakes → Redis Streams
-  → workers: evaluation trigger → engine /evaluate (Rust, <5ms) → floor hints back
+  → workers: evaluation consumer — per-account serial lanes in a tenant-owned lane set
+     (docs/04 §3.5, D82/docs/63 §4.13), owns evaluation_state + idempotency + DLQ (D81)
+     → engine /evaluate (Rust, stateless, <5ms) → (new_state, verdict, hints) back
   → verdict stored + outbox: evaluation.verdict {ok|breach|target_hit}
   → LCC state machine applies (breach → ACCOUNT_FAILED + NOT + AUD)
   → ANA read-model updater (equity curve point) + web SSE fan-out (TD live)

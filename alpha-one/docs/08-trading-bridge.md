@@ -197,7 +197,11 @@ configurable per tenant 30–300 s, producing ticks with `source = poll`.
   then a `resync` tick is emitted.
 - Resubscribe order after a restart: guard-band accounts → funded → open
   positions → the rest. Cold resync takes < 30 s at V1 and ≈ 1–2 min at
-  10k accounts.
+  10k accounts; **≈ 10–20 min at the corrected V2 target of 100k accounts
+  — so a fleet-wide resync is never performed: it is rolling per shard
+  (2,000 accounts, ≈ 12–24 s of `evl.tick_stale` blindness, 2 % blast
+  radius), and a simultaneous restart of all ≈ 50 shards is a declared
+  maintenance window announced per tenant via CON-15 (docs/63 §4.7).**
 
 - **Canonical model** (BRG-19 core): amounts Decimal(18,8) for prices, lots
   Decimal(10,2), broker `time` (ms) as the trading clock, platform-side
@@ -523,12 +527,14 @@ CREATE INDEX idx_bexec_cmd ON broker_executions(command_id, attempt);
 
 | Surface | V1 | V2 headroom / action |
 |---|---|---|
-| Ingest (D78) | streaming: ≈ 431 accounts, ≤ 862 subscriptions (high reliability = 2 instances), ~10 sockets, 1 sidecar shard; **0 CPU credits** steady-state | 10k accounts: ≤ 20k subscriptions (quota 10 × deployed), ~200 sockets, 5–6 shards (≤ 2k accounts each); inbound equity frames ≈ 3k/s (burst 10k/s) absorbed in memory (docs/63 §4.11) |
-| Tick emission (D79) | ≈ 10/s sustained, ≈ 100/s burst | ≤ 250/s sustained, ≤ 1k/s burst — same order as the old 60-s poll plan (167/s) at sub-second latency on verdict-relevant moves |
-| REST credit budget | fallback + resync D33 checks + reconciler only; one poll ≈ 176 credits; per-server limit 18k/min ⇒ ≈ 100 polled accounts/min per `client-id` (rotate across servers) | the old poll-everything plan would need ≈ 1.76M credits/min vs ≈ 216k/min for all MetaApi servers — **why D78 exists** (docs/63 F1) |
-| Sync tx size | group commit: ≤ 40 tx/s per bridge instance, ≤ 500 rows each | PG write capacity fine to 10× |
-| Deals table | ~50 deals/day/account → ~21k/day | partitioned; 90 d hot, archive to R2 (V2) |
-| Snapshots | 1 row/min/account → ~620k rows/day | downsample to 1/min min, 14 d rolling + daily rollups; ANA owns long-term |
+| Ingest (D78) | streaming: ≈ 431 accounts, ≤ 862 subscriptions (high reliability = 2 instances), ~10 sockets, 1 sidecar shard; **0 CPU credits** steady-state | **v1.1 corrected — 100k accounts (10 tenants × 10k):** ≤ 200k subscriptions (quota 10 × deployed = 1M ⇒ 5× headroom), **~2,000 sockets, ≈ 50 shards** (≤ 2k accounts each, **5 per tenant — the shard hash is `(tenant_id, account_id)`**, docs/63 §4.2), **≥ 334 `client-id` slots (≤ 300 accounts/user/server ⇒ ≥ 28 MetaApi user accounts)**; inbound equity frames **≈ 30k/s (burst 100k/s)** absorbed in memory. **≈ 75 GB of shard RSS at the 1.5 GB/shard alarm ⇒ docs/63 F12: this tier does not fit the ADR-9 single box; a 2nd box is a V2 prerequisite and takes `bridge-stream` first** (docs/29 §3.1) |
+| Tick emission (D79) | ≈ 10/s sustained, ≈ 100/s burst | **≤ 2,500/s sustained, ≤ 10k/s burst** — still the same *order* as the old 60-s poll plan (100k × 1/min = 1,667/s) at sub-second latency on verdict-relevant moves, but the *magnitude* breaks 13-month PG retention (docs/63 F13: ≈ 85 B rows over the ≈ 395-day window ≈ 34 TB ⇒ ≤ 7 d hot + R2 columnar archive). Per-row derivation: docs/63 §4.4 |
+| REST credit budget | fallback + resync D33 checks + reconciler only; one poll ≈ 176 credits; per-server limit 18k/min ⇒ ≈ 100 polled accounts/min per `client-id` (rotate across servers) | the old poll-everything plan would need **≈ 17.6M credits/min vs ≈ 216k/min for all MetaApi servers (≈ 81× over)** — **why D78 exists, and why the correction strengthens rather than changes it** (docs/63 F1). The fallback budget itself is **12 × 80 = 960 accounts/min platform-wide if MetaApi's per-server limit is global, or 9,600/min if it is per (`Client-Id`, server)** — docs/63 §4.7/Q8; plan against the pessimistic reading |
+| Sync tx size | group commit: ≤ 40 tx/s per bridge instance, ≤ 500 rows each | **≈ 4,300 rows/s sustained, ≈ 11,800 rows/s burst ⇒ ≈ 9 tx/s and ≈ 24 tx/s — inside the cap, but ≥ 2 bridge instances partitioned per tenant for the 30k frames/s ingest** (docs/63 §4.11). PG write capacity is *not* "fine to 10×": the evaluation path is ≈ 20k q/s at burst against a ≈ 10k q/s primary — docs/29 §3.4 |
+| Deals table | ~50 deals/day/account → ~21k/day | **~5M/day → ~450M rows in the 90 d hot window (~150 GB at ~330 B/row)**; partitioned by `(tenant_id, day)` so retention is `DROP PARTITION`, archive to R2 |
+| Snapshots | 1 row/min/account → ~620k rows/day | **~144M/day → ~2.0 B rows in the 14 d rolling window (~400 GB at ~180 B/row heap + PK index)**; partitioned by `(tenant_id, day)`; downsample to 1/min min + daily rollups; ANA owns long-term and **reads the replica, never the primary** (docs/29 §3.4.3) |
+| Cold resync (v1.1) | < 30 s | **≈ 10–20 min fleet-wide ⇒ never performed fleet-wide.** Rolling **per shard**: 2,000 accounts (one tenant's 1/5) at a time, ≈ 12–24 s of `evl.tick_stale` blindness, 2 % blast radius. A simultaneous 50-shard restart is a declared maintenance window announced per tenant via CON-15 (docs/63 §4.7) |
+| Tenant fairness (v1.1) | n/a (one tenant) | **Per-tenant `bridge` streams (`topic.bridge.{tenant_id}`) + tenant-owned `workers` lane sets (D82, docs/63 §4.13), and per-tenant load-shed levels published as `evl.load_shed` (D84, docs/63 §4.14).** One tenant = one shard set = one stream = one lane set = one credit budget: a single isolation unit an operator can reason about |
 | Command latency | p95 < 2 s (confirm included) | same; CRITICAL if p95 > 10 s over 15 min (enforcement lag = risk) |
 | MetaApi outage | streams `stale` → credit-budgeted fallback poll (funded/open-position first), others `evl.tick_stale`; queue commands, backlog alerts | failover server group (V3 BRG-26): groups span 2 MetaApi servers from day 1 (config), second server activated by CON flip |
 | Cost | per-account pricing → account caps are cost control (TEN limits) | BRG-47 cost tracking (V3) feeds CON |

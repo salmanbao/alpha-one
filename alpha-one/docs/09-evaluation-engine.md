@@ -49,12 +49,29 @@ Requirement coverage: `EVL-01,02,04,05,06,07,08,16,17,19,20,29,34,35,36,44,46,47
         │  5. persist the response's floor hints (same tx) + publish `evl.floors`
 ```
 
-**Stateless engine (ADR-11):** the Rust service holds no state; everything it
-needs arrives in the request (EvalState JSON + RuleSet JSON + Tick JSON). This
-makes it trivially testable, horizontally scalable, and re-runnable —
+**Stateless engine (ADR-11, re-confirmed 2026-09-25 by D81 — docs/64):** the
+Rust service holds no state and **opens no database connection**; everything it
+needs arrives in the request (EvalState JSON + RuleSet JSON + Tick JSON) and
+everything it produces leaves in the response `(verdict, new_state, hints)`.
+This makes it trivially testable, horizontally scalable, and re-runnable —
 **re-running history is a feature**: any past verdict can be recomputed from
 stored (state, rules, tick) — the dispute answer (EVL-16/29/49: "one defensible
 answer").
+
+> **D81 (docs/64) is binding on this section.** `propfirm-engine` had drifted
+> into a self-contained service with its own Postgres `AccountStore` (OCC),
+> idempotency store, rule-pack lifecycle and state-mutating endpoints; that is
+> reversed. **This `workers` consumer owns state, ordering, idempotency, retry
+> and the DLQ** — built on docs/04 §3.5's existing consumer-supervisor pattern,
+> the same mechanism NOT/LED/AUD use, not a new one for EVL. Two consequences
+> for §3.2 below: the single-writer-per-account guarantee becomes **structural**
+> (one lane, in one tenant-owned lane set, owns one account) rather than
+> transactional (OCC detecting a violation after the fact), and per-account
+> ordering is `hash(account_id) → lane` **within a tenant shard** (D82,
+> docs/63 §4.13), never a global hash. **Open item O-1 (docs/64 §7):** activated
+> rule packs still do not drive evaluation — the engine builds its registry from
+> the account's plan preset, so tenant rule configuration is inert until
+> `workers` passes the bound pack and `/evaluate` builds from it.
 
 ## 3. System design
 
@@ -489,19 +506,48 @@ CREATE TABLE evaluation_overrides (
   verdict, platform-internal p95 < 50 ms (SLO 250 ms). Quote → disable
   command sent: p95 < 150 ms internal. The pre-D78 equivalent was up to
   60 s of poll interval before EVL saw the equity.
-- **Tick rate:** ≈ 10/s sustained (≈ 100/s burst) at V1; ≤ 250/s sustained
-  (≤ 1k/s news burst) at V2 10k accounts. Guard-band ticks concentrate
-  load on the accounts nearest a floor — exactly the ones that need it.
-  The engine scales horizontally (stateless).
-- **Per-account serialization** (04 §3.5 lanes) is the correctness mechanism;
-  10k accounts / ≥ 16 lanes = fine (each tick is independent work). Every tick
-  is evaluated in order — no consumer-side skipping. Conflation happens once,
-  at the bridge, which tracks low/high continuously (docs/63 §4.5).
+- **Tick rate (v1.1 corrected):** ≈ 10/s sustained (≈ 100/s burst) at V1;
+  **≤ 2,500/s sustained (≤ 10k/s news burst) at the V2 target of 100,000
+  accounts (10 tenants × 10k — the white-label roster, docs/00 §1/§5)**. The
+  previous figure (≤ 250/s at "V2 10k accounts") was sized against a
+  single-tenant ceiling and was 10× too low; the per-row derivation is
+  docs/63 §4.4. Guard-band ticks concentrate load on the accounts nearest a
+  floor — exactly the ones that need it. **The engine scales horizontally
+  by adding replicas because it is stateless (ADR-11, re-confirmed by D81 —
+  see §1 and docs/64); a stateful engine cannot, because its replicas then
+  contend on the rows it owns.**
+- **Per-account serialization** (04 §3.5 lanes) is the correctness mechanism,
+  and **the "≥ 16 lanes" figure is corrected to ≥ 128**. The arithmetic: the
+  per-tick budget below is p95 < 10 ms, so one serial lane sustains ≈ 100
+  ticks/s; 2,500/s ⇒ 25 lanes, 10k/s burst ⇒ 100 lanes, ×2 headroom
+  (docs/29 §1.2) ⇒ 200. **At 100k accounts, 16 lanes would put 6,250 accounts
+  per lane — and 16 lanes provide only 1,600 ticks/s of capacity against
+  ≈ 1,791/s of *sustained* demand (docs/63 §4.4), so the fleet saturates on
+  ordinary traffic before any burst, with 6,250 accounts sharing each lane.** Lanes are grouped into **per-tenant lane sets**
+  (floor `10 × tenants`, docs/63 §4.13/D82) so one tenant's backlog cannot
+  head-of-line-block another tenant's accounts on a shared lane. Every tick is
+  evaluated in order — no consumer-side skipping. Conflation happens once, at
+  the bridge, which tracks low/high continuously (docs/63 §4.5).
+- **The evaluation write path is the platform's largest writer at the
+  corrected target** (≈ 5k q/s sustained, ≈ 20k q/s burst, ≈ 2.6k / ≈ 10.1k
+  commits/s — docs/29 §3.4.1). `evaluation_state` is partitioned by
+  `tenant_id`; a 5-minute fleet-wide burst drains in ≈ 10 minutes, which is
+  **exactly** the `evl.tick_stale` threshold below, i.e. zero margin. That is
+  why docs/63 §4.14 (D84) defines load-shedding as widening the bridge
+  conflation window rather than dropping observations, and why docs/29 §3.4.2
+  stages a horizontal-Postgres option on a measured trigger.
 - **Rule packs** are tiny (KB) — cached in the worker (in-mem, version-keyed),
   invalidated on `rule_pack.activated`.
 - **Re-runs/backfills** are batch (V2 EVL-33): 1k ticks/s single-worker,
   off-peak, with progress in CON — never on the live path.
-- **Memory:** engine per-request state ~2 KB; 100 req/s = trivial.
+- **Memory:** engine per-request state ~2 KB; **2,500 req/s sustained / 10k req/s
+  burst = ~5 MB / ~20 MB of in-flight state — still trivial, and the point of
+  D81 is that this stays trivial because the engine holds nothing between
+  requests.** The engine's own `benches/engine.rs` measures ≈ 52,600 pure
+  evals/s single-threaded (≈ 205k/s batched), so **CPU is not the constraint at
+  10k verdict/s — the HTTP fan-in and the Postgres state read/write are, and
+  both live in `workers`, not in the engine.** Scaling on engine CPU would add
+  replicas to a tier that is not saturated (docs/63 §4.14).
 
 ## 12. Open-source solutions
 

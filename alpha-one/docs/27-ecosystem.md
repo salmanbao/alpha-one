@@ -1878,9 +1878,10 @@ CREATE TABLE algo_guardrails (
   limit (the per-account, the
   MetaApi's), the platform's
   aggregate is the fan-out (the
-  10k accounts × the per-account
-  limit (the 08 §3.2's stagger, the
-  poll budget (the 08 §3.2) — the
+  100k accounts (the 29 §1.1's
+  corrected V2 target) × the
+  per-account limit (the 08 §3.2's
+  credit budget (the 08 §3.2) — the
   copy orders are the poll-budget-
   adjacent (the 08's per-tenant poll
   budget extended to the copy's

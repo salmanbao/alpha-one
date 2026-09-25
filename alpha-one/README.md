@@ -39,7 +39,7 @@ constantly).
 ## Spec website (interactive)
 
 The whole specification is browsable as a single-page website in
-[`site/`](site/index.html) — a developer UI over the entire corpus: all 66 docs,
+[`site/`](site/index.html) — a developer UI over the entire corpus: all 67 docs,
 the contract pack (event catalog, the 39 payload schemas with their
 derived-from citations, the error taxonomy, 36 API contracts, the 8 committed
 diagrams) and the decision registers (D1–D80 design decisions, the 205 PRD
@@ -157,6 +157,7 @@ questions, and the owner triage).
 
 | [62-contract-todo-sweep](docs/62-contract-todo-sweep.md) | **The contract-TODO sweep** (twenty-first pass): all 53 open owner-questions in the API contracts closed — 49 resolved by citation (keys already registered, codes already ruled, docs/09's rulepack block, D14/D25/D36/D40/D61/D66) and 4 decided: D72 the closed `payout.ineligible` sub-reason enum, D73 the confirm-once payout-method flow (PAY-05/06), D74 ops-runbook credential delivery in V1 (no automated email — carried twice, now settled), D75 the coupon/add-on/numbering shapes — the contract pack is now TODO-free for the freeze session |
 | [63-brg-streaming-ingestion](docs/63-brg-streaming-ingestion.md) | **BRG streaming ingestion** (twenty-second pass): how EVL/RSK get each account's equity, positions and deals from MetaApi at minimum latency — the five MetaApi APIs compared, the 60-s poll plan shown to break MetaApi's CPU-credit limits (F1), and four decisions: D77 a Node/TS SDK stream-gateway sidecar (ADR-15), D78 streaming as the V1 primary with polling as fallback, D79 bridge-side conflation + EVL floor hints + group commit + a relay NOTIFY doorbell on the unchanged outbox (quote→verdict p95 < 50 ms), D80 MetaApi risk-management trackers as an optional V2 watchdog |
+| [64-evl-state-ownership-split](docs/64-evl-state-ownership-split.md) | **EVL state ownership — the stateless engine, re-confirmed** (twenty-third pass): the corrected multi-tenant capacity target (10 tenants × 10k = **100,000 accounts**, not a single-tenant 10,000) and four decisions — **D81** `propfirm-engine` is pared back to ADR-11's scope (a stateless compute service: no database, no account CRUD, no idempotency store) with `evaluation_state`, ordering, idempotency, retry and DLQ moving to a `workers` consumer on docs/04 §3.5's existing pattern; **D82** per-tenant stream sharding + tenant-owned lane sets for event-bus fairness; **D83** `tenant_id` partitioning + a replica read path with horizontal Postgres staged on a measured trigger; **D84** lag-in-seconds as the autoscaling signal with conflation-widening load-shedding. Records 7 findings incl. **two components owning account state**, **an activated rule pack that does not affect the verdict** (the engine's `RulePackStore` is never consulted on the evaluation path), and **the `bridge.tick` 13-month PG retention being ≈ 34 TB at the corrected target** — plus the open blocker that the `workers` consumer does not exist yet |
 
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The

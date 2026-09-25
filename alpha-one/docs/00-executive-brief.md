@@ -34,6 +34,24 @@ Alpha One is **multi-tenant**: many prop firms run on one shared instance, each
 isolated, branded, and independently configured (rule packs, challenges, pricing,
 payout policy, support).
 
+> **The white-label scale target (binding, corrected 2026-09-25).** Alpha One is a
+> **white-label platform**: independent prop firms share one deployment and **each
+> firm can hold 5,000–10,000 active accounts at a time**. Every capacity number in
+> this spec is therefore sized against **10 tenants × 10,000 accounts = 100,000
+> concurrent broker accounts** for V2 — *not* against a single-tenant ceiling of
+> 10,000 accounts total, which is what the spec said before this correction and
+> which was ~10× too low. This is a **planning estimate, not a hard ceiling and not
+> a contractual commitment**; it is deliberately conservative against §5's own
+> 25–50 tenant V2 range (which would imply 250k–500k accounts). The full model, the
+> per-row arithmetic, and the six triggers that force a re-derivation (starting with
+> **"re-derive before onboarding tenant #15"**) are in
+> [29-scalability §1.1/§1.1.1](29-scalability.md) and
+> [63-brg-streaming-ingestion §4.11](63-brg-streaming-ingestion.md). Two consequences
+> are worth knowing before reading any module doc: the corrected target **does not
+> fit the ADR-9 single box** (a second box is a V2 entry prerequisite, not a V3
+> seam), and it **does not fit 13-month in-Postgres retention of `bridge.tick`**.
+> V1's numbers (431 accounts) are unchanged — this is a V2 planning correction.
+
 > **First tenant: FunderBlu.** FunderBlu is migrating from TTS (their current
 > provider). Every ambiguous default in this document set — "what does a prop firm
 > usually do?" — is answered from FunderBlu's current TTS operations unless a
@@ -135,18 +153,30 @@ meaningful scope (see §6 for release semantics; full requirement-level mapping 
 
 ## 5. Scale assumptions (design targets)
 
-| Metric | V1 target | V2 target | Notes |
-|---|---|---|---|
-| Tenants | 1–5 | 25–50 | FunderBlu first |
-| Active traders (registered) | ~5k | ~50k | Per tenant aggregate |
-| Concurrent broker accounts | ~1k | ~10k | 1 funded/eval account = 1 broker account |
-| Sync ticks (positions/equity) | 10/s sustained | 250/s (1k/s burst) | MetaApi streaming, conflated at the bridge (D78/D79, docs/63): event-driven on deals/positions/near-floor/material moves + heartbeat; bursty on news |
-| Peak event throughput | 200 msg/s | 2k msg/s | Redis Streams |
-| Daily orders (challenge purchases) | ~200 | ~5k | PK/IN/US crypto + card |
-| Payouts/day | ~50 | ~500 | Manual approval at launch |
-| MT5 accounts on MetaApi | ~300 | ~5k | **Cost driver** — see 09 & 29 |
+**V2 targets below are the corrected white-label figures (2026-09-25)** — sized at
+10 tenants × 10,000 accounts, per the note in §1. The previous version of this table
+was sized against a single-tenant 10,000-account ceiling and was ~10× too low; every
+downstream sizing decision (Redis Streams throughput, the relay target, the Postgres
+write volume, the `workers` lane count, the MetaApi subscription and socket counts)
+had been derived from that number. V1 is unchanged.
 
-These drive the capacity model in [29-scalability-operations](29-scalability.md).
+| Metric | V1 target — **unchanged** | V2 target — **corrected** | Notes |
+|---|---|---|---|
+| Tenants | 1–5 | **10 for sizing** (25–50 is the commercial ambition) | FunderBlu first. The account count, not the tenant count, is the sizing driver — see §1 and 29 §1.1.1 |
+| Active traders (registered) | ~5k | **~100k** (10 tenants × 10k active users) | Per tenant aggregate; was ~50k |
+| Concurrent broker accounts | ~1k | **~100k** | 1 funded/eval account = 1 broker account. **The correction** — was ~10k |
+| Sync ticks (positions/equity) | 10/s sustained | **2,500/s sustained (10k/s burst)** | MetaApi streaming, conflated at the bridge (D78/D79, docs/63): event-driven on deals/positions/near-floor/material moves + heartbeat; bursty on news. Per-row derivation: docs/63 §4.4 |
+| Peak event throughput | 200 msg/s | **10k msg/s = 600k events/min** | Redis Streams, **sharded per tenant** (D82, docs/63 §4.13) across **≥ 10 relay partitions** — the single relay process tops out at 2k msg/s (docs/04 §11) |
+| `workers` evaluation lanes | ≥ 16 | **≥ 128** (floor: 10 × tenants) | Per-account serial lanes (docs/04 §3.5); ≈ 100 ticks/s per lane at docs/09 §11's p95 < 10 ms |
+| Daily orders (challenge purchases) | ~200 | **~20k** | PK/IN/US crypto + card |
+| Payouts/day | ~50 | **~5k** | Manual approval at launch; ~1 %/day of the ~50k funded accounts |
+| MT5 accounts on MetaApi | ~300 | **~100k ⇒ ≈ $7.5M/mo platform-wide, ≈ $750k/mo per tenant** | **Cost driver** — see 09 & 29. Also a natural governor: the deployed-account count is cost-gated per tenant, so ~100k is a *capacity* target, not a forecast |
+
+These drive the capacity model in [29-scalability-operations](29-scalability.md)
+(§1.1 targets, §1.3 per-resource, §3.4 the Postgres write path, §6 the load-test
+targets LT-1..LT-8) and the ingest path in
+[63-brg-streaming-ingestion](63-brg-streaming-ingestion.md) (§4.11 the capacity
+summary, §4.11.1 what would re-derive it, §4.11.2 what the correction breaks).
 
 ## 6. Release trains
 
