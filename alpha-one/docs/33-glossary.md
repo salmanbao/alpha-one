@@ -89,6 +89,15 @@
 | frozen snapshot | the point-in-time data a document/decision renders from (never a live table) | 15 |
 | ULID | the 26-char lexicographically-sortable ID (docs/32); internal ULIDs never leak to public APIs (ref indirection) | 32/27 |
 | money (`_cents`) | int64 minor units + ISO-4217 currency — never floats (docs/32) | 32 |
+| broker tick (`bridge.tick`) | the observed-record event BRG emits per account (equity, balance, margin, positions, broker time) — EVL's only trading input (EVL-49) | 08 |
+| stream / stream state | BRG's per-account MetaApi streaming subscription (D78) and its state `subscribing → syncing → live → stale`; only `live` streams emit heartbeat ticks | 08/63 |
+| stream gateway (`bridge-stream`) | the Node/TS sidecar hosting MetaApi's SDK; forwards ordered frames to the Go bridge — no money math, no persistence, no decisions (D77, ADR-15) | 63 |
+| conflation | folding many broker equity quotes into few `bridge.tick` events by trigger (deal, position, guard, material, heartbeat, resync), keeping the low/high in between (D79) | 63 |
+| floor hint | EVL's advisory per-account equity levels (daily floor, total floor, target) that tell the conflator where quotes matter — decide *when* a tick is sent, never *what* is decided | 09 §3.8 |
+| guard band | the equity zone just above a floor hint (default 50 bps of initial balance) where every quote becomes an urgent tick (≤ 4/s); a crossing is never rate-capped (I-21) | 63 |
+| heartbeat tick | a tick restating current state after 60 s (open positions) / 300 s (flat) with no other trigger — keeps `evl.tick_stale` meaningful | 63 |
+| fallback poll | REST polling of accounts whose stream is `stale`, under a MetaApi CPU-credit budget (D78) | 08 §3.3 |
+| doorbell (`outbox_doorbell`) | the payload-free Postgres `NOTIFY` that wakes the relay right after an outbox commit — never the transport (D79) | 04 §3.3 |
 
 ## 5. The surfaces (apps)
 

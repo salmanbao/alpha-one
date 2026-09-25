@@ -47,6 +47,9 @@ CREATE TABLE evaluation_state (                -- "evaluated" counters (single w
   target_reached_at     TIMESTAMPTZ,
   target_hit_pending    BOOLEAN NOT NULL DEFAULT false,
   breach_rule_id        TEXT, breach_at TIMESTAMPTZ,
+  floor_daily_cents     BIGINT,                -- §3.8 floor hints (D79): advisory, bridge
+  floor_total_cents     BIGINT,                -- conflation only — never read back by the
+  target_equity_cents   BIGINT,                -- engine; NULL = no hint (bridge heartbeats)
   version               BIGINT NOT NULL DEFAULT 0
 );
 

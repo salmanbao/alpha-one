@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "bridge.tick.v1.json",
   "title": "Alpha One \u2014 event bridge.tick v1",
-  "description": "V1 catalog event `bridge.tick` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = EVL (evaluate), ANA (equity points), web SSE fan-out (TD live) \u2014 observed record per EVL-49; no audit mirror (docs/05 \u00a714). Derived from: docs/08 \u00a78 (canonical tick shape \u2014 D34, docs/51: positions array, margin/free_margin, leverage-as-string, deals_count, last_deal_ticket); money cents per docs/32 `account_snapshots`/`broker_accounts`. Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
+  "description": "V1 catalog event `bridge.tick` (v1). Envelope per EVT-03 (see envelope.schema.json). Producer/consumers per contracts/events/catalog.md: consumers = EVL (evaluate), ANA (equity points), web SSE fan-out (TD live) \u2014 observed record per EVL-49; no audit mirror (docs/05 \u00a714). Derived from: docs/08 \u00a78 (canonical tick shape \u2014 D34, docs/51: positions array, margin/free_margin, leverage-as-string, deals_count, last_deal_ticket; D79, docs/63: optional trigger/source/stream_seq/equity_low_cents/equity_high_cents); money cents per docs/32 `account_snapshots`/`broker_accounts`. Money is integer minor units (docs/00 #3); the envelope carries tenant_id \u2014 no redundant tenant field in the payload.",
   "allOf": [
     {
       "$ref": "envelope.schema.json#/$defs/envelope"
@@ -120,6 +120,40 @@
             },
             "broker_time": {
               "$ref": "envelope.schema.json#/$defs/TimestampMs"
+            },
+            "trigger": {
+              "type": "string",
+              "enum": [
+                "deal",
+                "position",
+                "guard",
+                "material",
+                "heartbeat",
+                "resync"
+              ],
+              "description": "why the streaming conflator emitted this tick (D79, docs/63 \u00a74.4); evidence only \u2014 never a rule input. Absent on fallback-poll ticks"
+            },
+            "source": {
+              "type": "string",
+              "enum": [
+                "stream",
+                "poll",
+                "resync"
+              ],
+              "description": "ingest path (D78): stream = MetaApi streaming, poll = credit-budgeted REST fallback, resync = post-(re)synchronization full state"
+            },
+            "stream_seq": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "bridge-assigned per-account monotonic sequence (D33: ordering cursors are ours, not the broker's)"
+            },
+            "equity_low_cents": {
+              "type": "integer",
+              "description": "lowest broker equity observed since the previous tick (conflation evidence, D79; invariant I-22)"
+            },
+            "equity_high_cents": {
+              "type": "integer",
+              "description": "highest broker equity observed since the previous tick (conflation evidence, D79; invariant I-22)"
             }
           },
           "additionalProperties": false,

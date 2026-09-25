@@ -68,6 +68,9 @@ generators). Each names its owner doc:
 | I-18 | realm separation | a console-audience token can never satisfy a tenant-route policy, and vice versa (AUTH-16) | 02 §3.1 |
 | I-19 | staff-MFA gate | every staff-role route denies a token without an MFA assertion (`amr`), with `auth.mfa_required` (D5, AUTH-09) | 02 §3.2 |
 | I-20 | tenant-state enforcement | the §5.1 state→capability matrix holds for every state x surface pair (table-driven test over the matrix) | 03 §5.1 |
+| I-21 | no floor crossing conflated away | for any generated broker-equity quote sequence and floor-hint set, **every** quote at or below a floor hint yields an emitted `bridge.tick` (rate caps never apply to crossings) — property test on the BRG conflator (D79) | 63 §4.4 / 08 §3.3 |
+| I-22 | conflation evidence bounds | each tick's `equity_low_cents`/`equity_high_cents` bound every quote folded since the previous tick; `equity_low_cents` ≥ every floor hint unless the tick is itself a crossing tick | 63 §4.4 |
+| I-23 | no silent frame loss | under injected backpressure on the `bridge-stream`↔bridge link, `Deal`/`Positions`/`AccountInfo` frames are never dropped — they queue or the account is force-resynced; replaying a recorded session twice leaves `broker_deals`/`broker_positions` identical (D77/D78) | 63 §4.2 / §4.7 |
 
 ### 3.1 Freeze-audit addenda (twentieth pass — the decision-coverage hooks)
 
@@ -81,6 +84,15 @@ against the current decisions; the recent rulings gain explicit hooks:
 | D68 (breach auto-open, docs/60) | the same breach verdict id replayed → exactly one case (the `dedup_key`); the case carries `payout_hold=true`, dormant until the V1.1 interlock |
 | D70 (decide step-up, docs/60) | `risk.case.decide` without a fresh MFA assertion → `authz.step_up_required` 403; with one → 200 |
 | D71 (one open case per account, docs/60) | two concurrent opens on the same account → one 201 + one `risk.case_already_open` 409 (the advisory-lock check) |
+
+### 3.2 Streaming-ingestion addenda (twenty-second pass — docs/63)
+
+| Decision | The test hook |
+|---|---|
+| D77 (SDK sidecar, docs/63 §4.2) | a recorded `prices` packet **without** `equity` produces no equity update (the SDK's local recompute is never forwarded — docs/63 F5); numeric fields arrive at the bridge as decimal strings and round per the docs/09 table (golden fixtures) |
+| D78 (streaming primary) | kill the stream for one account → `stale` within 90 s → no heartbeat ticks → `evl.tick_stale` on the next evaluation → fallback poll within 30 s (`source = poll`) → restore → resync from the PG cursor with zero duplicate deals + a `resync` tick; the fallback poller never exceeds its per-`client-id` credit budget (simulated 429s → `brg.rate_limited` back-off) |
+| D79 (conflation + outbox) | I-21/I-22 above; the tick commit and its outbox row are one transaction (kill between → neither); the relay wakes on the doorbell (publish p95 < 10 ms after commit) and still drains with NOTIFY disabled (1-s safety poll); the floor hints are **not** an engine input (evaluate with/without `floor_*` → identical verdicts) |
+| D80 (watchdog, V2) | a tracker event with no EVL breach → `bridge.watchdog_divergence`, and **no** LCC transition ever originates from the watchdog path |
 
 ## 4. Contract gates (code vs `contracts/`)
 
@@ -101,7 +113,9 @@ against the current decisions; the recent rulings gain explicit hooks:
   service they hammer; nightly CI runs the smoke profile, gates
   run the full profile.
 - **Budgets:** GW p95 per docs/04 §6; EVL verdict latency per
-  docs/09 §11; TD FCP/LCP per docs/16 §11; DOC renders/min per
+  docs/09 §11; ingest quote→verdict p95 < 50 ms internal and ≤ 250
+  ticks/s sustained at 10k simulated accounts (recorded-packet replay,
+  docs/63 §6); relay ≥ 60k events/min (docs/04 §11); TD FCP/LCP per docs/16 §11; DOC renders/min per
   docs/15 §12. A gate fails if any budget regresses >10% without
   a recorded capacity decision (PLT-02 precursor, docs/29 §1.3).
 - **Soak:** 24-h soak at gate load before M2 (cutover) and M4 —

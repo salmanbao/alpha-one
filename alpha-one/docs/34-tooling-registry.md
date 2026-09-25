@@ -72,7 +72,7 @@ needed — §9), **REJECTED** (never adopt).
 
 | Tool | What it does | Serves | Cost | Status | Owner | Action needed |
 |---|---|---|---|---|---|---|
-| MetaApi | MT5 provisioning, balance/equity/position sync, execution, enable/disable | BRG-01/02/05/07/08/10/11/14/43/44 | $50–100/mo per active account | NOT STARTED | Shadab | **Sign day 1.** Sandbox keys. Confirm provisioning coverage before Phase 1. #1 schedule risk (docs/99 §1). |
+| MetaApi | MT5 provisioning, balance/equity/position sync (**streaming API = V1 ingest, D78**; REST = fallback/commands/reconciliation), execution, enable/disable; risk-management trackers = optional V2 watchdog (D80, off by default) | BRG-01/02/05/07/08/10/11/14/21/43/44 | $50–100/mo per active account (+ ×2 resource-slot billing on `reliability: high` accounts; risk-management API billed per account-hour if enabled) | NOT STARTED | Shadab | **Sign day 1.** Sandbox keys. Confirm provisioning coverage before Phase 1. #1 schedule risk (docs/99 §1). **G2 infrastructure required** (G1 caps quotes at 1/2.5 s). Phase-0 spike questions: docs/63 §8. |
 | Veriff | Identity verification, document checks, liveness | KYC-01/02/06/07/08/24 | per verification | SIGNED (FunderBlu contract) | FunderBlu COO | Confirm keys work. Confirm webhooks included (KYC-05). Build adapter. |
 | Match2Pay | Card + local payments (PK/IN) | CHK-04/06/07/08 | per transaction | NOT STARTED | BE-2 | Sign week 1. API keys. Test hosted checkout. Settlement report format. |
 | Interkasa | Secondary local rail, same iface | CHK-04/05 | per transaction | NOT STARTED | BE-2 | Sign as secondary behind CHK-04 iface. |
@@ -108,6 +108,7 @@ needed — §9), **REJECTED** (never adopt).
 | Flipt | Feature flags (Git-native, declarative) | TEN-10, CON-31 (V2.0) | EVALUATING | BE-2 | Adopt (BVR-20). Per-tenant + platform rollouts. |
 | Hook0 | Webhook delivery (retry, HMAC, logs, breakers) — **V1 pipeline per D54 (docs/99 0.3/0.7 test it); the EVT-11/13/14/15 V2.0 rows = the productized per-tenant surface** | EVT-11/13/14/15 (V2.0) | ADOPT (V1) | BE-1 | BVR-24. AGPL — verify at adoption (§9 checklist). |
 | Uptime Kuma | External uptime probes (independent box) | OPS-31 (V2.0) | EVALUATING | DevOps | Detects total outages (runs off-platform). |
+| `metaapi.cloud-sdk` (npm, JS/TS) | MetaApi streaming client inside the `bridge-stream` sidecar (D77, ADR-15) | BRG-07/08/21 | ADOPT (V1) | BE-1 | Pinned **29.3.3**. Licence: proprietary source-available ("free … provided you use it to implement applications which use metaapi.cloud") → **review-before-deploy** (§4). Transitive `socket.io-client ~2.4`. Upgrades gated by recorded-packet replay (BRG-43). Exit path = BRG-01 `Connector.Stream` / polling fallback. |
 
 ### 3.3 V2.0 consider-later adoptions
 
@@ -184,7 +185,9 @@ needed — §9), **REJECTED** (never adopt).
 - **Review-before-upgrade:** Redis >7.2 (RSALv2/SSPLv1) — BVR-17.
   Pin 7.2 until the review passes.
 - **Review-before-deploy (fair-code / source-available):** n8n
-  (Sustainable Use), Sentry self-host, Nango (Elastic-2.0) — BVR-18.
+  (Sustainable Use), Sentry self-host, Nango (Elastic-2.0) — BVR-18;
+  **`metaapi.cloud-sdk`** (MetaApi DMCC proprietary, source-available,
+  free only for use with metaapi.cloud — D77, docs/63 F10).
 - **AGPL in the stack (self-hosted, no SaaS distribution):**
   **ZITADEL (new, ADR-13)**, Hook0, UnKey, Comp AI, Grafana, Loki.
   Verify the distribution model matches our use (self-hosted backend,
@@ -278,6 +281,7 @@ pricing must cover it (docs/22 §3.4, docs/29 §5).
 ## 9. Open items (signup + confirmation checklist)
 
 - [ ] **MetaApi signup (day 1)** — owner Shadab. Sandbox keys + provisioning coverage confirm. Blocks BRG (docs/08 §16).
+- [ ] **MetaApi streaming spike (Phase 0)** — owner BE-1. G2 + `reliability`/region choice, the six docs/63 §8 questions (position-symbol price push, region latency, sidecar RSS/account, tracker-stream filter, `high` reliability cost, HWM sampling), `packetLogger` fixture capture (≥ 24 h, 3 demo accounts), `metaapi.cloud-sdk` licence review (D77/D78).
 - [ ] **Match2Pay signup (week 1)** — owner BE-2. Keys + hosted checkout test + settlement format.
 - [ ] **Interkasa signup (week 1)** — owner BE-2. Secondary rail behind CHK-04.
 - [ ] **Postmark signup (day 1)** — owner BE-2. Sending domain + auth.

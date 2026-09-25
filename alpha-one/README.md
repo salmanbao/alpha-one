@@ -39,10 +39,10 @@ constantly).
 ## Spec website (interactive)
 
 The whole specification is browsable as a single-page website in
-[`site/`](site/index.html) — a developer UI over the entire corpus: all 65 docs,
+[`site/`](site/index.html) — a developer UI over the entire corpus: all 66 docs,
 the contract pack (event catalog, the 39 payload schemas with their
 derived-from citations, the error taxonomy, 36 API contracts, the 8 committed
-diagrams) and the decision registers (D1–D76 design decisions, the 205 PRD
+diagrams) and the decision registers (D1–D80 design decisions, the 205 PRD
 questions, and the owner triage).
 
 - **Browse:** open `site/index.html` in any browser — grouped sidebar navigation,
@@ -156,6 +156,7 @@ questions, and the owner triage).
 | [61-freeze-audit](docs/61-freeze-audit.md) | **The freeze audit** (twentieth pass): the cross-cutting sweep over docs/28 Security + 29 Scalability + 35 Testing — **zero new decisions needed**, every finding was already-decided text not yet propagated: the D51/D55/D56/D57/D59 OPS facts synced into the Security and Scalability aggregations (three Redis containers, pgBackRest, the warm standby's ≤ 15-min promote, the external monitors, the weekly restore verify), 30+ stale `02 §3.x` citation refs re-pointed to the restructured AUTH layout, `audit_log` → `audit_events`, three legacy uppercase error codes lowercased, the `payments.*` alias family retired across five docs, `isolation.test` given its true home, and docs/35 gained the D64/D66/D68/D70/D71 test hooks |
 
 | [62-contract-todo-sweep](docs/62-contract-todo-sweep.md) | **The contract-TODO sweep** (twenty-first pass): all 53 open owner-questions in the API contracts closed — 49 resolved by citation (keys already registered, codes already ruled, docs/09's rulepack block, D14/D25/D36/D40/D61/D66) and 4 decided: D72 the closed `payout.ineligible` sub-reason enum, D73 the confirm-once payout-method flow (PAY-05/06), D74 ops-runbook credential delivery in V1 (no automated email — carried twice, now settled), D75 the coupon/add-on/numbering shapes — the contract pack is now TODO-free for the freeze session |
+| [63-brg-streaming-ingestion](docs/63-brg-streaming-ingestion.md) | **BRG streaming ingestion** (twenty-second pass): how EVL/RSK get each account's equity, positions and deals from MetaApi at minimum latency — the five MetaApi APIs compared, the 60-s poll plan shown to break MetaApi's CPU-credit limits (F1), and four decisions: D77 a Node/TS SDK stream-gateway sidecar (ADR-15), D78 streaming as the V1 primary with polling as fallback, D79 bridge-side conflation + EVL floor hints + group commit + a relay NOTIFY doorbell on the unchanged outbox (quote→verdict p95 < 50 ms), D80 MetaApi risk-management trackers as an optional V2 watchdog |
 
 > Regenerate with `python3 scripts/parse_prd_workbook.py` →
 > `python3 scripts/build_prd_registers.py` (both have `--check` modes). The
