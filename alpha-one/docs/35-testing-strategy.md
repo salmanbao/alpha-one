@@ -71,6 +71,14 @@ generators). Each names its owner doc:
 | I-21 | no floor crossing conflated away | for any generated broker-equity quote sequence and floor-hint set, **every** quote at or below a floor hint yields an emitted `bridge.tick` (rate caps never apply to crossings) — property test on the BRG conflator (D79) | 63 §4.4 / 08 §3.3 |
 | I-22 | conflation evidence bounds | each tick's `equity_low_cents`/`equity_high_cents` bound every quote folded since the previous tick; `equity_low_cents` ≥ every floor hint unless the tick is itself a crossing tick | 63 §4.4 |
 | I-23 | no silent frame loss | under injected backpressure on the `bridge-stream`↔bridge link, `Deal`/`Positions`/`AccountInfo` frames are never dropped — they queue or the account is force-resynced; replaying a recorded session twice leaves `broker_deals`/`broker_positions` identical (D77/D78) | 63 §4.2 / §4.7 |
+| I-24 | single writer per account, **structurally** (D81) | for any account, over any interleaving of redelivered `bridge.tick` events, DLQ retries and `manual-run` enqueues, exactly one `workers` lane issues `evaluation_state` writes — a concurrency test fails if two lanes ever hold the same `account_id`, and the engine has **no** OCC conflict path to exercise (docs/09 §3.2's guarantee is a property of the topology, not of conflict detection) | 64 §4.1 / 09 §3.2 / 04 §3.5 |
+| I-25 | the engine holds no state (ADR-11, D81) | the engine binary starts, passes `/ready` and serves `/evaluate` with **no `DATABASE_URL` configured and no reachable Postgres or Redis**; a CI job asserts the crate has no `sqlx` dependency and no `postgres` feature in the default build | 64 §4.1 / 01 ADR-11 |
+| I-26 | floor hints agree with the rules (property test) | for every equity-basis rule and generated `(state, pack)`: at `equity == floor` the rule **fires**, at `floor + 1 cent` it **does not**, both under the rule's `tolerance_cents()`; and `floor_total_cents == min(static_floor, trailing_floor)` whenever both are bound | 64 §4.5 / 09 §3.8 |
+| I-27 | hints are advisory | mutating any persisted `floor_*` value changes **no** verdict for any tick — the engine never reads them back (I-03 preserved; extends the D79 row below) | 64 §4.5 / 63 §4.4 |
+| I-28 | `trigger` is not a rule input | the same `(state, pack, equity)` produces the same verdict for every `trigger` ∈ {deal, position, guard, material, heartbeat, resync} | 64 §4.4 / 63 §4.4 |
+| I-29 | envelope conformance at the boundary | every `/evaluate` request the `workers` consumer sends validates against `contracts/events/payloads/bridge.tick.v1.json`'s payload schema; a contract test fails on any field the engine accepts that the schema does not define (G5 — the old per-symbol `Quote`/`Tick` DTO is not the envelope) | 64 §4.4 |
+| I-30 | no shed trigger is ever dropped (load test LT-6) | under D84 shed levels 1–3, zero `deal`/`position`/`guard`/crossing/`resync` ticks are withheld, and I-22's evidence bound still holds across every widened conflation window; the ladder removes ≈ 14 % at level 1, ≈ 30 % at level 2 and ≈ 60 % at level 3 of sustained load as predicted | 63 §4.14 / 29 §6 |
+| I-31 | per-tenant fairness (load test LT-4) | with tenant A driven at 10× its weight and tenants B–J at their sustained rate, B–J's quote→verdict p95 is unchanged within measurement noise and no `evl.tick_stale` fires outside A | 63 §4.13 / 29 §6 |
 
 ### 3.1 Freeze-audit addenda (twentieth pass — the decision-coverage hooks)
 
@@ -112,12 +120,24 @@ against the current decisions; the recent rulings gain explicit hooks:
   V3 numbers at M5 (docs/99 §10). Suites live in-repo next to the
   service they hammer; nightly CI runs the smoke profile, gates
   run the full profile.
-- **Budgets:** GW p95 per docs/04 §6; EVL verdict latency per
-  docs/09 §11; ingest quote→verdict p95 < 50 ms internal and ≤ 250
-  ticks/s sustained at 10k simulated accounts (recorded-packet replay,
-  docs/63 §6); relay ≥ 60k events/min (docs/04 §11); TD FCP/LCP per docs/16 §11; DOC renders/min per
+- **Budgets (v1.1 — re-targeted at the corrected 100k-account V2 figure,
+  docs/29 §1.1):** GW p95 per docs/04 §6; EVL verdict latency per
+  docs/09 §11; ingest quote→verdict p95 < 50 ms internal and **≤ 2,500
+  ticks/s sustained (≤ 10k/s burst) at 100k simulated accounts** in 10
+  tenant partitions (recorded-packet replay, docs/63 §6); **relay
+  ≥ 600k events/min across ≥ 10 partitions** (docs/04 §11); **`workers`
+  ≥ 128 lanes with no lane's head-of-line delay over the docs/09 §11
+  budget**; TD FCP/LCP per docs/16 §11; DOC renders/min per
   docs/15 §12. A gate fails if any budget regresses >10% without
   a recorded capacity decision (PLT-02 precursor, docs/29 §1.3).
+  **The full load-test matrix is docs/29 §6's LT-1..LT-8**, which adds the
+  gates the corrected target makes load-bearing and the old 10k profile
+  could not exercise: LT-4/I-31 per-tenant fairness, LT-5 the PG
+  burst-drain margin against `evl.tick_stale`, LT-6/I-30 the D84 shedding
+  ladder, LT-7 the Redis Streams trim hazard, and LT-1 measuring real
+  `bridge-stream` RSS/account (which retires docs/63 F12's ≈ 50-shard
+  estimate). The arithmetic behind every figure is machine-checked by
+  `scripts/verify_capacity_arithmetic.py`.
 - **Soak:** 24-h soak at gate load before M2 (cutover) and M4 —
   connection leaks, slow Streams growth, and disk curves are the
   usual catches.
