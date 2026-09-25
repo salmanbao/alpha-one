@@ -57,9 +57,17 @@ jobs:
         run: >-
           go run ./cmd/evl-loadtest -db "$TEST_DATABASE_URL" -redis "$TEST_REDIS_URL"
           -tenants 10 -accounts 100 -drain 5000 -rate 20 -phase 20s -budget 8
-          -fairness-slack 0 -out loadtest.json
+          -fairness-slack 0 -out loadtest.json 2>&1 | tee loadtest.log; exit ${PIPESTATUS[0]}
         # exactly-once / versions / I-24 / DLQ fail the job; LT-4 is reported
         # only, because I-31's bound is an open decision (docs/64 O-8)
+      - name: summary (annotations + step summary)
+        if: always()
+        run: |
+          pass=$(grep -c '^--- PASS' test.log || true); bad=$(grep -cE '^--- (FAIL|SKIP)' test.log || true)
+          echo "::notice title=go test -race::${pass} passed, ${bad} failed/skipped"
+          grep -E '_test.go:[0-9]+: (I-24|resize|scale-|pruning|backlog|tick )' test.log | sed 's/^ *//' | head -5 | while read -r l; do echo "::notice title=test log::$l"; done
+          grep -E '^\[(drain|exactly-once|versions|I-24)\]|^worst' loadtest.log | while read -r l; do echo "::notice title=evl-loadtest::$l"; done
+          { echo '```'; grep -E '^(--- |ok|FAIL)' test.log; echo; cat loadtest.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -118,7 +126,14 @@ jobs:
         run: >-
           go run ./cmd/evl-loadtest -db "$TEST_DATABASE_URL" -redis "$TEST_REDIS_URL"
           -engine "$ENGINE_URL" -token "$ENGINE_TOKEN" -tenants 10 -accounts 100 -drain 5000
-          -rate 20 -phase 20s -budget 8 -fairness-slack 0 -out loadtest-engine.json
+          -rate 20 -phase 20s -budget 8 -fairness-slack 0 -out loadtest-engine.json 2>&1 | tee loadtest-engine.log; exit ${PIPESTATUS[0]}
+      - name: summary (annotations + step summary)
+        if: always()
+        run: |
+          pass=$(grep -c '^--- PASS' e2e.log || true); bad=$(grep -cE '^--- (FAIL|SKIP)' e2e.log || true)
+          echo "::notice title=evl tests vs real engine::${pass} passed, ${bad} failed/skipped"
+          grep -E '^\[(drain|exactly-once|versions|I-24)\]|^worst' loadtest-engine.log | while read -r l; do echo "::notice title=evl-loadtest (real engine)::$l"; done
+          { echo '```'; grep -E '^(--- |ok|FAIL)|_test.go' e2e.log; echo; cat loadtest-engine.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
