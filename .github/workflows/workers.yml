@@ -1,0 +1,129 @@
+name: workers
+
+on:
+  push:
+    paths:
+      - "pf-platform/go/workers/**"
+      - "alpha-one/contracts/data/schemas/**"
+      - "alpha-one/contracts/events/payloads/**"
+      - ".github/workflows/workers.yml"
+  pull_request:
+    paths:
+      - "pf-platform/go/workers/**"
+      - "alpha-one/contracts/data/schemas/**"
+      - "alpha-one/contracts/events/payloads/**"
+      - ".github/workflows/workers.yml"
+  workflow_dispatch:
+    inputs:
+      engine_ref:
+        description: "propfirm-engine ref for the e2e job (docs/64 O-10)"
+        default: "arena/01a0d960-alpha-one"
+
+defaults:
+  run:
+    working-directory: pf-platform/go/workers
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: postgres}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 2s --health-retries 30
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
+      REQUIRE_INTEGRATION: "1" # skipping integration tests is a failure here
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: pf-platform/go/workers/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - name: test (race, integration)
+        run: go test -race -count=1 -v ./... 2>&1 | tee test.log; exit ${PIPESTATUS[0]}
+      - name: load test (stub engine, CI scale)
+        run: >-
+          go run ./cmd/evl-loadtest -db "$TEST_DATABASE_URL" -redis "$TEST_REDIS_URL"
+          -tenants 10 -accounts 100 -drain 5000 -rate 20 -phase 20s -budget 8
+          -fairness-slack 0 -out loadtest.json
+        # exactly-once / versions / I-24 / DLQ fail the job; LT-4 is reported
+        # only, because I-31's bound is an open decision (docs/64 O-8)
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workers-test-results
+          path: |
+            pf-platform/go/workers/test.log
+            pf-platform/go/workers/loadtest.json
+
+  # docs/64 O-10: the same suites against the real stateless engine.
+  e2e-engine:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: postgres}
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 2s --health-retries 30
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
+      REQUIRE_INTEGRATION: "1"
+      ENGINE_URL: http://127.0.0.1:8080
+      ENGINE_TOKEN: e2e-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: salmanbao/propfirm-engine
+          ref: ${{ inputs.engine_ref }}
+          path: engine
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: {workspaces: engine}
+      - name: build + start engine
+        working-directory: engine
+        run: |
+          cargo build --release --features server --bin propfirm-server
+          PROPFIRM_SERVICE_TOKENS="workers:active:$(printf %s "$ENGINE_TOKEN" | sha256sum | cut -d' ' -f1)" \
+            nohup ./target/release/propfirm-server 127.0.0.1:8080 > engine.log 2>&1 &
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:8080/ready && exit 0; sleep 1; done
+          cat engine.log; exit 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: pf-platform/go/workers/go.sum
+      - name: evl tests against the real engine
+        run: go test -count=1 -v ./evl/ 2>&1 | tee e2e.log; exit ${PIPESTATUS[0]}
+      - name: load test against the real engine
+        run: >-
+          go run ./cmd/evl-loadtest -db "$TEST_DATABASE_URL" -redis "$TEST_REDIS_URL"
+          -engine "$ENGINE_URL" -token "$ENGINE_TOKEN" -tenants 10 -accounts 100 -drain 5000
+          -rate 20 -phase 20s -budget 8 -fairness-slack 0 -out loadtest-engine.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-engine-results
+          path: |
+            pf-platform/go/workers/e2e.log
+            pf-platform/go/workers/loadtest-engine.json
+            engine/engine.log

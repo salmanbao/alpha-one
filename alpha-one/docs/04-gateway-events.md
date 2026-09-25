@@ -129,7 +129,7 @@ published_at NULL · publish_attempt`. No business code touches Streams directly
 ### 3.3 Relay (EVT-02)
 
 Single instance (PG advisory lock `relay:lock`, steal after 30 s heartbeat):
-1. `SELECT ... FROM outbox WHERE published_at IS NULL ORDER BY id LIMIT 500 FOR UPDATE SKIP LOCKED`.
+1. `SELECT ... FROM outbox WHERE published_at IS NULL ORDER BY event_id LIMIT 500 FOR UPDATE SKIP LOCKED`.
 2. Per event: `XADD topic.<domain> MAXLEN ~ 100000 * {payload}` with stream
    field `event_id` for dedupe; set `published_at = now()`.
 3. On XADD failure: leave `published_at NULL`, `publish_attempt++`; 5 failures →
@@ -178,6 +178,41 @@ Worker supervisor: per-consumer goroutine pool (per-entity serial lanes via
 (`security.replay` class). The CON DLQ screen (list/filter/bulk-retry) is the
 V2 UX (blueprint step 10); the V1 rule is: no dead event without either a
 retry or a recorded purge decision.
+
+#### 3.5.1 Supervisor mechanics (reference implementation: `pf-platform/go/workers/consumer`)
+
+The first implementation of the supervisor above (built for the EVL lane,
+docs/64 §6 step 1) is generic. Every consumer reuses it; none re-implements
+ordering, idempotency or retries.
+
+- **Stream ownership.** One instance consumes a stream at a time:
+  - Acquire with `SET lease:{group}:{stream} <instance> NX PX 15s`.
+  - Renew every ttl/3 with a compare-and-`PEXPIRE` script, and release with compare-and-`DEL`.
+  - A failed renewal cancels the stream's context, so in-flight handlers abort.
+  - On acquire: `XGROUP CREATE … 0 MKSTREAM`, then `XAUTOCLAIM` the whole PEL. Entries the previous owner left pending are redelivered, and `consumer_state` dedupes them.
+- **Rebalancing.** Without this, the first instance to start keeps every lease forever and scale-out adds idle pods.
+  - Each instance heartbeats into the ZSET `members:{group}` every ttl/3. Members silent for one ttl are dropped.
+  - The per-instance target is ceil(streams ÷ live members).
+  - An instance never acquires above target. Above target, it sheds one stream per ttl/3.
+  - Measured: 10 streams go from 1→2 instances as 10/0 → 5/5 in 2.1–2.7 s at ttl 0.9 s, and back 2→1 in 0.3–0.4 s.
+- **Lanes.** `lane = jump_hash(fnv64(entity_id), N)`, one goroutine per lane. Resizing N→N+1 moves ≈ 1/(N+1) of keys (measured: 13→14 moved 7.37 % against 7.14 % ideal).
+- **Retries** stay inside the lane, which keeps entity order: backoff 1 s × 2^(k−1), 5 attempts, 30 s handler timeout.
+  - A `Permanent` error dead-letters on attempt 1.
+  - A dead letter is `XADD dlq.{name}` (event_id, consumer, stream, tenant_id, entity_id, attempts, error, payload, dead_at), then `consumer_state.status='dead'`, then `XACK`.
+- **Lag,** per stream:
+  - `consumer_stream_lag_entries` = group `lag` + `pending`. A NULL `lag` falls back to `XLEN`.
+  - `consumer_lag_seconds` = entries ÷ ack rate. The rate is the average since start for the first 60 s, then an EWMA with τ = 60 s; a cold EWMA reads a large backlog as thousands of seconds. With no acks it falls back to the age of the oldest outstanding entry.
+  - Only the lease holder exports a stream's series. They are deleted on release, so alerts never fire on a previous owner's stale value.
+- **Trim detection.** It runs in the consume loop, before the first read and after each non-empty read.
+  - Trigger: `XINFO STREAM` first-entry id moved past the last observed one, and `lost = (entries-added − length) − group.entries-read` > 0.
+  - Counted in `consumer_stream_trimmed_total` / `_entries_total`, then `OnTrim(lastDelivered, firstRetained)`. The consumer decides how to replay; EVL replays from `events`.
+  - `max-deleted-entry-id` must not be used: `MAXLEN`/`XTRIM` do not update it (only `XDEL` does).
+  - Trimming already-delivered entries is routine and is not reported (tested).
+- **Weighted fair admission (`FairShare`),** optional.
+  - A group-wide in-flight budget is split as ceil(budget ÷ live members) per instance.
+  - Slots are taken per handler attempt and never held across backoff.
+  - A freed slot goes to the waiting stream with the lowest in-flight ÷ weight (weight = its lane count). Ties go to the longest-waiting head.
+  - Per-stream lanes isolate *queues*. FairShare shares the *downstream* (PG) that every lane uses; see docs/64 §9 for the LT-4 measurement behind it.
 
 ### 3.6 Ingress webhooks (EVT-10, V1)
 

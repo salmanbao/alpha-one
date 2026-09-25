@@ -1,0 +1,98 @@
+# D84 (docs/63 §4.14) alerting for the workers evaluation lane.
+#
+# Thresholds are fractions of the 10-min evl.tick_stale window: lag is
+# measured in *seconds of backlog* (consumer_lag_seconds = outstanding
+# entries ÷ drain rate), per tenant stream.
+#
+# Durations are evaluated here with `for:` rather than trusting the
+# in-process ladder's timers: only the current lease owner exports a
+# tenant's series (the supervisor deletes them on release), so the series
+# survives a lease handover while an in-process timer restarts.
+# The ladder's own gauges (evl_shed_level, evl_incident) drive the *action*
+# (evl.load_shed); these rules drive *people*.
+#
+#   severity=info      scale-out wanted      lag > 60 s for 60 s
+#   severity=warning   WARN (shed level 1)   lag > 120 s for 5 m
+#   severity=page      PAGE                  lag > 300 s for 60 s; stream unowned 2 m
+#   severity=incident  INCIDENT              lag > 480 s; trim of undelivered
+#                                            entries; funded tick_stale;
+#                                            single-writer violation
+groups:
+  - name: evl-lane
+    rules:
+      - record: tenant:evl_lag_seconds:max
+        expr: max by (tenant) (consumer_lag_seconds{consumer="evaluation"})
+
+      - alert: EvlLagScaleOut
+        expr: tenant:evl_lag_seconds:max > 60
+        for: 60s
+        labels: {severity: info, team: platform}
+        annotations:
+          summary: "EVL lane backlog {{ $value | humanizeDuration }} for tenant {{ $labels.tenant }} — scale out workers"
+          description: "D84: > 60 s for 60 s. HPA target is this signal; no human action unless it persists."
+
+      - alert: EvlLagWarn
+        expr: tenant:evl_lag_seconds:max > 120
+        for: 5m
+        labels: {severity: warning, team: platform}
+        annotations:
+          summary: "EVL backlog {{ $value | humanizeDuration }} for tenant {{ $labels.tenant }} (shed level ≥ 1)"
+          description: "D84: > 120 s for 5 m. Bridge conflation widened for non-funded heartbeats (docs/63 §4.14 L1)."
+
+      - alert: EvlLagPage
+        expr: tenant:evl_lag_seconds:max > 300
+        for: 60s
+        labels: {severity: page, team: platform}
+        annotations:
+          summary: "EVL backlog {{ $value | humanizeDuration }} for tenant {{ $labels.tenant }} — half the tick_stale window"
+          description: >-
+            D84 PAGE: > 300 s for 60 s. Shed level 2 is active. At 480 s this becomes an
+            INCIDENT; at 600 s ticks are suppressed as stale. Check workers replicas,
+            engine /evaluate latency, PG primary saturation (evl_pg_state_seconds).
+          runbook: docs/63-brg-streaming-ingestion.md#414
+
+      - alert: EvlStreamUnowned
+        expr: sum by (tenant) (consumer_stream_owned{consumer="evaluation"}) == 0
+        for: 2m
+        labels: {severity: page, team: platform}
+        annotations:
+          summary: "No workers instance owns topic.bridge.{{ $labels.tenant }} — its ticks are not being evaluated"
+          description: "An unowned stream exports no lag series, so the lag alerts cannot fire for it. Check workers pods / Redis lease keys."
+
+      - alert: EvlIncidentLag
+        expr: tenant:evl_lag_seconds:max > 480
+        labels: {severity: incident, team: platform}
+        annotations:
+          summary: "EVL INCIDENT: tenant {{ $labels.tenant }} backlog {{ $value | humanizeDuration }} (> 80 % of tick_stale)"
+          description: "D84: shed level 3 (fleet-wide material 25 bps, funded heartbeat widening outside the guard band)."
+
+      - alert: EvlIncidentStreamTrimmed
+        expr: increase(consumer_stream_trimmed_total{consumer="evaluation"}[10m]) > 0
+        labels: {severity: incident, team: platform}
+        annotations:
+          summary: "EVL INCIDENT: undelivered bridge.tick entries trimmed for tenant {{ $labels.tenant }}"
+          description: >-
+            MAXLEN trimmed entries the evaluation group had not read
+            (consumer_stream_trimmed_entries_total). workers replays the window from the
+            `events` table; verify evl.stream_trimmed replay completed.
+
+      - alert: EvlIncidentFundedStale
+        expr: increase(evl_tick_stale_total{funded="true"}[10m]) > 0
+        labels: {severity: incident, team: platform}
+        annotations:
+          summary: "EVL INCIDENT: funded-account ticks suppressed as stale for tenant {{ $labels.tenant }}"
+          description: "docs/63 §4.14: reaching tick_stale on funded accounts means the docs/29 §4 SLO has already failed."
+
+      - alert: EvlIncidentSingleWriter
+        expr: increase(evl_single_writer_violation_total[10m]) > 0
+        labels: {severity: incident, team: platform}
+        annotations:
+          summary: "EVL INCIDENT: evaluation_state version conflict for tenant {{ $labels.tenant }}"
+          description: "docs/64 I-24: lane ownership should make this impossible. The write was rolled back and retried; investigate lease/lane handling."
+
+      - alert: EvlDeadLetters
+        expr: increase(consumer_dlq_total{consumer="evaluation"}[15m]) > 0
+        labels: {severity: warning, team: platform}
+        annotations:
+          summary: "bridge.tick events dead-lettered for tenant {{ $labels.tenant }} (dlq.evaluation)"
+          description: "Permanent engine rejections (400/404/413/422) or 5 failed attempts. Inspect dlq.evaluation and consumer_state status='dead'."

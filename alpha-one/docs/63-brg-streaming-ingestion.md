@@ -909,7 +909,7 @@ it with a measurement.
 bridge applies it — the *same* advisory cache-invalidation pattern as
 `evl.floors` (§4.4) and `rule_pack.activated`. Redis-down degrades to
 level 0 at the bridge (the safe direction: shed nothing, keep emitting)
-with a 30 s PG reload fallback, exactly as floor hints already do. The
+with a 30 s PG reload fallback, exactly as floor hints already do (the level is persisted in `evl_load_shed`, docs/64 §4.9 "as implemented"). The
 decision to shed is made where the lag is observable (`workers`); the
 act of shedding happens where the tick is born (the bridge conflator), so
 no outbox row, relay `XADD` or PG write is spent on a tick that is about

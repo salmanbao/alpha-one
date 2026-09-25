@@ -10,7 +10,9 @@ CREATE TABLE outbox (
   published_at  TIMESTAMPTZ,
   publish_attempt INT NOT NULL DEFAULT 0
 );
-CREATE INDEX idx_outbox_unpublished ON outbox(id) WHERE published_at IS NULL;
+CREATE INDEX idx_outbox_unpublished ON outbox(event_id) WHERE published_at IS NULL;
+-- (was `outbox(id)`: the table has no `id` column — the key is `event_id`, a
+-- ULID, so ORDER BY event_id is creation order. docs/04 §3.3 says the same.)
 
 CREATE TABLE events (
   event_id      ULID,
@@ -28,8 +30,16 @@ CREATE TABLE events (
   correlation_id ULID,
   payload       JSONB NOT NULL,
   appended_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (topic, event_id)
-) PARTITION BY RANGE (appended_at);
+  PRIMARY KEY (topic, event_id, occurred_at)
+) PARTITION BY RANGE (occurred_at);
+-- Partition key = occurred_at (was appended_at). Postgres requires the
+-- partition key in every unique constraint, and the previous
+-- `PRIMARY KEY (topic, event_id) … PARTITION BY RANGE (appended_at)` did not
+-- apply. occurred_at is an envelope field — immutable per event — so a
+-- re-appended event carries the same key and (topic, event_id, occurred_at)
+-- dedupes exactly as (topic, event_id) did; appended_at is assigned per
+-- INSERT and would not. Day partitions; the bridge.tick ≤ 7-day hot window
+-- (docs/63 F13) and the workers trim-replay (D82) both prune on it.
 CREATE INDEX idx_events_tenant_type ON events(tenant_id, type, occurred_at);
 CREATE INDEX idx_events_entity ON events(entity_id, occurred_at);
 

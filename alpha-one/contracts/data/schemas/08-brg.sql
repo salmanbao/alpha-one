@@ -60,6 +60,27 @@ CREATE TABLE broker_positions (
 );
 CREATE INDEX idx_bpos_open ON broker_positions(login) WHERE closed_at IS NULL;
 
+-- D83 (docs/64 §4.8, docs/29 §3.4): the two high-volume BRG tables are
+-- partitioned by (tenant_id, day) — HASH(tenant_id) into 16 buckets, each
+-- RANGE-partitioned by day. tenant_id first because it is the D83 sharding
+-- function (the same key a Citus distribution would use) and every
+-- hot-path query carries it; day second for retention (DROP, not DELETE).
+-- Postgres requires every partition key in the PRIMARY KEY, so the keys
+-- below carry tenant_id and the day column; neither weakens uniqueness,
+-- because both are functions of the natural key:
+--   * a deal's tenant is its login's tenant, and deal_day is derived from
+--     deal_time (broker time, immutable per deal ticket), so a redelivered
+--     deal lands on the same PK and the dedupe (ON CONFLICT DO NOTHING)
+--     still fires. The previous `PARTITION BY RANGE (received_at)` with
+--     `PRIMARY KEY (login, deal_id)` was rejected by Postgres outright, and
+--     partitioning on received_at would have broken dedupe (a redelivery has
+--     a new received_at);
+--   * a snapshot's tenant is its account's tenant; bucket_ts is already
+--     the PK.
+-- Child partitions: the 16 hash buckets are created here; the per-day
+-- children are created ahead of time by the BRG partition job (7 days
+-- ahead) and dropped by retention (account_snapshots 14 d rolling, D35;
+-- broker_deals monthly children, kept — money evidence).
 CREATE TABLE broker_deals (
   deal_id       BIGINT NOT NULL,           -- MT5 deal ticket (per login)
   login         TEXT NOT NULL,
@@ -71,10 +92,11 @@ CREATE TABLE broker_deals (
   price         NUMERIC(18,8) NOT NULL,
   profit_cents  BIGINT, swap_cents BIGINT, commission_cents BIGINT,
   deal_time     TIMESTAMPTZ NOT NULL,      -- broker time
+  deal_day      DATE NOT NULL,             -- (deal_time AT TIME ZONE 'UTC')::date, set by the writer
   received_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (login, deal_id)
-) PARTITION BY RANGE (received_at);
--- monthly partitions (high-volume table; same pattern as events)
+  PRIMARY KEY (tenant_id, login, deal_id, deal_day),
+  CHECK (deal_day = (deal_time AT TIME ZONE 'UTC')::date)
+) PARTITION BY HASH (tenant_id);
 
 CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-day rolling (D35)
   account_id      ULID NOT NULL,
@@ -89,11 +111,29 @@ CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-da
   equity_high_cents BIGINT,                   -- minute (streaming; NULL on fallback-poll rows)
   broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
   received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (account_id, bucket_ts)
-) PARTITION BY RANGE (bucket_ts);
--- daily partitions; retention = 14-day rolling (partition DROP; BRG job) with the
--- daily rollup exported to the ANA read model first (docs/19). PAY eligibility and
--- TD intraday equity curves read here (BRG-09 refreshes the latest row on demand).
+  PRIMARY KEY (tenant_id, account_id, bucket_ts)
+) PARTITION BY HASH (tenant_id);
+-- retention = 14-day rolling (per-day child DROP; BRG job) with the daily
+-- rollup exported to the ANA read model first (docs/19). PAY eligibility and
+-- TD intraday equity curves read here — from the replica (D83), except
+-- BRG-09's on-demand refresh of the latest row.
+
+DO $$
+BEGIN
+  FOR b IN 0..15 LOOP
+    EXECUTE format(
+      'CREATE TABLE broker_deals_h%s PARTITION OF broker_deals
+         FOR VALUES WITH (MODULUS 16, REMAINDER %s) PARTITION BY RANGE (deal_day)', b, b);
+    EXECUTE format(
+      'CREATE TABLE account_snapshots_h%s PARTITION OF account_snapshots
+         FOR VALUES WITH (MODULUS 16, REMAINDER %s) PARTITION BY RANGE (bucket_ts)', b, b);
+  END LOOP;
+END $$;
+-- Day children, e.g. (the BRG partition job's template):
+--   CREATE TABLE account_snapshots_h3_20260925 PARTITION OF account_snapshots_h3
+--     FOR VALUES FROM ('2026-09-25 00:00+00') TO ('2026-09-26 00:00+00');
+--   CREATE TABLE broker_deals_h3_202609 PARTITION OF broker_deals_h3
+--     FOR VALUES FROM ('2026-09-01') TO ('2026-10-01');
 
 CREATE TABLE broker_executions (
   id            ULID PRIMARY KEY,

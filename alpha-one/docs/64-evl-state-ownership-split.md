@@ -246,6 +246,21 @@ stateless `/evaluate-order`, all behind the service token.** From 14 routes
 to 7, and from "a service with a database" to "a function with an HTTP
 shape".
 
+**As implemented (propfirm-engine, branch `arena/01a0d960-alpha-one`,
+commit `493a967`; not yet compiled, see O-10).** The implemented surface
+has 7 routes and differs from the table above in three places, each on
+purpose:
+
+| Route | Why it differs |
+|---|---|
+| `POST /internal/v1/state/init` | **Added.** Builds the initial `(state, plan, hints)` for a preset. Without it, `workers` could create an `evaluation_state` row only by reimplementing the engine's state constructor, which is the drift D81 exists to prevent. `workers` exposes it as `evl.InitAccount`. |
+| `POST /internal/v1/override/decide` | **The "decision" half of the `/override` split,** kept stateless. The step-up MFA (≤ 5 min) and the > $500k firm:owner checks stay in `workers`/GW, where the actor context lives; the engine judges admissibility from the verdict and evidence it is given. |
+| `/internal/v1/explain` | **Deferred (O-7).** The breach-report rendering depends on the evidence schema TD consumes, which has no contract yet. The old `GET /breach-report/:id` is removed as planned. |
+
+`/evaluate-order` moved from `/v1/` to `/internal/v1/` behind the service
+token, as the table requires. A request's `rule_pack` field is a hard 400
+(G7, §4.6).
+
 ### 4.4 D81's wire contract: `bridge.tick` v1 at the boundary (G5)
 
 `/evaluate`'s request DTO becomes the real `bridge.tick` v1 envelope
@@ -359,6 +374,23 @@ the `MAXLEN ~100000` trim hazard (detection via `evl.stream_trimmed` +
 replay-from-PG, prevention via D84's shedding, and an explicit refusal to
 raise `MAXLEN` because Redis is never the source of truth).
 
+**Proposed amendment to D82 (pending owner decision, from the LT-4
+measurement in §9.1).** Per-tenant streams and lane sets isolate *queues*:
+tenant A's backlog never sits in front of B's ticks. They do not isolate
+the downstream that every lane shares. At saturation, with lanes alone
+(ownership balanced), B–J p95 rose 4.06× while A's backlog grew to a 724 ms
+p95. The implementation therefore adds **weighted fair admission**
+(`consumer.FairShare`, docs/04 §3.5.1):
+- a group-wide in-flight budget (`WORKERS_INFLIGHT_BUDGET`, default 64, sized ≈ 2 × the PG primary's vCPUs), split across live instances
+- a freed slot goes to the waiting tenant with the lowest in-flight ÷ weight
+
+This is the "weighted fair queuing" option of step 5a, applied where it is
+implementable: at the shared resource, not on a shared stream (which
+remains unimplementable, as argued above). Measured effect at the same
+load: B–J p95 went from 4.06× to 1.41×, A's p95 went from 724 ms to
+24 ms, and burst drain throughput went from 421 to 513 ticks/s. I-31 as
+written is still not met (O-8).
+
 ### 4.8 D83 — Postgres write scaling for `evaluation_state`
 
 **Full text and arithmetic: docs/29 §3.4.** In one paragraph: at the
@@ -417,6 +449,18 @@ priority list protects them. **`evl.tick_stale` is explicitly not a
 capacity plan**: it is the correctness backstop, and reaching it on funded
 accounts is already a docs/29 §4 SLO failure, which is why that condition
 is an incident and not a degradation.
+
+**D84 as implemented (`pf-platform/go/workers/evl/ladder.go`,
+`deploy/prometheus/evl-alerts.yml`).** Three things the prose above did
+not specify, each found while testing:
+1. **The shed level is persisted.** A new table, `evl_load_shed(tenant_id, level, reason, level1_at, incident_until)` in `09-evl.sql`, is written on every level change.
+   - It is the bridge's "30 s PG reload fallback" that docs/63 §4.14 promises; before this there was no PG row to reload.
+   - After a lease handover, the new owner resumes the tenant's level and incident hold instead of resetting it to level 0 mid-incident (tested).
+2. **Only the stream's lease holder exports its lag and ladder series.** They are deleted on release. Otherwise, after a handover, the previous owner's last `consumer_lag_seconds` / `evl_page` keep alerting on stale data (tested).
+3. **Alert durations are evaluated by Prometheus (`for:`), not by in-process timers,** because the series survives a handover and the timer does not.
+   - Added `EvlStreamUnowned` (page): an unowned stream exports no lag series, so no lag alert can fire for it.
+   - `evl_single_writer_violation_total > 0` is an INCIDENT (I-24 says it cannot happen).
+   - Rebalancing (docs/04 §3.5.1) is what makes "scale out on lag" effective at all: before it existed, the first instance kept every lease.
 
 ## 5. ADR-11's status
 
@@ -477,11 +521,16 @@ two commits in two repos: merging 3 without 1 removes the evaluation path.
 | # | Item | Owner | Why it is not closed here |
 |---|---|---|---|
 | **O-1** | **Activated rule packs still do not drive evaluation.** D81 removes the engine's disconnected `RulePackStore` (G3) but does **not** by itself make tenant-authored packs effective. `workers` must resolve the account's bound `(rule_pack_id, rule_pack_version)`, fetch the document from ADM's store, and `/evaluate` must build its `RuleRegistry` **from that document** rather than from `acc.plan`'s preset. Until that lands, tenant rule configuration is inert and `input_hash` reproducibility remains qualified (§5). | EVL owner + ADM owner | It needs docs/09 §3.1's pack-vs-plan precedence decided first — a data-model question, not a refactor. **This is the single most consequential thing this pass found and did not fix, and it is stated here so it cannot be lost behind a green build.** |
-| O-2 | The `workers` consumer does not exist (F-B1) | BE-2 | §6 step 1 |
+| O-2 | ~~The `workers` consumer does not exist (F-B1)~~ **Implemented, unmerged:** `pf-platform/go/workers`, covering the supervisor (docs/04 §3.5.1), the EVL lane, tests and `cmd/evl-loadtest`. The results are in §9.1 | BE-2 | Open until merged and until the e2e job runs it against the real engine (O-10) |
+| **O-1a** | **`account.activated.v1` carries no plan or rule-pack binding.** `workers` cannot create an account's `evaluation_state` from the event alone, so there is **no `account.activated` consumer yet**; only `evl.InitAccount(preset)` exists, for ADM/LCC to call once the binding is known. It is the same gap as O-1, seen from the event side. | EVL owner + LCC owner | Adding `rule_pack_id`/`rule_pack_version` (or a plan preset) to `account.activated` is a versioned contract change (docs/00 §8 #8) |
 | O-3 | docs/04 §3.4's 13-month `events` retention needs the `bridge.tick` tier exception recorded normatively (docs/63 F13, §10.2 there) | BE-1 | docs/29 §3.4.2 states the decision; the docs/04/32 edits are mechanical and belong in a wiring pass |
 | O-4 | `contracts/api/09-EVL.openapi.yaml` must be regenerated for the §4.3 surface (14 routes → 7, the new `/evaluate` request/response shape, `/rule-packs/validate`, `/explain`) | EVL owner | Contract changes are versioned explicitly (docs/00 §8 #8); doing it inside this decision doc would bypass that |
 | O-5 | MetaApi's per-server credit limit: per (`Client-Id`, server) or global? (docs/63 §8 Q8) | BE-1 + Tech Lead | A vendor question. Planned against the pessimistic reading until answered. |
 | O-6 | Measured RSS per `bridge-stream` account (docs/63 §8 Q3/Q7) | BE-1 + DevOps | F12's shard count and the second-box requirement follow from it; the ≈ 50-shard figure is an estimate |
+| O-7 | `/internal/v1/explain` deferred (see "As implemented" under §4.3) | EVL owner + TD owner | Needs an evidence contract first |
+| **O-8** | **I-31 (LT-4) did not pass as written on the dev sandbox** (§9.1). Per-tenant lanes plus FairShare prevent starvation and contain the hot tenant, but B–J p95 still rose 1.41× (p50 unchanged) because the shared PG and CPU ran at ≈ 74 % utilization against ≈ 39 % at baseline. "Unchanged within measurement noise" is not physically achievable on a shared resource whose utilization doubles, unless the hot tenant is throttled below idle capacity (non-work-conserving). | D82 owner | A spec decision: (a) quantify I-31, e.g. B–J p95 ≤ 1.5× baseline **and** inside the docs/63 §4.6 SLO; or (b) require a per-tenant rate cap. Rerun on V2 hardware either way |
+| O-9 | Of the 27 files in `contracts/data/schemas/`, only 01/04/08/09 apply to a clean PG 16. The rest fail with `type "ulid" does not exist` (now fixed by the new `01-domains.sql`); 03-ten, 05-led-aud, 19-ana and 26-mob also have syntax errors | Data owner | Outside this pass. A CI job applying every schema file would have caught it |
+| **O-10** | **The engine changes are committed but neither pushed nor compiled.** `git push` to `salmanbao/propfirm-engine` returns 403 for the agent's GitHub app, and the sandbox has no Rust toolchain, so the first compile is the PR's CI run. Until then, D81's engine half, I-25 and I-26 are **unverified** | EVL owner | Needs repo access for the app |
 
 ## 8. Test hooks
 
@@ -489,7 +538,7 @@ two commits in two repos: merging 3 without 1 removes the evaluation path.
 |---|---|---|---|
 | I-24 | **single writer per account, structurally** | for any account, over any interleaving of redelivered `bridge.tick` events, DLQ retries and `manual-run` enqueues, exactly one `workers` lane issues `evaluation_state` writes — asserted by a concurrency test that fails if any two lanes hold the same `account_id`, and by the absence of any OCC conflict path in the engine | 64 §4.1 / 09 §3.2 / 04 §3.5 |
 | I-25 | **the engine holds no state** | the engine binary starts, passes `/ready` and serves `/evaluate` with **no `DATABASE_URL` configured and no reachable Postgres or Redis**; a CI job asserts the crate has no `sqlx` dependency and no `postgres` feature in the default build | 64 §4.1 / 01 ADR-11 |
-| I-26 | **hint/rule agreement** (property test) | for every equity-basis rule and generated `(state, pack)`: at `equity == floor` the rule fires; at `floor + 1 cent` it does not; both under the rule's `tolerance_cents()`; and `floor_total_cents == min(static, trailing)` when both are bound | 64 §4.5 / 09 §3.8 |
+| I-26 | **hint/rule agreement** (property test) | for every equity-basis rule and generated `(state, pack)`: at `equity == floor` the rule fires; at `floor + 1 cent` it does not; both under the rule's `tolerance_cents()`; and `floor_total_cents == max(static, trailing)` when both are bound — the *stricter* floor is the higher one (a breach fires at `equity ≤ floor`); an earlier draft said `min`, which would have advertised the laxer floor | 64 §4.5 / 09 §3.8 |
 | I-27 | **hints are advisory** | mutating any `floor_*` value in a persisted state changes **no** verdict for any tick — the engine never reads them back (I-03 preserved) | 64 §4.5 / 63 §4.4 |
 | I-28 | **`trigger` is not a rule input** | the same `(state, pack, equity)` produces the same verdict for every value of `trigger` ∈ {deal, position, guard, material, heartbeat, resync} | 64 §4.4 / 63 §4.4 |
 | I-29 | **envelope conformance** | every `/evaluate` request the `workers` consumer sends validates against `contracts/events/payloads/bridge.tick.v1.json`'s payload schema; a contract test fails on any field the engine accepts that the schema does not define | 64 §4.4 |
@@ -514,6 +563,40 @@ two commits in two repos: merging 3 without 1 removes the evaluation path.
 | docs/35 | I-24..I-31 |
 | `propfirm-engine` README + docs/architecture.md | **pending §6 step 4** — stateless compute service, not a self-contained deployment |
 | `contracts/api/09-EVL.openapi.yaml` | **pending O-4** |
+| `contracts/data/schemas/01-domains.sql` | **new**: the `ULID` domain every schema file references and none defined (O-9) |
+| `contracts/data/schemas/04-gw-evt.sql`, `08-brg.sql`, `09-evl.sql` | D83 partitioning (`evaluation_state` HASH 64; `broker_deals` HASH 16 × monthly `deal_day`; `account_snapshots` HASH 16 × daily; `events` daily), with dedupe keys that include the partition key; `idx_outbox_unpublished` on `event_id`; the new `evl_load_shed` table |
+| docs/04 | §3.3 relay `ORDER BY event_id`; **new §3.5.1**, the supervisor mechanics as implemented |
+| `pf-platform/go/workers/` | **new**: `consumer/` (the supervisor), `evl/` (the lane), `cmd/workers`, `cmd/evl-loadtest`, `deploy/prometheus/evl-alerts.yml` |
+
+### 9.1 Measured results (dev sandbox: 2 vCPU, PG 16.14 and Redis 7 local, stub engine)
+
+These are **not** the V2-scale load tests. docs/29 §6 LT-1..LT-8 run at
+100k accounts on V2 hardware. These runs show the mechanisms work and give
+relative numbers. Reproduce with `go run ./cmd/evl-loadtest [-budget N]`.
+Every run seeds 10 tenants × 100 accounts via `/state/init`, drains a
+5,000-tick burst, then runs 20 s at 20 ticks/s per tenant (baseline) and
+20 s with tenant A at 10× (380 ticks/s offered in total). It runs 2
+supervisor instances and injects 1 % redeliveries.
+
+| Property | Result, identical in every run |
+|---|---|
+| exactly-once | 16,600 unique events + 184 redeliveries → 16,600 `consumer_state` done, 16,600 `evaluations`, 16,600 distinct |
+| versions | 1,000/1,000 accounts' final `evaluation_state.version` == ticks sent |
+| I-24 | 0 concurrent same-account handlers, 0 single-writer violations, 0 DLQ, 0 retries |
+
+| LT-4 configuration (ownership balanced 5/5) | burst drain | B–J p95 base → hot (ms) | worst B–J ratio | A hot p95 |
+|---|---|---|---|---|
+| lanes only (D82 as decided) | 421/s | 28.7–30.6 → 103.6–111.5 (B, G, J printed) | 4.06× (all nine) | 724 ms |
+| + FairShare, 8 per instance | 414/s | 31.3–34.7 → 69.9–113.1 | 3.43× | 2,535 ms |
+| + FairShare, 4 per instance | 495/s | 25.9–28.2 → 36.5–43.9 | 1.62× | 31 ms |
+| + FairShare, budget 4 (2 per instance), longest-waiting tie-break | 513/s | 21.0–24.9 → 24.5–29.6 | **1.41×** | 24 ms |
+
+Below saturation (baseline 12 ticks/s per tenant, hot phase ≈ 58 % of
+capacity, lanes only), B–J p95 went from 34.2–36.5 to 40.0–44.3 ms (+18 %).
+The run with the (since fixed) tenant-id tie-break showed B–J p95 rising
+in tenant order (B 26.7 → J 35.7 ms), which is why ties now go to the
+longest-waiting tenant.
+
 
 ## 10. What did **not** change
 
