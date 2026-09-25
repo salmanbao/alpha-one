@@ -254,6 +254,9 @@ Envelope per GW-18: every error response carries exactly `code`, `message`, `cor
 | `brg.sync_gap` | — | Deal discontinuity (event + ADM review) |
 | `brg.credentials_missing` | — | Provisioned account missing creds (should never happen) |
 | `brg.symbol_unknown` | — | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) |
+| `brg.stream_stale` | — | Account stream not `live` (disconnect / broker offline / 90 s silence) — no heartbeat ticks; fallback poll after 30 s (docs/63 §4.7) |
+| `brg.stream_desync` | — | Stream ordering failure, sequence regression, or critical-frame queue overflow at the sidecar boundary → forced resync (never silent loss, I-23) |
+| `brg.rate_limited` | — | MetaApi 429 (`TooManyRequestsError`) on REST or subscribe — back off to `recommendedRetryTime`; rotate `client-id` for per-server limits |
 
 ### EVL (extended)
 

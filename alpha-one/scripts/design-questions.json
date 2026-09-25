@@ -803,6 +803,46 @@
    "owner": "DevOps",
    "deadline": "Contract freeze",
    "answer": "**Answered 2026-09-20 — designed path, not accepted risk (full story in docs/06 §3.7).** Supervisor = compose `restart: always` on the prod box (compose IS the process supervisor there; the D56 standby host is a disaster standby, not an active HA pair — there is no second relay to fail over to) + the `relay:lock` PG advisory lock with a 30 s heartbeat steal (docs/04 §3.3) — a second/started relay cannot publish while the lock is held, and a dead one is stolen within 30 s. Detection = `relay.lag` Prometheus metric + CON gauge (docs/04 §11) and the `evt.relay_stopped` CRITICAL after 60 s without a publish (docs/04 §6 ext) + Uptime Kuma on `/readyz` (readyz already gates on relay lag < 60 s, docs/04 §4). Worst-case detection-to-restart ≈ 60–90 s. In-flight: nothing is in flight — rows leave the outbox only after the XADD batch succeeds (`published_at IS NULL` is the work queue, docs/04 §3.3); a relay that dies mid-run leaves rows in PG to be drained on restart, and at-least-once redelivery is absorbed by consumer idempotency on `event_id`. Exit criterion: kill relay 5 min → restart → zero lost, zero dupes (docs/04 §16 step 2). Backlog impact: notifications (NOT), tenant webhooks (Hook0 via consumers), LED postings, and ANA read models lag by the stall duration + drain time; the **trading path is unaffected** (bridge enforcement does not depend on events, docs/04 §16 risks). V2 candidate (not V1 scope): dual-relay lease handover for <30 s failover."
+  },
+  {
+   "id": "D77",
+   "source_doc": "08",
+   "section": "Stream runtime (twenty-second pass — docs/63 §4.2)",
+   "question": "STREAM RUNTIME: MetaApi's real-time account data (broker equity on every price packet, positions, deals) is only practically reachable through its streaming API, which MetaApi says to consume via its SDK (JS/Python/Java — no Go SDK). The bridge is Go (docs/01 §2 rejected Node for the hot sync path). How should the platform host the streaming client: a Node/TS sidecar on the official SDK, a Go port of the socket.io protocol, or a Java SDK sidecar?",
+   "raised_by": "Twenty-second pass — BRG streaming ingestion (2026-09-25, docs/63)",
+   "owner": "Tech Lead + BE-1",
+   "deadline": "Phase 0 exit (MetaApi spike)",
+   "answer": "**Answered 2026-09-25 — a thin Node/TS `bridge-stream` sidecar on the official `metaapi.cloud-sdk` (pinned 29.3.3).** The sidecar holds one SynchronizationListener per account and forwards ordered frames (Equity, AccountInfo, Positions, Deal, SyncState, Health, Downgrade) to the Go bridge over gRPC on a Unix socket. It does no money math (numbers cross as decimal strings; Go rounds per docs/09), holds no durable state (a PG-backed SDK HistoryStorage cursor lives in the bridge), makes no decisions, and reads equity only from raw packet values — never the SDK's local recompute (docs/63 F5). Recorded as ADR-15 (docs/01) — the one scoped exception to the Go-core rule. Rejected: a Go protocol port (we would own an evolving protocol MetaApi says not to re-implement); a Java sidecar (JVM on the single box + a third language). Licence = source-available, free for metaapi.cloud use → docs/34 review-before-deploy."
+  },
+  {
+   "id": "D78",
+   "source_doc": "08",
+   "section": "Ingest mode (twenty-second pass — docs/63 §3 F1, §4.7)",
+   "question": "INGEST MODE: docs/08 fixed V1 as poll-only every 60 s with streaming (BRG-21) in V3. MetaApi's documented CPU-credit limits (≈176 credits per account poll; 18k credits/min per front-end server) cap a 60-s poll at ≈100 accounts per server — V1's 431 accounts need ≥5 servers via client-id rotation, and V2's 10k accounts (≈1.76M credits/min) exceed all 12 servers combined (≈216k/min) ~8×; poll lag (≤60 s) is also enforcement lag. Streaming consumes no credits. Should V1 ingest move to streaming?",
+   "raised_by": "Twenty-second pass — BRG streaming ingestion (2026-09-25, docs/63)",
+   "owner": "Tech Lead + BE-1",
+   "deadline": "Phase 0 exit (MetaApi spike)",
+   "answer": "**Answered 2026-09-25 — streaming is the V1 primary ingest; REST polling is demoted to fallback + reconciliation.** BRG-21 is pulled forward from V3 to V1 (workbook unchanged; recorded in docs/08 §1 and docs/99). Accounts whose stream is `stale` > 30 s are REST-polled every 60 s under a per-client-id credit budget (≤80% of the per-server limit; funded/open-position accounts first); REST also serves the D33 history-window check at every (re)synchronization + hourly, BRG-09 on-demand refresh when the stream is not live, commands, and the nightly reconciler. Provisioning sets reliability (high for funded), region per broker group, riskManagementApiEnabled=false, metastatsApiEnabled=false; G2 required. Rejected: V1 poll-only with streaming in V2 (still needs client-id sharding, keeps 60-s lag); keep V3."
+  },
+  {
+   "id": "D79",
+   "source_doc": "08",
+   "section": "Hot path (twenty-second pass — docs/63 §4.4–§4.5)",
+   "question": "HOT PATH: per-quote equity (≈3k frames/s at 10k accounts, 10k/s bursts) cannot ride the outbox (relay capacity 10k events/min; every event is kept 13 months). How do streamed updates reach EVL with minimum latency without breaking ADR-6 (transactional outbox) — conflate at the bridge and keep the outbox, grant an ADR-6 exception for a tick stream, or call EVL directly with async persistence?",
+   "raised_by": "Twenty-second pass — BRG streaming ingestion (2026-09-25, docs/63)",
+   "owner": "Tech Lead + BE-1 + BE-2",
+   "deadline": "Contract freeze",
+   "answer": "**Answered 2026-09-25 — keep the transactional outbox; conflate at the bridge; group commit; NOTIFY doorbell.** The bridge holds per-account hot state and emits `bridge.tick` only on triggers: deal, position change (urgent), guard (equity within a guard band — default 50 bps of initial balance — of an EVL floor hint, ≤4/s; a floor crossing is never rate-capped, invariant I-21), material (abs Δequity ≥ 10 bps, ≤1/10 s), heartbeat (60 s open / 300 s flat, only while live), resync. A group-commit writer (≤25 ms / ≤500 rows; urgent = now) writes snapshots + deals + outbox + pg_notify('outbox_doorbell') in one tx; the relay LISTENs (1-s safety poll kept; NOTIFY is never transport). EVL returns advisory floor hints (evaluation_state.floor_daily/total/target + Redis `evl.floors`) — they change only when a tick is emitted, never what is decided. `bridge.tick` stays v1 with optional trigger/source/stream_seq/equity_low_cents/equity_high_cents (evidence; V1 rules still run at equity_cents). Envelope: V1 ≈10/s, V2 ≤250/s sustained, ≤1k/s burst (same order as the old poll plan); relay target raised to 60k events/min; platform-internal quote→verdict p95 < 50 ms. Correction: a relay stall pauses evaluation (docs/63 F6) — `bridge`-topic lag alert WARN 5 s / CRITICAL 30 s. Rejected: ADR-6 exception; direct bridge→EVL gRPC with async persistence."
+  },
+  {
+   "id": "D80",
+   "source_doc": "08",
+   "section": "MetaApi risk-management API (twenty-second pass — docs/63 §4.10)",
+   "question": "RISK-MANAGEMENT API: MetaApi's risk-management ('prop trading') API offers server-side drawdown/profit trackers with a resumable tracker-event stream, period statistics and equity charts. Should Alpha One use it — as a verdict source, as a watchdog, or not at all? (Tracker drawdown is measured against the period's initialBalance, has no trailing high-water mark, does not support MT5 netting, and is billed per account-hour on top of MetaApi; BVR-28 forbids vendor-final breaches.)",
+   "raised_by": "Twenty-second pass — BRG streaming ingestion (2026-09-25, docs/63)",
+   "owner": "Tech Lead + FunderBlu risk",
+   "deadline": "V2 planning",
+   "answer": "**Answered 2026-09-25 — optional V2 watchdog, off by default; never a verdict source.** When a tenant/program opts in, BRG mirrors the rule pack into trackers (daily loss → period 'date', total loss → 'lifetime' absolute threshold; trailing-HWM programs and netting accounts get none) and long-polls /users/current/tracker-events/stream with a PG-persisted previousSequenceNumber cursor. A tracker event on a live stream with no EVL breach within 30 s → `bridge.watchdog_divergence` (ext) → ADM review; on a stale stream → immediate BRG-09 REST refresh → urgent tick → EVL decides. Never touches LCC (BVR-28). EquityBalanceListener (a duplicate streaming connection), equity charts (ANA owns) and MetaStats/CopyFactory are not on the ingest path. Cost passed through (docs/22 §3.4)."
   }
  ]
 }

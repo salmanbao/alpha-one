@@ -137,6 +137,22 @@ Single instance (PG advisory lock `relay:lock`, steal after 30 s heartbeat):
 4. **Pruning** (a V1 necessity — the outbox must not grow unbounded; EVT-33's
    V2 retention ops formalize the policy): published events older than 7 d
    deleted nightly (they live in the `events` table forever).
+5. **Wake-up = doorbell + safety poll (D79, docs/63 §4.5).** The relay
+   `LISTEN`s on the `outbox_doorbell` channel and runs step 1 immediately
+   on each notification; notifications arriving mid-drain coalesce into
+   one more pass. Producers on the latency-critical path (the BRG
+   group-commit writer) issue `pg_notify('outbox_doorbell','')` inside
+   their outbox transaction, so the doorbell rings on commit and never
+   for a rolled-back row. The 1-s safety poll stays, so a lost
+   notification (e.g. a relay reconnect) costs ≤ 1 s. NOTIFY carries **no
+   payload and no delivery guarantee**. It is not the transport (§12's
+   rejection stands); the outbox row is.
+
+   **Correction to D76's accepted-risk wording (docs/63 F6):** enforcement
+   commands do not ride the relay, but **evaluation does**. EVL's only
+   input, `bridge.tick`, is outbox → relay → Streams, so a relay stall is
+   an evaluation pause. The `bridge` topic therefore gets its own lag
+   alert: `relay.lag{topic=bridge}` > 5 s → WARN, > 30 s → CRITICAL.
 
 ### 3.4 Event log (EVT-08)
 
@@ -417,12 +433,12 @@ relay lock is PG-side.
 |---|---|---|
 | Middleware chain | < 2 ms overhead (cached tenant config, JWKS/session deny-set in Redis) | 2k req/s per instance; add instances (stateless) |
 | Idempotency | Redis SETNX + 24 h TTL; ~2 MB RAM per 10k keys — trivial | — |
-| Outbox poll | keyset + SKIP LOCKED; 500/batch; publish in one XADD batch (pipeline) | 10k events/min sustained (10× V2 target) |
+| Outbox poll | keyset + SKIP LOCKED; 500/batch; publish in one XADD batch (pipeline); `NOTIFY` doorbell wake-up (§3.3 step 5) → publish latency p95 < 10 ms after commit | target **60k events/min sustained** (1k/s — the D79 V2 `bridge.tick` burst point ≤ 1k/s + other topics; sustained ticks ≤ 250/s, docs/63 §4.4); measured in the 29 §6 load test |
 | Streams | per-topic streams; MAXLEN ~100k; consumer groups | 2k msg/s fine on Redis with AOF everysec |
 | Ordering | per-entity lanes (hash) | no global ordering — documented |
 | DLQ | per-consumer stream + CON screen | DLQ depth alert > 100 |
 | Replay | from PG `events` — O(range), no stream scan | 13-month window |
-| Failure: relay down | outbox accumulates (bounded by tx rate); **trading continues** (bridge→PG direct for enforcement-critical paths — sync ticks are PG writes, events are derived) | RTO for relay = restart (< 1 min) |
+| Failure: relay down | outbox accumulates (bounded by tx rate); **trading continues** (bridge→PG direct for enforcement-critical paths — sync ticks are PG writes, events are derived) — but **evaluation pauses** (EVL consumes `bridge.tick` via the relay; docs/63 F6) | RTO for relay = restart (< 1 min); `bridge`-topic lag CRITICAL at 30 s |
 | Failure: Redis down | GW: authn falls to PG (degraded); rate limits fail-open with alert; EVT: relay pauses (outbox accumulates) | the failure rows above + 29 §6 load numbers |
 
 ## 12. Open-source solutions
@@ -431,7 +447,7 @@ relay lock is PG-side.
 |---|---|
 | **Hook0** (self-hosted webhook delivery) | **CHOSEN** for outbound (EVT-11/13/14/15; AGPL review done — self-hosted OK) |
 | Kafka / NATS JetStream | **Forbidden/consider-later** (ADR-7); Redis Streams for V1–V2 |
-| Outbox alternatives (PG NOTIFY, CDC/Debezium) | Rejected: NOTIFY no replay; Debezium = extra infra, more moving parts |
+| Outbox alternatives (PG NOTIFY, CDC/Debezium) | Rejected as transport: NOTIFY no replay; Debezium = extra infra, more moving parts. NOTIFY **is** used as the relay's payload-free wake-up doorbell (§3.3 step 5, D79) |
 | Kong/Traefik | Forbidden (ADR-4) |
 | Apifox/Scalar (OpenAPI hosting) | Scalar for the docs site rendering (CMS), contract served by api |
 | BullMQ | Used only for JS-side cron (docs-worker jobs); not the event bus |

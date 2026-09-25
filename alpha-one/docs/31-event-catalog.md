@@ -26,7 +26,7 @@
 - **The DLQ** (04 §5.6): 5 retries → `evt.consumer_dlq` (04 §6) → the CON-15
   alert (21 §3.2).
 
-## 2. The catalog (160 events — 42 V1 baseline, 118 extended — across 33 topics)
+## 2. The catalog (161 events — 42 V1 baseline, 119 extended — across 33 topics)
 
 ### `user.*`
 
@@ -144,13 +144,14 @@
 
 | Event | Producer | When / V1 producer | Consumers | Tier |
 |---|---|---|---|---|
-| `bridge.tick` | 08 (BRG) | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) | V1 |
+| `bridge.tick` | 08 (BRG) | BRG (streaming conflator, per account, event-driven: deal/position/guard/material/resync + heartbeat ≤ 60 s open / ≤ 300 s flat; fallback poll 60 s — D78/D79, docs/63 §4.4) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) | V1 |
 | `bridge.sync_gap` | 08 (BRG) | BRG (history-window count mismatch — D33) | ADM (manual review), AUD, EVL (gap_flagged verdict) | V1 |
 | `bridge.account_created` | 08 (BRG) | provisioning | LCC, NOT, CON | ext |
 | `bridge.trading_disabled` | 08 (BRG) | after confirmed command | LCC (confirm transition), AUD | ext |
 | `bridge.positions_closed` | 08 (BRG) | after confirmed close-all | LCC, AUD, NOT (breach evidence) | ext |
 | `bridge.reconciliation_exception` | 08 (BRG) | nightly mismatch | ADM, AUD, CON | ext |
 | `bridge.command_dead` | 08 (BRG) | terminal command failure | CON (CRITICAL), AUD | ext |
+| `bridge.watchdog_divergence` | 08 (BRG) | V2 (D80): MetaApi risk-management tracker event with no matching EVL breach within 30 s | ADM (review), CON — never LCC (BVR-28) | ext |
 
 ### `evaluation.*`
 

@@ -56,7 +56,8 @@ on-call surface.
 | `web` | Next.js 15 / TS | TD, ADM, CON, CMS frontends (routed by host/subdomain). SSR/RSC for pages; no business logic | stateless, 1 instance V1 |
 | `zitadel` | Go (upstream) | Identity provider (ADR-13): hosted login, credentials, MFA factors, sessions, orgs/projects, SSO/SAML, SCIM, login policy. Own database in the same Postgres instance | single instance (stateless except PG); upstream image, unmodified |
 | `api` | Go 1.27 | All public + internal REST APIs. Hosts the **in-app gateway layer** (GW). Sync request handling | stateless, 1–2 instances |
-| `bridge` | Go 1.27 | BRG: MetaApi connections, account provisioning, polling sync, enforcement actions | stateless over PG, 1 instance (MetaApi rate-limited anyway) |
+| `bridge` | Go 1.27 | BRG: MetaApi connections, account provisioning, **streaming ingest** (hot state, conflation, group commit — D78/D79) + fallback polling, enforcement actions | 1 instance V1; hot state is rebuildable (MetaApi resync + PG), scaling = shard accounts across instances (docs/63 §4.11) |
+| `bridge-stream` | Node 22 / TS | BRG stream gateway (D77, ADR-15): official `metaapi.cloud-sdk` streaming connections → ordered frames to `bridge` over gRPC on a Unix socket. No money math, no persistence, no decisions | 1 shard V1; ≤ 2k accounts/shard (5–6 shards at 10k) |
 | `engine` | Rust (axum) | EVL: rule evaluation, verdicts, PnL math, day-boundary processing | stateless, 1–2 instances; invoked by `api`/`bridge`/`workers` |
 | `relay` | Go 1.27 | Outbox relay: reads `outbox`, publishes to Redis Streams, manages delivery seq | **exactly one instance** (locked via PG advisory lock) |
 | `workers` | Go 1.27 | Event consumers (consumer groups), schedulers, reconcilers, report generation, DLQ handling | stateless, 1–2 instances |
@@ -78,7 +79,7 @@ with enforced boundaries (linter: `goimports` + custom `boundary` check in CI).
 
 | Concern | Choice | Rationale / rejected alternatives |
 |---|---|---|
-| Core language | **Go 1.27** (api, bridge, relay, workers) | One binary per service, easy concurrency for sync polling, excellent Postgres/Redis clients. Rejected: Node (GC latency in hot sync path, weaker type safety for money math), Python (runtime perf for sync). |
+| Core language | **Go 1.27** (api, bridge, relay, workers) | One binary per service, easy concurrency for sync polling, excellent Postgres/Redis clients. Rejected: Node (GC latency in hot sync path, weaker type safety for money math), Python (runtime perf for sync). **One scoped exception (ADR-15, D77):** the `bridge-stream` sidecar is Node/TS because MetaApi's streaming protocol is only practically reachable via its SDK — it forwards frames only; every number is parsed, rounded and acted on in Go/Rust. |
 | Rule engine language | **Rust** (engine) | Verdict math must be exact, allocation-light, and property-tested (already scaffolded in `pf-platform` with `cargo test` green). Exposed as HTTP service (JSON, no gRPC in V1 — JSON for debuggability; move to gRPC only if p99 proves it). |
 | Frontend | **Next.js 15 + TypeScript + Tailwind** | App Router, RSC for data-heavy pages, client islands for live charts (TradingView Lightweight Charts, ~45KB). One pnpm monorepo (`web/`) for TD/ADM/CON/CMS. Rejected: separate frameworks per app. |
 | Primary DB | **Postgres 16** | Domain data, event log, outbox, command log, ledger, audit — all here. `pg_cron` NOT used (schedulers live in workers). |
@@ -157,6 +158,27 @@ are a ratified artifact — `contracts/permissions/roles.yaml`, seeded into the
 rows + `authz_policy_versions` + audit row + `casbin:reload` publish, instances
 re-checks the version on request (cached ≤ 30 s), and boot with an empty or
 unloadable rule set **fails closed** (deny all + SEV-1 alert).
+
+**ADR-15**: **Broker data is ingested by streaming, through a thin SDK
+sidecar** (D77/D78/D79, twenty-second pass, docs/63; 2026-09-25).
+- **Why.** MetaApi's streaming API is the V1 ingest path, because the
+  60-s REST poll plan breaks MetaApi's per-server CPU-credit limit at V1
+  scale and cannot reach V2. The protocol is consumed through MetaApi's
+  official JS SDK.
+- **Where it runs.** The SDK lives in the `bridge-stream` Node/TS
+  sidecar, which forwards ordered, string-encoded frames to the Go
+  `bridge` over gRPC on a Unix socket.
+- **Guardrails** (the exception to the Go-core rule is exactly this
+  narrow): the sidecar does no arithmetic, holds no durable state, and
+  makes no decisions. Equity is the broker's number, never the SDK's
+  local recompute.
+- **What stays the same.** The hot path still honours ADR-6: the bridge
+  conflates quotes into material `bridge.tick` events and commits them
+  through the transactional outbox (group commit). The relay is woken by
+  a Postgres `NOTIFY` *doorbell* — NOTIFY is never the transport. EVL
+  publishes advisory floor hints so near-floor quotes are never delayed.
+- **Exit path.** BRG-01's `Connector.Stream`: a provider without a
+  streaming SDK falls back to polling behind the same interface.
 
 ## 4. Event backbone
 
@@ -255,17 +277,20 @@ Trader: TD "Buy challenge" → CHK session (GW idempotency)
   → BRG: MetaApi creates MT5 account (+ credentials encrypted, BRG-06)
   → LCC state=ACTIVE_EVAL, EVL: rule pack bound, evaluation.started
   → NOT: "You're live" email; DOC: certificate later on funding
-  → TRADER TRADES: BRG sync (positions/equity/deals) every ≤60s + on tick events
-  → each sync: EVL verdict (ok / breaching / passed) → LCC state transitions
+  → TRADER TRADES: BRG streaming ingest (positions/equity/deals, D78) → conflated
+    bridge.tick on deals/positions/near-floor/material moves + heartbeat ≤60s
+  → each tick: EVL verdict (ok / breaching / passed) → LCC state transitions
   → on pass: LCC state=FUNDED_OFFER (V1: auto-fund or manual approval per tenant setting)
 ```
 
-**Flow B — Sync tick (hot path, ~10/s).**
+**Flow B — Sync tick (hot path, ~10/s V1, ≤ 250/s V2 — D78/D79, docs/63).**
 ```
-bridge: poll MetaApi (per account, staggered) → normalize (BRG-19)
-  → upsert broker_account snapshot (PG) + INSERT sync_batch (PG, same tx)
-  → outbox: bridge.tick {account, equity, margin, positions[...], broker_time}
-  → workers: evaluation trigger → engine /evaluate (Rust, <5ms)
+MetaApi streaming → bridge-stream (Node, SDK) → gRPC/UDS frames → bridge hot state
+  → normalize (BRG-19) → conflator (deal|position|guard|material|heartbeat|resync)
+  → group commit ≤25 ms (urgent: now): broker_account snapshot + deals (PG) +
+    outbox: bridge.tick {account, equity, margin, positions[...], broker_time, trigger}
+    + pg_notify doorbell → relay wakes → Redis Streams
+  → workers: evaluation trigger → engine /evaluate (Rust, <5ms) → floor hints back
   → verdict stored + outbox: evaluation.verdict {ok|breach|target_hit}
   → LCC state machine applies (breach → ACCOUNT_FAILED + NOT + AUD)
   → ANA read-model updater (equity curve point) + web SSE fan-out (TD live)
@@ -362,7 +387,8 @@ The authoritative, task-level version with exit criteria is
 alpha-one-platform/
 ├── apps/
 │   ├── api/            # Go: core API + in-app GW + domain packages (lcc, brg, evl-client, pay, chk, kyc, not, doc, led, aud, ten, authz-client, sup, ana, adm, con, mig, ...)
-│   ├── bridge/         # Go: BRG service (MetaApi client, connectors, sync, enforcement)
+│   ├── bridge/         # Go: BRG service (MetaApi client, connectors, stream ingest + conflator, fallback sync, enforcement)
+│   ├── bridge-stream/  # Node/TS: MetaApi SDK stream gateway sidecar (ADR-15) — frames only
 │   ├── relay/          # Go: outbox relay + replay CLI
 │   ├── workers/        # Go: consumers, schedulers, reconcilers
 │   ├── engine/         # Rust: EVL (axum service + property tests + fuzz corpus)

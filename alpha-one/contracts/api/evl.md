@@ -151,6 +151,8 @@ Errors:
 - Hard breach (EVL-17): transition to BREACH_DETECTED + enqueue disable-then-close commands (BRG-10 via EVT-20).
 - Pass detection (EVL-19): all objectives + day requirements met => PASS_PENDING; auto-advance or queue for verification per config.
 - Evaluation audit (EVL-16): every evaluation stores inputs hash, rule version, observed values, thresholds, result (AUD-01 storage).
+- Floor hints (D79, docs/09 §3.8, docs/63): the pure evaluation additionally returns `hints {floor_daily_cents, floor_total_cents, target_equity_cents}` computed from the post-evaluation state; the worker persists them to `evaluation_state.floor_*` in the same tx and publishes Redis `evl.floors {account_id, version}`. Advisory only — consumed by the BRG streaming conflator to decide *when* to emit ticks; never read back as an engine input.
+- Tick inputs (D78/D79): `bridge.tick` is event-driven from BRG streaming (`trigger`, `source`, `equity_low/high_cents` are evidence fields — stored with the evaluation, not rule inputs in V1).
 
 ## Events emitted/consumed
 - Trigger inputs: sync snapshots (BRG-07), trade closes (BRG-08), daily schedule, and admin demand (EVL-05 names all four triggers).

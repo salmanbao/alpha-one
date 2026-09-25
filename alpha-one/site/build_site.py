@@ -2,7 +2,7 @@
 """Build the Alpha One specification website (alpha-one/site/).
 
 Generates a self-contained, offline-capable documentation site for the whole
-spec: all 65 docs in alpha-one/docs/, the contracts pack (event catalog,
+spec: all 66 docs in alpha-one/docs/, the contracts pack (event catalog,
 payload schemas, error taxonomy, 33 API contracts, diagrams) and the PRD /
 design-question registers. No network needed at runtime — the only external
 dependency (marked.min.js, markdown renderer) is vendored into site/vendor/.

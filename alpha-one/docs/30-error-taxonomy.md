@@ -41,7 +41,7 @@
 - **Deprecation**: `Deprecation` header + `public.deprecated` (200) → `410
   public.removed` after the 12-month window (27 Part A §3.5).
 
-## 2. The registry (314 codes — 73 V1 baseline, 241 extended — across 25 modules)
+## 2. The registry (317 codes — 73 V1 baseline, 244 extended — across 25 modules)
 
 ### 02 — AUTH
 
@@ -179,6 +179,9 @@
 | `brg.sync_gap` | — | Deals-count mismatch in the sync window (event + ADM review) | ext |
 | `brg.credentials_missing` | — | Provisioned account missing creds (should never happen) | ext |
 | `brg.symbol_unknown` | — | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) | ext |
+| `brg.stream_stale` | — | Account stream not `live` (disconnect / broker offline / 90 s silence) — no heartbeat ticks; fallback poll after 30 s (docs/63 §4.7) | ext |
+| `brg.stream_desync` | — | Stream ordering failure, sequence regression, or critical-frame queue overflow at the sidecar boundary → forced resync (never silent loss, I-23) | ext |
+| `brg.rate_limited` | — | MetaApi 429 (`TooManyRequestsError`) on REST or subscribe — back off to `recommendedRetryTime`; rotate `client-id` for per-server limits | ext |
 
 ### 09 — EVL
 

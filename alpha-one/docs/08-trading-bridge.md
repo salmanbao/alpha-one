@@ -2,7 +2,8 @@
 
 > Covers PRD module **BRG** (47 requirements). The bridge is the platform's only
 > door into the broker world: it provisions MT5 accounts, keeps our copy of
-> trading state fresh by polling, and **executes** enforcement commands issued by
+> trading state fresh by **streaming** it from MetaApi (D78, docs/63 — REST
+> polling is the fallback), and **executes** enforcement commands issued by
 > LCC/EVL. It is also the platform's **highest-risk external dependency** (MetaApi
 > — sign up day 1 of Phase 0, per the PRD).
 
@@ -28,34 +29,55 @@ requirement, `docs/39-prd-change-log.md` §2) and must be defined into a
 train or deleted before the Phase-1 contract freeze. It is therefore
 *not* counted in any release above.
 
+**Release pull-forward (D78, docs/63, 2026-09-25):** `BRG-21` (broker
+streaming, workbook V3.0) is delivered in **V1** as the primary ingest path —
+the 60-s poll plan breaks MetaApi's per-server CPU-credit limit at V1 scale
+and cannot reach V2 at all (docs/63 F1). The workbook row is unchanged; the
+pull-forward is recorded here, in docs/63 §5 and docs/99. The V3.0 count
+above still lists it for workbook parity.
+
 ## 2. Architecture
 
 ```
  LCC (commands: provision, disable, close, enable, archive)
- EVL (reads sync snapshots; verdicts back to LCC)
+ EVL (verdicts back to LCC; publishes advisory floor hints → bridge, docs/09 §3.8)
         │  account_commands (PG) / broker_executions
         ▼
 ┌──────────────────────── bridge service (Go, 1 instance V1) ───────────────────────┐
-│  scheduler ── per-tenant poll budget (max 50% slots to one tenant)                │
-│   ├── poll account (equity/balance/margin/freeMargin/leverage)                    │
-│   ├── poll positions (open)                                                       │
-│   └── poll deals (incremental since last deal ticket)                             │
-│  normalizer ── MetaApi model → internal canonical (symbol, side, lots, px, time)  │
-│  sync writer ── PG tx: snapshots + deals + bridge.tick event (outbox)             │
+│  stream ingest ── gRPC (UDS) frames from bridge-stream: equity/account/positions/ │
+│                   deals/sync/health; per-account hot state + stream_seq (D33)     │
+│  normalizer ── decimal strings → canonical (symbol, side, lots, px, cents, time)  │
+│  conflator  ── trigger rules → bridge.tick candidates (docs/63 §4.4, D79)         │
+│  group-commit writer ── PG tx ≤25 ms: snapshots + deals + outbox + NOTIFY         │
+│  fallback poller ── REST, credit-budgeted, only accounts whose stream is `stale`  │
 │  executor   ── commands: retry, circuit-break per account, confirm (re-read)      │
 │  reconciler ── nightly: full fetch vs stored state → exceptions                   │
-│  health     ── per-account failure counters → ops.provider_health                 │
+│  health     ── stream states + failure counters → ops.provider_health             │
 └───────────────────────────────────────────────────────────────────────────────────┘
-        │ REST (https, API key)
-        ▼
+        ▲ gRPC bidi over Unix socket               │ REST (https, API key): commands,
+        │                                          │ fallback, D33 checks, reconciler
+┌─ bridge-stream (Node/TS sidecar, official metaapi.cloud-sdk, D77) × S shards ─┐
+│  SynchronizationListener per account · no money math · no persistence         │
+└───────────────┬───────────────────────────────────────────────────────────────┘
+                │ socket.io streaming (0 CPU credits)
+                ▼
    MetaApi cloud ──► MT5 broker servers (server groups: BRG-12)
 ```
 
-**MetaApi model (V1 facts):** one **MetaApi account** (our platform key) can
-manage many MT5 logins on many servers; per-login REST: account info, positions,
-orders, deals, history deals, symbol info, server time. Webhooks exist but V1 is
-**poll-only** (deterministic, testable, no webhook-verify surface; streaming is
-BRG-21 V3). Cost: ~$50–100/mo **per MT5 account** (PRD estimate) — this is why
+**MetaApi model (V1 facts, docs/63 §2):** one **MetaApi account** (our platform
+key) can manage many MT5 logins on many servers. Per login there are two data
+channels:
+- **Streaming (primary, D78).** Server-push terminal-state sync: account
+  information, positions, orders, deals, and `prices` packets that carry
+  **broker-computed equity/margin/freeMargin/marginLevel**. Packets are
+  sequence-numbered, and the channel costs zero CPU credits. It is reachable
+  in practice only through MetaApi's SDK (JS/Python/Java), hence the Node
+  sidecar (D77).
+- **REST/RPC (fallback, commands, reconciliation).** Account info, positions,
+  orders, deals/history, symbols, server time. Metered in CPU credits: 50 per
+  state read; 18k/min per MetaApi front-end server.
+
+There are no account-state webhooks (docs/63 F8). Cost: ~$50–100/mo **per MT5 account** (PRD estimate) — this is why
 account caps are hard limits (TEN limits) and why funded accounts dominate cost
 (00 §2).
 
@@ -73,6 +95,11 @@ type Connector interface {
   GetAccountInfo(ctx, login) (AccountInfo, error)              // equity etc.
   GetPositions(ctx, login) ([]Position, error)
   GetDealsSince(ctx, login, lastDealTicket int64) ([]Deal, error)
+  Stream(ctx, logins <-chan Subscription) (<-chan Frame, error) // BRG-21 (V1 per D78):
+                                                  // ordered per-login frames (equity,
+                                                  // account, positions, deal, sync, health);
+                                                  // polling-only adapters return ErrNoStream
+                                                  // and the bridge polls (docs/63 §4.7)
   ClosePosition(ctx, login, positionID) error
   SetTradingEnabled(ctx, login, enabled bool) error            // BRG-14
   Credit(ctx, login, amountCents int64, memo string) error    // V2 BRG-22 (audited)
@@ -97,20 +124,80 @@ type Connector interface {
 4. BRG reports `broker.created` → LCC activates account → credential delivery (D74, docs/62: no automated email in V1 — staff copy from the ADM detail view, sensitive-read audited; automated V2 template later)
    (NOT + DOC template, one-time reveal in TD).
 5. Failure: attempts ≤ 2, then `broker.failed` (LCC state) + CON alert.
+6. **MetaApi account settings (docs/63 §4.9):**
+   - `reliability`: `high` for funded accounts; per program for challenges,
+     default `regular`. The ×2 slot cost is passed through (docs/22 §3.4).
+   - `region`: `broker_groups.metaapi_region`.
+   - `resourceSlots`: 1.
+   - `riskManagementApiEnabled`: `false`, unless the D80 V2 watchdog is on.
+   - `metastatsApiEnabled`: `false`.
 
-### 3.3 Sync (BRG-07/08/09) — the hot path
+   BRG subscribes the stream only once the account is `DEPLOYED` and
+   `CONNECTED`. G2 infrastructure is required: G1 throttles quotes to one
+   per 2.5 s.
 
-Per active account, staggered poll every **60 s** (configurable per tenant 30–300 s;
-burst after known events: after any command, immediate re-poll):
+### 3.3 Sync (BRG-07/08/09/21) — the hot path: streaming ingest (D78/D79, docs/63)
+
+**Primary: streaming.** The `bridge-stream` sidecar (D77) holds one MetaApi
+streaming subscription per active account and forwards ordered frames to
+the bridge over local gRPC. The bridge keeps per-account **hot state** in
+memory and runs the **conflator** (docs/63 §4.4). A `bridge.tick` is
+emitted only on these triggers:
+
+| Trigger | Fires on | Flush |
+|---|---|---|
+| `deal` | any new deal | urgent |
+| `position` | open-position set changed | urgent |
+| `guard` | equity inside the guard band (default 50 bps of initial balance) above an **EVL floor hint** (docs/09 §3.8); ≤ 4/s per account | urgent |
+| `guard` (crossing) | equity ≤ a floor hint — **never rate-capped** (I-21) | urgent |
+| `material` | \|Δequity\| ≥ 10 bps of initial balance since the last tick; ≤ 1 per 10 s per account | normal |
+| `heartbeat` | 60 s with open positions / 300 s when flat, **only while the stream is `live`** | normal |
+| `resync` | synchronization completed / broker reconnected | urgent |
+
+**The group-commit writer** flushes on the first of three: 25 ms, 500
+rows, or an urgent tick. Each flush is **one transaction** (ADR-6 intact):
 
 ```
 tx:
   UPSERT broker_accounts(login) SET equity, balance, margin, free_margin,
-         leverage, server_time, last_synced_at, last_deal_ticket
+         leverage, server_time, last_synced_at, last_deal_ticket, stream_state, last_stream_seq
   UPSERT broker_positions (open set; delete closed rows → into history)
-  INSERT broker_deals (new deals since last ticket; ON CONFLICT (login, deal_id) DO NOTHING)
-  INSERT outbox: bridge.tick {account, equity, margin, positions[...], deals_count, broker_time}
+  INSERT broker_deals (new deals; ON CONFLICT (login, deal_id) DO NOTHING)
+  UPSERT account_snapshots (minute bucket; equity_low/high widened with LEAST/GREATEST)
+  INSERT outbox: bridge.tick {account, equity, margin, positions[...], deals_count, broker_time,
+                              trigger, source, stream_seq, equity_low_cents, equity_high_cents}
+  SELECT pg_notify('outbox_doorbell', '')      -- relay wake-up only (docs/04 §3.3)
 ```
+
+**Hard rules:**
+- Equity is the broker's number, taken from the raw `prices` /
+  `accountInformation` packet. The SDK's local recompute is never used
+  (docs/63 F5; docs/09 §3.3).
+- Numbers cross the sidecar boundary as decimal strings. The rounding to
+  cents happens here, per the docs/09 table.
+- A floor hint only changes *when* a tick is emitted, never what EVL
+  decides.
+
+**Fallback: polling** (the pre-D78 poll loop, demoted). An account whose
+stream is `stale` for > 30 s (§3.6) gets REST-polled every 60 s,
+configurable per tenant 30–300 s, producing ticks with `source = poll`.
+- **Budget:** a hard CPU-credit budget per MetaApi `client-id` (≤ 80 % of
+  the 18k credits/min per-server limit; one poll ≈ 176 credits), with
+  client-ids rotated across front-end servers.
+- **Overflow** (a MetaApi-wide outage): funded and open-position accounts
+  are polled first; the rest ride `evl.tick_stale`.
+- **After any command** an immediate refresh runs: the hot state if the
+  stream is `live`, else a REST re-poll.
+
+**Resync** (on every stream (re)synchronization):
+- The SDK's `HistoryStorage` is PG-backed: `lastDealTime()` =
+  `max(broker_deals.deal_time) − 5 min`, so MetaApi replays only the recent
+  deals.
+- After `dealsSynchronized` the D33 history-window check (below) runs,
+  then a `resync` tick is emitted.
+- Resubscribe order after a restart: guard-band accounts → funded → open
+  positions → the rest. Cold resync takes < 30 s at V1 and ≈ 1–2 min at
+  10k accounts.
 
 - **Canonical model** (BRG-19 core): amounts Decimal(18,8) for prices, lots
   Decimal(10,2), broker `time` (ms) as the trading clock, platform-side
@@ -120,7 +207,10 @@ tx:
   **server-global** counters, not per-login contiguous, so ticket arithmetic
   (`min(new) > last + 1`) would alarm on nearly every poll. The V1 check is a
   **history-window count**: per account, deals in `[last_synced_at − overlap, now]`
-  fetched from the history API vs rows written this window; count mismatch →
+  fetched from the history API vs rows written this window. Under D78 the
+  check runs **at every stream (re)synchronization**, plus an hourly sweep,
+  plus the nightly reconciler — not "per poll" (docs/63 F9). The fallback
+  poller keeps the per-poll check; count mismatch →
   `bridge.sync_gap` event + WARN alert (missing deals = potentially missing
   trades; EVL treats the gap as *evidence unavailable* — it does not assume,
   and ADM is paged for manual review). `last_deal_ticket` stays the incremental
@@ -128,11 +218,15 @@ tx:
   hash reconciliation on top. The bridge-assigned per-account `seq` in the
   pf-platform scaffold is the same lesson: ordering cursors must be ours, not
   the broker's.)
-- **Equity snapshots:** every tick updates `account_snapshots` (downsampled: 1
-  row/account/min, 14-day rolling in PG, daily rollup to ANA read model;
+- **Equity snapshots:** every ingested equity frame updates the
+  `account_snapshots` minute bucket (last value + `equity_low_cents` /
+  `equity_high_cents` observed in the minute — honest candles, D79;
+  downsampled: 1 row/account/min, 14-day rolling in PG, daily rollup to ANA read model;
   multi-resolution = LCC-42 V2).
-- **Slot alerts (BRG-34):** poll backlog > 2 min → WARN; > 10 min → CRITICAL
-  (evaluation fairness at risk — documented in the SLOs, 29 §4).
+- **Slot alerts (BRG-34):** fallback-poll backlog > 2 min → WARN; > 10 min →
+  CRITICAL. Stream analogues: `bridge`-topic relay lag > 5 s → WARN, > 30 s →
+  CRITICAL (docs/63 F6); > 5 % of accounts `stale` → WARN, > 20 % →
+  CRITICAL (evaluation fairness at risk — documented in the SLOs, 29 §4).
 
 ### 3.4 Enforcement execution (BRG-10/11) + trading on/off (BRG-14)
 
@@ -167,13 +261,29 @@ levels: `degraded` (p95 > 2 s) → poll interval widens ×2 (fairness preserved 
 backlog alert), `down` (5% success over 5 min) → CRITICAL + all enforcement
 commands queue (not dropped) + CON banner.
 
+**Stream health (D78, docs/63 §4.7).** Each account's stream state is
+`subscribing → syncing → live → stale`, stored as
+`broker_accounts.stream_state`.
+- **`stale` triggers:** SDK `onDisconnected` / `onStreamClosed`,
+  `connectedToBroker = false`, or no data or `Health` frame for 90 s. (The
+  SDK itself declares a disconnect after 60 s without a `status` packet.)
+- **While `stale`:** no heartbeat ticks are emitted, so EVL's
+  `evl.tick_stale` engages. After 30 s the fallback poller takes the
+  account.
+- **Metrics** (into `ops.provider_health`): stream-state counts; SDK
+  `latencyMonitor` price/update latency p95; `seq_regression`;
+  resyncs/min; fallback-poll credit burn.
+- **MetaApi 429s** (`TooManyRequestsError`) honour `recommendedRetryTime`
+  (`brg.rate_limited`). A subscription-server-full response switches
+  `client-id`.
+
 ## 4. Events (topic `bridge`)
 
 ### 4.1 V1 baseline events — authoritative (tenth pass D28)
 
 | Event | Producer (V1) | V1 consumers |
 |---|---|---|
-| `bridge.tick` | BRG (sync loop, per account, 60 s cadence) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) |
+| `bridge.tick` | BRG (streaming conflator, per account, event-driven — deal/position/guard/material/resync triggers + heartbeat ≤ 60 s with open positions, ≤ 300 s flat; fallback poll 60 s — D78/D79, docs/63 §4.4) | EVL (evaluate), ANA (equity points) — the observed record per EVL-49; no audit mirror (docs/05 §14) |
 | `bridge.sync_gap` | BRG (history-window count mismatch — D33) | ADM (manual review), AUD, EVL (gap_flagged verdict) |
 
 ### 4.2 Extended (post-V1) event model — design-level
@@ -186,16 +296,21 @@ commands queue (not dropped) + CON banner.
 | `bridge.sync_gap` | deals-count mismatch in the sync window (D33) | account, window_start, expected_count, got_count | ADM (manual review), AUD, EVL (gap_flagged verdicts) |
 | `bridge.reconciliation_exception` | nightly mismatch | account, kind, delta | ADM, AUD, CON |
 | `bridge.command_dead` | terminal command failure | command_id, reason | CON (CRITICAL), AUD |
-| `ops.provider_health` | 5 min | success_rate, p95_ms, state | CON, dashboards |
+| `ops.provider_health` | 5 min | success_rate, p95_ms, state, streams_live, streams_stale, stream_latency_p95_ms | CON, dashboards |
+| `bridge.watchdog_divergence` | V2, D80: a MetaApi risk-management tracker event with no matching EVL breach within 30 s (live stream) | account, tracker_id, period, absolute_drawdown, broker_time | ADM (review), CON — **never** LCC (BVR-28) |
 
 ## 5. Lifecycles
 
 - **Broker account:** `created → active (syncing) → disabled (trading off) →
   archived (V2)`. Mirrors LCC account state but broker-side; `bridge_state`
   column on `broker_accounts` + nightly comparison with LCC state (LCC-33).
-- **Sync cycle:** `scheduled → polled → written → (gap? | clean)` — per account;
-  `last_deal_ticket` is the incremental cursor (monotonic); gap judgment is the
-  D33 history-window count.
+- **Stream session (D78):** `subscribing → syncing → live ⇄ stale →
+  (fallback polling) → syncing …` per account. Every entry to `syncing`
+  resumes from the PG deal cursor. Every exit to `live` runs the D33
+  history-window check and emits a `resync` tick.
+- **Fallback sync cycle:** `scheduled → polled → written → (gap? | clean)`,
+  per `stale` account only. `last_deal_ticket` is the incremental cursor
+  (monotonic); gap judgment is the D33 history-window count.
 - **Command:** `pending → executing → confirmed | failed(retry) → dead` (attempts
   ≤ 3 for non-money, ≤ 1 for `credit`).
 - **Circuit breaker:** `closed → open (5 fails) → half-open (probe) → closed`.
@@ -218,6 +333,9 @@ Namespace `BRG` (provider-safe strings only — MetaApi error codes mapped to ou
 | `brg.sync_gap` | internal WARN | Deals-count mismatch in the sync window (event + ADM review) |
 | `brg.credentials_missing` | internal CRITICAL | Provisioned account missing creds (should never happen) |
 | `brg.symbol_unknown` | internal | Normalization hit unmapped symbol (BRG-32 V2 mapping mgmt; V1: alert + skip with log) |
+| `brg.stream_stale` | internal WARN | Account stream not `live` (disconnect / broker offline / 90 s silence) — no heartbeat ticks; fallback poll after 30 s (docs/63 §4.7) |
+| `brg.stream_desync` | internal WARN | Stream ordering failure, sequence regression, or critical-frame queue overflow at the sidecar boundary → forced resync (never silent loss, I-23) |
+| `brg.rate_limited` | internal WARN | MetaApi 429 (`TooManyRequestsError`) on REST or subscribe — back off to `recommendedRetryTime`; rotate `client-id` for per-server limits |
 
 ## 7. API endpoints
 ### 7.1 V1 baseline — `brg` (see `contracts/api/brg.md`)
@@ -254,11 +372,18 @@ history = TD-08 reads ANA read model fed by `bridge.tick`/deals).
                    "lots": 0.50, "open_price": 1.08420, "current_price": 1.08510,
                    "sl": 1.08120, "tp": null, "opened_at": 1758275000000,
                    "profit_cents": 45000, "swap_cents": -1200, "commission_cents": -300 } ],
-  "deals_count": 2, "last_deal_ticket": 88231, "broker_time": 1758278400000 }
+  "deals_count": 2, "last_deal_ticket": 88231, "broker_time": 1758278400000,
+  // D79 additive, optional (docs/63 §4.4) — absent on pre-D78 producers
+  "trigger": "material",            // deal|position|guard|material|heartbeat|resync
+  "source": "stream",               // stream|poll|resync
+  "stream_seq": 482113,             // bridge-assigned per-account monotonic (D33)
+  "equity_low_cents": 10398000,     // observed extremes since the previous tick —
+  "equity_high_cents": 10415500 }   // dispute evidence; EVL V1 decides at equity_cents
 
 // GET /v1/admin/broker/health
 { "data": { "provider": "metaapi", "state": "healthy", "success_rate_1m": 0.999,
     "p95_ms": 420, "accounts_syncing": 431, "backlog_seconds_p95": 7,
+    "streams": { "live": 429, "syncing": 1, "stale": 1, "price_latency_p95_ms": 180 },
     "groups": [ { "name": "fb-live-1", "accounts": 300, "state": "active" } ] } }
 ```
 
@@ -272,7 +397,9 @@ CREATE TABLE broker_groups (
   platform      TEXT NOT NULL DEFAULT 'mt5',
   server_id     TEXT NOT NULL,              -- MetaApi server identifier
   timezone      TEXT NOT NULL,              -- day-boundary authority (ADR-12)
-  poll_interval_s INT NOT NULL DEFAULT 60,
+  poll_interval_s INT NOT NULL DEFAULT 60,     -- fallback poll cadence (D78: stream is primary)
+  metaapi_region  TEXT,                        -- MetaApi region for this group (docs/63 §4.9)
+  quote_interval_ms INT NOT NULL DEFAULT 1000 CHECK (quote_interval_ms >= 250), -- stream quotes
   state         TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','degraded','disabled')),
   UNIQUE (tenant_id, name)
 );
@@ -295,12 +422,18 @@ CREATE TABLE broker_accounts (
   last_synced_at     TIMESTAMPTZ,
   server_time        TIMESTAMPTZ,          -- last broker-attested time
   fail_streak        INT NOT NULL DEFAULT 0,
+  stream_state       TEXT NOT NULL DEFAULT 'subscribing'      -- D78, docs/63 §4.7
+                     CHECK (stream_state IN ('subscribing','syncing','live','stale','unsubscribed')),
+  stream_state_at    TIMESTAMPTZ,
+  last_stream_seq    BIGINT NOT NULL DEFAULT 0,               -- bridge-assigned (D33)
+  metaapi_reliability TEXT NOT NULL DEFAULT 'regular' CHECK (metaapi_reliability IN ('regular','high')),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   archived_at        TIMESTAMPTZ,
   UNIQUE (login)
 );
 CREATE INDEX idx_bacc_tenant_state ON broker_accounts(tenant_id, state);
 CREATE INDEX idx_bacc_sync ON broker_accounts(state, last_synced_at) WHERE state = 'active';
+CREATE INDEX idx_bacc_stale ON broker_accounts(stream_state_at) WHERE stream_state = 'stale'; -- fallback poller
 
 CREATE TABLE broker_positions (
   position_id   TEXT NOT NULL,             -- login-positionId canonical
@@ -343,6 +476,8 @@ CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-da
   balance_cents   BIGINT NOT NULL,
   margin_cents    BIGINT,
   free_margin_cents BIGINT,
+  equity_low_cents  BIGINT,                   -- D79: observed min/max broker equity in the
+  equity_high_cents BIGINT,                   -- minute (streaming; NULL on fallback-poll rows)
   broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
   received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (account_id, bucket_ts)
@@ -388,12 +523,14 @@ CREATE INDEX idx_bexec_cmd ON broker_executions(command_id, attempt);
 
 | Surface | V1 | V2 headroom / action |
 |---|---|---|
-| Poll throughput | 431 accounts × 1/min ≈ 7.2 req/s to MetaApi | 5k accounts ≈ 83 req/s — 1 bridge instance + MetaApi concurrency (cap 20) → **add bridge replicas** (stateless; scheduler sharding by server group); MetaApi rate limits are the binding constraint → poll interval widens automatically (fairness: backlog alerts, SLO) |
-| Sync tx size | 1 tx/account/poll (small) | PG write capacity fine to 10× |
+| Ingest (D78) | streaming: ≈ 431 accounts, ≤ 862 subscriptions (high reliability = 2 instances), ~10 sockets, 1 sidecar shard; **0 CPU credits** steady-state | 10k accounts: ≤ 20k subscriptions (quota 10 × deployed), ~200 sockets, 5–6 shards (≤ 2k accounts each); inbound equity frames ≈ 3k/s (burst 10k/s) absorbed in memory (docs/63 §4.11) |
+| Tick emission (D79) | ≈ 10/s sustained, ≈ 100/s burst | ≤ 250/s sustained, ≤ 1k/s burst — same order as the old 60-s poll plan (167/s) at sub-second latency on verdict-relevant moves |
+| REST credit budget | fallback + resync D33 checks + reconciler only; one poll ≈ 176 credits; per-server limit 18k/min ⇒ ≈ 100 polled accounts/min per `client-id` (rotate across servers) | the old poll-everything plan would need ≈ 1.76M credits/min vs ≈ 216k/min for all MetaApi servers — **why D78 exists** (docs/63 F1) |
+| Sync tx size | group commit: ≤ 40 tx/s per bridge instance, ≤ 500 rows each | PG write capacity fine to 10× |
 | Deals table | ~50 deals/day/account → ~21k/day | partitioned; 90 d hot, archive to R2 (V2) |
 | Snapshots | 1 row/min/account → ~620k rows/day | downsample to 1/min min, 14 d rolling + daily rollups; ANA owns long-term |
 | Command latency | p95 < 2 s (confirm included) | same; CRITICAL if p95 > 10 s over 15 min (enforcement lag = risk) |
-| MetaApi outage | queue commands, widen polls, backlog alerts | failover server group (V3 BRG-26): groups span 2 MetaApi servers from day 1 (config), second server activated by CON flip |
+| MetaApi outage | streams `stale` → credit-budgeted fallback poll (funded/open-position first), others `evl.tick_stale`; queue commands, backlog alerts | failover server group (V3 BRG-26): groups span 2 MetaApi servers from day 1 (config), second server activated by CON flip |
 | Cost | per-account pricing → account caps are cost control (TEN limits) | BRG-47 cost tracking (V3) feeds CON |
 
 ## 12. Open-source solutions
@@ -401,6 +538,10 @@ CREATE INDEX idx_bexec_cmd ON broker_executions(command_id, attempt);
 | Option | Verdict |
 |---|---|
 | **MetaApi** (commercial, register must-integrate) | **CHOSEN V1** — only realistic MT5 management API without a MetaQuotes partnership; ~$50–100/account/mo |
+| MetaApi **streaming API** via official `metaapi.cloud-sdk` (JS; source-available licence, docs/34) | **CHOSEN V1 ingest (D77/D78)** — zero CPU credits, broker equity on every price packet, sequence-numbered; hosted in the `bridge-stream` Node sidecar |
+| MetaApi REST/RPC | **V1 fallback + commands + reconciliation** — credit-metered (F1 of docs/63 rules it out as the steady-state feed) |
+| MetaApi **risk-management API** (trackers, tracker-event stream) | **V2 optional watchdog, off by default (D80)** — alarm + stale-stream refresh trigger; never a verdict source (BVR-28); billed per account-hour; no MT5 netting |
+| MetaApi MetaStats / CopyFactory | Not on the ingest path (docs/63 §2); MetaStats = possible V2 TD/ANA enrichment; CopyFactory = TRD V3 only |
 | MetaQuotes Manager API (C++) | Requires partnership + C++ wrapper service — V2+ option if cost/limits bite |
 | mql-zmq / MQL5-JSON-API (self-hosted EA bridge) | V2+ option for direct server access (research-validated); rejected V1 (ops weight, no multi-tenant story) |
 | FIX engines (quickfix, etc.) | Out of scope — Alpha One is not an execution venue (research §4.1 applies to LP-routing firms) |
@@ -410,9 +551,14 @@ CREATE INDEX idx_bexec_cmd ON broker_executions(command_id, attempt);
 
 ## 13. Technology stack
 
-Go bridge service (REST client, scheduler, executor); Postgres (snapshots/deals/
-executions, partitioned); Redis (scheduler dedupe, circuit-breaker state);
-MetaApi (REST); Prometheus (poll backlog, provider health); Sentry (normalization
+Go bridge service (stream ingest, conflator, group-commit writer, REST client,
+fallback scheduler, executor); **`bridge-stream` sidecar — Node 22 LTS /
+TypeScript + `metaapi.cloud-sdk` pinned 29.3.3** (D77; frames only, no money
+math, gRPC over a Unix socket to the bridge); Postgres (snapshots/deals/
+executions, partitioned; `NOTIFY` doorbell to the relay); Redis (scheduler
+dedupe, circuit-breaker state, `evl.floors` hint pub/sub); MetaApi (streaming +
+REST); Prometheus (stream states, SDK latency monitor, fallback backlog,
+provider health); Sentry (normalization
 panics = P1); Uptime Kuma (MetaApi status page cross-check).
 
 ## 14. Integration — internal modules (glue)
@@ -420,8 +566,8 @@ panics = P1); Uptime Kuma (MetaApi status page cross-check).
 | Module | How |
 |---|---|
 | **LCC** | consumes `account_commands` (provision/disable/close/enable/archive); reports `broker.created/failed` + confirms back (LCC transition preconditions) |
-| **EVL** | consumes `bridge.tick` → verdicts; EVL never calls MetaApi; reads positions/equity from PG snapshots (or gets them in the tick payload) |
-| **RSK (V2)** | consumes deals/positions for anti-gaming patterns (news trading, hedging, latency) |
+| **EVL** | consumes `bridge.tick` → verdicts; EVL never calls MetaApi; reads positions/equity from PG snapshots (or gets them in the tick payload). **Return path (D79):** EVL persists advisory floor hints (`evaluation_state.floor_*`, docs/09 §3.8) + `evl.floors` pub/sub; the conflator reads them to decide *when* to emit — never *what* is decided |
+| **RSK (V2)** | consumes deals/positions for anti-gaming patterns (news trading, hedging, latency) from PG — deals now land within one group commit (≤ 25 ms) of the broker event; RSK still never subscribes to ticks (docs/10 §3) |
 | **ANA** | equity points, trade history read model (TD-06/08/21/23) |
 | **PAY** | payout eligibility reads latest equity/balance snapshot (funded accounts) |
 | **MIG** | cutover: FunderBlu's existing MT5 accounts are **adopted** (not recreated) — `broker_accounts` rows seeded from TTS export + MetaApi verify (LCC-22, MIG-xx) |
@@ -440,18 +586,22 @@ archive V2).
 |---|---|---|---|---|
 | 0. **MetaApi account + first MT5 server + 3 test accounts** (PRD: day 1) | Tech Lead | 1 d (waiting on signup) | — | manual REST round-trip logged in `ops/notes` |
 | 1. Schemas (groups, accounts, positions, deals, executions) + envelope types | BE-1 | 2 d | OPS | migrations green |
-| 2. MetaApi client + connector (info/positions/deals-since/create) + normalizer + **fixture corpus** | BE-1 | 4 d | 0, 1 | unit: 200 recorded MetaApi responses normalize deterministically |
-| 3. Scheduler (per-tenant budget, stagger, re-poll after commands) + sync writer + gap detection + `bridge.tick` | BE-1 | 4 d | 2 | 3 test accounts sync 24 h clean; injected gap → event + alert |
+| 2. MetaApi client + connector (info/positions/deals-since/create) + normalizer + **fixture corpus** (REST responses **and** SDK `packetLogger` stream recordings) | BE-1 | 4 d | 0, 1 | unit: 200 recorded MetaApi responses normalize deterministically |
+| 2a. **`bridge-stream` sidecar (D77)**: SDK listener per account → `bridge.ingest.v1` frames over gRPC/UDS; `PgHistoryStorage` cursor; primary-instance pinning; bounded queues (equity latest-wins, critical frames never dropped); latency monitor → Prometheus | BE-1 | 5 d | 2 | 3 demo accounts stream 24 h; a `prices` fixture without `equity` yields no equity update (F5); forced disconnect → `stale` → resync from cursor with no duplicate deals |
+| 3. Stream ingest + conflator (docs/63 §4.4) + group-commit writer + NOTIFY doorbell + fallback poller (per-tenant credit budget, stagger, re-poll after commands) + gap detection + `bridge.tick` | BE-1 | 5 d | 2a | 3 test accounts sync 24 h clean; I-21 property test green (no floor crossing conflated away); injected gap → event + alert; stream kill → fallback poll within 30 s |
 | 4. Provisioning (create → creds encrypt → broker.created) + the credential-delivery path (D74, docs/62: the ADM sensitive-read reveal, staff-delivered in V1) | BE-1 | 3 d | 2, LCC | end-to-end: LCC command → real MT5 account → staff reveal is audited and the trader receives credentials through the firm's channel (staging) |
 | 5. Executor (disable/enable/close-all) + confirm re-reads + circuit breaker + command_dead | BE-1 | 3 d | 3, LCC | breach on sandbox: positions closed < 10 s, confirmed empty |
 | 6. BRG-43 **adapter contract test suite** (fixtures + lifecycle scenarios, runnable per adapter) | BE-1 | 2 d | 2–5 | CI job `bridge-contract` green; a fake broken adapter fails it |
 | 7. Reconciliation (nightly) + provider health + dashboards + alerts | BE-2 | 3 d | 3, 5 | injected mismatch detected; MetaApi 500s → degraded state visible in CON |
 | 8. BRG-44 credential encryption + log-scanner test + reveal integration with LCC | BE-2 | 1.5 d | 4 | scan: zero credential material in logs/events (property test) |
 | 9. V2: MatchTrader adapter (BRG-03) behind same contract; capability declarations; reconciliation full; symbol mapping; multi-server; archive; password reset | BE-1 | 3 wks | 6 | adapter #2 passes BRG-43 with zero core changes |
-| 10. V3: cTrader/DXtrade adapters + optional streaming (BRG-21) + cost tracking (BRG-47) | BE-1 | 4 wks | 9 | — |
+| 9a. V2 (D80, optional): MetaApi risk-management watchdog — tracker provisioning mirrored from the rule pack, tracker-event long-poll cursor, `bridge.watchdog_divergence` | BE-1 | 1 wk | 3 | off by default; divergence surfaced to ADM; never transitions LCC |
+| 10. V3: cTrader/DXtrade adapters (streaming where the platform offers it, BRG-21 via `Connector.Stream`) + cost tracking (BRG-47) | BE-1 | 4 wks | 9 | — |
 
 **Risks (the platform's riskiest):** MetaApi cost/limits/pricing change →
-mitigation: account caps, per-tenant poll budgets, adapter interface keeps escape
+mitigation: account caps, streaming ingest (0 CPU credits) with credit-budgeted
+fallback polling (D78), SDK pinned + recorded-packet replay gate on upgrades,
+adapter interface keeps escape
 hatches (direct EA bridge, second provider) warm; MetaApi outage → mitigation:
 command queueing + failover group config from day 1; sync lag during MetaApi
 degradation → mitigation: SLO on enforcement latency + backlog alerts +

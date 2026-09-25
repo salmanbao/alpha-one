@@ -578,7 +578,9 @@ CREATE TABLE broker_groups (
   platform      TEXT NOT NULL DEFAULT 'mt5',
   server_id     TEXT NOT NULL,              -- MetaApi server identifier
   timezone      TEXT NOT NULL,              -- day-boundary authority (ADR-12)
-  poll_interval_s INT NOT NULL DEFAULT 60,
+  poll_interval_s INT NOT NULL DEFAULT 60,     -- fallback poll cadence (D78: stream is primary)
+  metaapi_region  TEXT,                        -- MetaApi region for this group (docs/63 §4.9)
+  quote_interval_ms INT NOT NULL DEFAULT 1000 CHECK (quote_interval_ms >= 250), -- stream quotes
   state         TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','degraded','disabled')),
   UNIQUE (tenant_id, name)
 );
@@ -601,12 +603,18 @@ CREATE TABLE broker_accounts (
   last_synced_at     TIMESTAMPTZ,
   server_time        TIMESTAMPTZ,          -- last broker-attested time
   fail_streak        INT NOT NULL DEFAULT 0,
+  stream_state       TEXT NOT NULL DEFAULT 'subscribing'      -- D78, docs/63 §4.7
+                     CHECK (stream_state IN ('subscribing','syncing','live','stale','unsubscribed')),
+  stream_state_at    TIMESTAMPTZ,
+  last_stream_seq    BIGINT NOT NULL DEFAULT 0,               -- bridge-assigned (D33)
+  metaapi_reliability TEXT NOT NULL DEFAULT 'regular' CHECK (metaapi_reliability IN ('regular','high')),
   created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   archived_at        TIMESTAMPTZ,
   UNIQUE (login)
 );
 CREATE INDEX idx_bacc_tenant_state ON broker_accounts(tenant_id, state);
 CREATE INDEX idx_bacc_sync ON broker_accounts(state, last_synced_at) WHERE state = 'active';
+CREATE INDEX idx_bacc_stale ON broker_accounts(stream_state_at) WHERE stream_state = 'stale'; -- fallback poller
 
 CREATE TABLE broker_positions (
   position_id   TEXT NOT NULL,             -- login-positionId canonical
@@ -649,6 +657,8 @@ CREATE TABLE account_snapshots (              -- §3.3: 1 row/account/min, 14-da
   balance_cents   BIGINT NOT NULL,
   margin_cents    BIGINT,
   free_margin_cents BIGINT,
+  equity_low_cents  BIGINT,                   -- D79: observed min/max broker equity in the
+  equity_high_cents BIGINT,                   -- minute (streaming; NULL on fallback-poll rows)
   broker_time     TIMESTAMPTZ,                -- broker-attested time of the tick
   received_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (account_id, bucket_ts)
@@ -723,6 +733,9 @@ CREATE TABLE evaluation_state (                -- "evaluated" counters (single w
   target_reached_at     TIMESTAMPTZ,
   target_hit_pending    BOOLEAN NOT NULL DEFAULT false,
   breach_rule_id        TEXT, breach_at TIMESTAMPTZ,
+  floor_daily_cents     BIGINT,                -- §3.8 floor hints (D79): advisory, bridge
+  floor_total_cents     BIGINT,                -- conflation only — never read back by the
+  target_equity_cents   BIGINT,                -- engine; NULL = no hint (bridge heartbeats)
   version               BIGINT NOT NULL DEFAULT 0
 );
 

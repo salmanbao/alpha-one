@@ -1,5 +1,5 @@
 {
-  "_note": "Example for the V1 catalog event `bridge.tick` (tenth pass D28, docs/50) \u2014 envelope per EVT-03; canonical schema: contracts/events/payloads/bridge.tick.v1.json. Producer: BRG (sync loop, per account, 60 s cadence). Consumers: EVL (evaluate), ANA (equity points); observed record per EVL-49 \u2014 no audit mirror (docs/05 \u00a714).",
+  "_note": "Example for the V1 catalog event `bridge.tick` (tenth pass D28, docs/50) \u2014 envelope per EVT-03; canonical schema: contracts/events/payloads/bridge.tick.v1.json. Producer: BRG (streaming conflator, per account, event-driven + heartbeat; fallback poll \u2014 D78/D79, docs/63). Consumers: EVL (evaluate), ANA (equity points); observed record per EVL-49 \u2014 no audit mirror (docs/05 \u00a714).",
   "id": "M4GCQTE6BXP80HM6BA5X0JRKE8",
   "type": "bridge.tick",
   "version": 1,
@@ -46,6 +46,11 @@
     ],
     "deals_count": 2,
     "last_deal_ticket": 88231,
-    "broker_time": 1758278400000
+    "broker_time": 1758278400000,
+    "trigger": "material",
+    "source": "stream",
+    "stream_seq": 482113,
+    "equity_low_cents": 10398000,
+    "equity_high_cents": 10415500
   }
 }

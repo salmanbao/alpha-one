@@ -139,6 +139,22 @@ If a V3 detector needs tick-level features, it consumes EVL-computed features,
 not raw market data. Redis loss degrades RSK to re-emission (dedupe rebuilds);
 it can never corrupt a case.
 
+**Streaming ingestion (D78–D80, docs/63) changes RSK's inputs, not its
+shape:**
+- RSK stays batch and still never subscribes to ticks.
+- The live account/position/equity hot state now lives **in the BRG
+  process**, rebuilt from MetaApi plus PG on restart. It is still not in
+  Redis, and still not RSK's.
+- Deals land in `broker_deals` within one group commit (≤ 25 ms) of the
+  broker event, instead of up to 60 s later. `deal_time` (broker) vs
+  `received_at` (platform) is now an honest latency feature for the
+  news/latency-arb detectors (RSK-38).
+- `account_snapshots` gains per-minute `equity_low/high_cents`, which
+  sharpens intraday exposure features.
+- MetaApi's risk-management trackers (the D80 V2 watchdog) are **not an
+  RSK input**. They are a BRG-side alarm reviewed by ADM, never a signal
+  source and never a verdict (BVR-28).
+
 ## 4. Events (topic `risk`)
 
 ### 4.1 V1 baseline events — authoritative

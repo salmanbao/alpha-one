@@ -29,9 +29,9 @@ Requirement coverage: `EVL-01,02,04,05,06,07,08,16,17,19,20,29,34,35,36,44,46,47
 ## 2. Architecture
 
 ```
- bridge.tick (event, per account)
-        │
-        ▼
+ bridge.tick (event, per account — streaming-conflated, D78/D79, docs/63)
+        │                                      ▲ floor hints (advisory, §3.8):
+        ▼                                      │ evaluation_state.floor_* + `evl.floors`
  workers: evaluation-trigger consumer  (per-account serial lane)
         │  1. load EvalState (PG, row lock by account id) + RuleSet (versioned)
         │  2. HTTP → engine (Rust): /evaluate
@@ -46,6 +46,7 @@ Requirement coverage: `EVL-01,02,04,05,06,07,08,16,17,19,20,29,34,35,36,44,46,47
         │       PG: update EvalState (new version) + INSERT verdict
         │       outbox: evaluation.verdict → LCC transition (+ NOT/DOC/AUD)
         │  4. else: update EvalState counters (equity high-water, dailies)
+        │  5. persist the response's floor hints (same tx) + publish `evl.floors`
 ```
 
 **Stateless engine (ADR-11):** the Rust service holds no state; everything it
@@ -191,10 +192,62 @@ contract test renders the matrix from code (same pattern as LCC transitions).
 
 | Trigger | Source | What runs |
 |---|---|---|
-| `tick` | `bridge.tick` (per account, 60 s cadence) | full evaluate (SUSPENDED/terminal accounts are skipped — WARN, no state change; D31) |
+| `tick` | `bridge.tick` (per account, **event-driven** from the BRG streaming conflator — `tick.trigger` ∈ deal/position/guard/material/heartbeat/resync; heartbeat ≤ 60 s with open positions, ≤ 300 s flat; `source = poll` ticks from the fallback poller are identical in treatment — D78/D79, docs/63 §4.4) | full evaluate. `trigger`, `source`, `equity_low/high_cents` are **evidence only** — stored with the verdict, never an input to rule math in V1 (breach/HWM at `equity_cents`; §3.8) (SUSPENDED/terminal accounts are skipped — WARN, no state change; D31) |
 | `day_rolled` | LCC `account.day_rolled` (broker midnight per server) | daily reset: push `daily_pnls`, `day_start_equity = equity`, `trading_days++` (if any trade that day), `calendar_days++`; then re-evaluate on the post-rollover tick (SUSPENDED accounts get no rollover event — clocks frozen, docs/07 §3.3; D31) |
 | `manual` | ADM "run evaluation now" (EVL-36: 2FA, audited; used after data repairs) | full evaluate on latest tick |
 | `backfill` (V2 EVL-33) | CON batch tool | re-evaluate a tick range (uses stored observed ticks; writes corrected verdicts only if the fix changes state — with full before/after audit) |
+
+### 3.8 Floor hints — the EVL → BRG return path (D79, docs/63 §4.4)
+
+**Why they exist.** Streaming ingestion (D78) sees every broker equity
+quote. Only the ones that can matter become `bridge.tick` events: a quote
+near or through a loss floor must reach EVL at once, while a quote far
+from any floor can wait for the materiality/heartbeat trigger. To tell
+the two apart, the bridge needs to know *where the floors are*. EVL is the
+only component that can compute them.
+
+**Computation — pure, in the engine.** `/evaluate` returns, next to the
+verdict, a `hints` object computed from the **post-evaluation** state and
+the rule set:
+- `floor_daily_cents` = the equity at which the active equity-basis daily
+  loss rule fires (e.g. `day_start_equity − limit`);
+- `floor_total_cents` = the stricter of the static and trailing (EVL-29)
+  max-loss floors;
+- `target_equity_cents` = the profit-target equity.
+
+A hint is `null` when no equity-basis rule of that kind is bound.
+Balance-basis rules need no hint: balance moves only on deals, and deals
+always emit ticks. The hint functions live in the metric registry
+(§3.3) — one place for the math — and are property-tested against the
+rule functions: at `equity = floor` the rule fires, at `floor + 1 cent`
+it does not, under the §3.4 tolerance.
+
+**Persistence and delivery:**
+- The worker writes the hints into `evaluation_state.floor_*` in the
+  **same transaction** as the state update.
+- It publishes `evl.floors {account_id, version}` on Redis pub/sub (the
+  same cache-invalidation class as `rule_pack.activated`).
+- `day_rolled` and rule-pack re-binds recompute the hints too.
+
+**Advisory by construction:**
+- The bridge uses hints **only to decide when to emit** a tick. The
+  engine never reads `floor_*` back as input, so I-03 recompute is
+  unaffected.
+- A stale or missing hint degrades to the materiality/heartbeat cadence
+  (≤ 60 s), which is the pre-D78 behaviour.
+- A quote at or through a hint is always emitted, never rate-capped
+  (invariant I-21, docs/35).
+- BRG never decides a breach (BVR-28; this doc §1).
+
+**Evidence fields.** `equity_low_cents` / `equity_high_cents` on the tick
+are the broker equity extremes the bridge observed since the previous
+tick. They are stored with the verdict evidence for disputes ("what did
+the account touch between ticks?"). V1 rule semantics are unchanged: loss
+rules and the HWM run on `equity_cents`. Under conflation the HWM sampling
+error is bounded by the bridge's materiality threshold (10 bps default),
+where 60-s polling left it unbounded. Trailing on the observed intraday
+high is a rule-semantics question for a future pass (docs/63 §8 Q6), not
+a V1 behaviour.
 
 ### 3.7 Overrides (EVL-20, V1-Plus)
 
@@ -278,7 +331,7 @@ Namespace `EVL` (internal-facing; client errors surface via LCC/ADM codes):
 | `evl.rulepack_invalid` | Pack failed schema/validation on create (ADM, 422 to user) |
 | `evl.rulepack_conflict` | Pack contains conflicting rules (e.g. two `max_daily_loss`) — EVL-28 V2 validator; V1: builder prevents |
 | `evl.input_mismatch` | `input_hash` of stored re-run ≠ recomputed (data corruption — CRITICAL) |
-| `evl.tick_stale` | Tick older than 10 min (sync lag) — evaluation skipped + WARN (stale equity must not drive verdicts; EVL-52 snapshot ordering: verdicts only from ticks newer than the state's last evaluated tick). No verdict row is written; the `gap_flagged` status is reserved for `bridge.sync_gap` verdicts (§3.5) |
+| `evl.tick_stale` | Tick older than 10 min (sync lag; tick age = now − envelope `occurred_at`, which BRG sets to the receive time of the newest frame folded into the tick — a heartbeat never refreshes stale data, and a `stale` stream emits no heartbeats, docs/63 §4.7) — evaluation skipped + WARN (stale equity must not drive verdicts; EVL-52 snapshot ordering: verdicts only from ticks newer than the state's last evaluated tick). No verdict row is written; the `gap_flagged` status is reserved for `bridge.sync_gap` verdicts (§3.5) |
 | `evl.unknown_rule_kind` | Engine newer/older than pack (versioning bug — deploy gate) |
 | `evl.override_invalid` | Override target not overridable (terminal/already overridden) |
 | `evl.metric_unavailable` | Required metric missing from tick (e.g. deal data gap) — verdict = `ok-with-gap-flag` + WARN; **never** assume (00 §8 #5) |
@@ -326,7 +379,9 @@ verdict evidence).
                 "equity_cents": 9487700, "day_start_equity_cents": 10000000 } },
   "state_after": { "daily_loss_max_cents": 512300, "breach_rule_id": "max_daily_loss",
                    "breach_at": 1758278400000, "version": 412 },
-  "metrics": { "daily_pnl_cents": -512300, "profit_cents": -512300 } } }
+  "metrics": { "daily_pnl_cents": -512300, "profit_cents": -512300 },
+  "hints": { "floor_daily_cents": 9500000, "floor_total_cents": 9000000,   // §3.8 (D79):
+             "target_equity_cents": 11000000 } } }                           // advisory → BRG
 
 // GET /v1/accounts/{id}/breach-report (TD-25)
 { "data": { "account_id": "01J9ACC...", "rule": "Maximum daily loss (5% of day-start equity)",
@@ -387,6 +442,9 @@ CREATE TABLE evaluation_state (                -- "evaluated" counters (single w
   target_reached_at     TIMESTAMPTZ,
   target_hit_pending    BOOLEAN NOT NULL DEFAULT false,
   breach_rule_id        TEXT, breach_at TIMESTAMPTZ,
+  floor_daily_cents     BIGINT,                -- §3.8 floor hints (D79): advisory, bridge
+  floor_total_cents     BIGINT,                -- conflation only — never read back by the
+  target_equity_cents   BIGINT,                -- engine; NULL = no hint (bridge heartbeats)
   version               BIGINT NOT NULL DEFAULT 0
 );
 
@@ -426,10 +484,19 @@ CREATE TABLE evaluation_overrides (
 
 - **Latency budget (per tick):** PG state read ~1 ms + engine HTTP ~2 ms +
   state write ~1 ms → p95 < 10 ms; breach-to-enforcement (engine → LCC → BRG
-  confirm) p95 < 100 ms target, SLO 1 s (29 §4). At 10 ticks/s this is
-  nothing; at 100 ticks/s (V2) the engine scales horizontally (stateless).
+  confirm) p95 < 100 ms target, SLO 1 s (29 §4).
+- **Ingest latency (D78/D79, docs/63 §4.6):** broker quote at MetaApi →
+  verdict, platform-internal p95 < 50 ms (SLO 250 ms). Quote → disable
+  command sent: p95 < 150 ms internal. The pre-D78 equivalent was up to
+  60 s of poll interval before EVL saw the equity.
+- **Tick rate:** ≈ 10/s sustained (≈ 100/s burst) at V1; ≤ 250/s sustained
+  (≤ 1k/s news burst) at V2 10k accounts. Guard-band ticks concentrate
+  load on the accounts nearest a floor — exactly the ones that need it.
+  The engine scales horizontally (stateless).
 - **Per-account serialization** (04 §3.5 lanes) is the correctness mechanism;
-  10k accounts / 8 lanes = fine (each tick is independent work).
+  10k accounts / ≥ 16 lanes = fine (each tick is independent work). Every tick
+  is evaluated in order — no consumer-side skipping. Conflation happens once,
+  at the bridge, which tracks low/high continuously (docs/63 §4.5).
 - **Rule packs** are tiny (KB) — cached in the worker (in-mem, version-keyed),
   invalidated on `rule_pack.activated`.
 - **Re-runs/backfills** are batch (V2 EVL-33): 1k ticks/s single-worker,
@@ -451,14 +518,15 @@ CREATE TABLE evaluation_overrides (
 Rust (axum service `engine`: reqwest-free pure core + serde; `cargo test` +
 proptest property suite + fuzz corpus from real MetaApi fixtures), Go consumer in
 `workers` (per-account lanes), Postgres (state/evaluations/packs), Redis (pack
-cache invalidation pub/sub), Prometheus (verdict latency, gap-flag rate),
+cache invalidation + `evl.floors` hint pub/sub), Prometheus (verdict latency,
+quote→verdict latency by `tick.trigger`, gap-flag rate),
 Sentry (engine panics = P1: a panic mid-verdict must surface, not drop).
 
 ## 14. Integration — internal modules (glue)
 
 | Module | How |
 |---|---|
-| **BRG** | consumes `bridge.tick` (observed); EVL never calls MetaApi; gap flags (`bridge.sync_gap`) → `gap_flagged` verdicts |
+| **BRG** | consumes `bridge.tick` (observed); EVL never calls MetaApi; gap flags (`bridge.sync_gap`) → `gap_flagged` verdicts; returns advisory floor hints (§3.8) that steer the BRG conflator's emit timing (D79) |
 | **LCC** | `evaluation.verdict` → transitions (breach/target/rollover); LCC owns state *transitions*, EVL owns *decisions* — the cleanest split in the system |
 | **TEN** | rule packs are tenant-owned; builder in ADM uses tenant limits (`max_custom_rules`) |
 | **ADM** | pack builder (EVL-01), re-bind, manual run, override, verdict viewer |

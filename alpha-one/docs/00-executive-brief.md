@@ -140,7 +140,7 @@ meaningful scope (see §6 for release semantics; full requirement-level mapping 
 | Tenants | 1–5 | 25–50 | FunderBlu first |
 | Active traders (registered) | ~5k | ~50k | Per tenant aggregate |
 | Concurrent broker accounts | ~1k | ~10k | 1 funded/eval account = 1 broker account |
-| Sync ticks (positions/equity) | 10/s sustained | 100/s | MT5 polling-driven, bursty |
+| Sync ticks (positions/equity) | 10/s sustained | 250/s (1k/s burst) | MetaApi streaming, conflated at the bridge (D78/D79, docs/63): event-driven on deals/positions/near-floor/material moves + heartbeat; bursty on news |
 | Peak event throughput | 200 msg/s | 2k msg/s | Redis Streams |
 | Daily orders (challenge purchases) | ~200 | ~5k | PK/IN/US crypto + card |
 | Payouts/day | ~50 | ~500 | Manual approval at launch |
